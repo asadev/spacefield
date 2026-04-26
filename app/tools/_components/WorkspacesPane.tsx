@@ -66,7 +66,11 @@ const DANGER =
 
 export default function WorkspacesPane() {
   const { user, supabase, enabled } = useAuth();
-  const { workspaces: localWs, switchWorkspace } = useWorkspaces();
+  const {
+    workspaces: localWs,
+    switchWorkspace,
+    deleteWorkspace: deleteLocalWorkspace,
+  } = useWorkspaces();
 
   const [rows, setRows] = useState<MyWorkspace[]>([]);
   const [pending, setPending] = useState<PendingInvite[]>([]);
@@ -229,6 +233,10 @@ export default function WorkspacesPane() {
     try {
       const { error } = await supabase.from("workspaces").delete().eq("id", workspaceId);
       if (error) throw error;
+      // Mirror the delete into localStorage too — otherwise the desktop
+      // keeps showing the workspace and `ensure` happily re-creates it
+      // in the cloud on the next mount, defeating the delete.
+      deleteLocalWorkspace(workspaceId);
       setMsg({ type: "success", text: "Workspace deleted." });
       await refresh();
     } catch (err) {

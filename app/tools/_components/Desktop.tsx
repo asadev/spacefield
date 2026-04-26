@@ -47,13 +47,64 @@ export default function Desktop() {
 }
 
 function DesktopGate() {
-  const { activeId, hydrated } = useWorkspaces();
+  const { activeId, hydrated, workspaces } = useWorkspaces();
   if (!hydrated) {
     // Avoid mounting hooks against an empty workspace id during the brief
     // window before WorkspaceProvider hydrates from localStorage.
     return <div className="fixed inset-0 bg-app" aria-hidden="true" />;
   }
+  // No workspaces (user just deleted them all, or signed in fresh and
+  // the cloud reconcile pulled an empty list). Show a focused "create
+  // your first workspace" prompt instead of mounting a desktop against
+  // an empty namespace.
+  if (workspaces.length === 0 || !activeId) {
+    return <NoWorkspacesScreen />;
+  }
   return <DesktopApp key={activeId} />;
+}
+
+function NoWorkspacesScreen() {
+  const [createOpen, setCreateOpen] = useState(true);
+  return (
+    <div className="fixed inset-0 flex items-center justify-center bg-app p-6">
+      <div className="max-w-sm rounded-2xl border border-app bg-app-elevated p-6 text-center shadow-xl">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-tool-accent-soft text-tool-accent">
+          <svg
+            viewBox="0 0 24 24"
+            className="h-6 w-6"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="3" y="4" width="18" height="16" rx="2" />
+            <path d="M3 10h18" />
+            <path d="M9 14h6" />
+          </svg>
+        </div>
+        <h1 className="mt-4 text-lg font-semibold tracking-tight text-app">
+          No workspaces yet
+        </h1>
+        <p className="mt-1 text-sm text-secondary">
+          A workspace holds your dock, widgets, wallpaper, and the apps you
+          install. Create one to get started.
+        </p>
+        <button
+          type="button"
+          onClick={() => setCreateOpen(true)}
+          className="mt-5 rounded-lg bg-tool-accent px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
+        >
+          Create workspace
+        </button>
+      </div>
+      <CreateWorkspaceDialog
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+      />
+    </div>
+  );
 }
 
 function DesktopApp() {

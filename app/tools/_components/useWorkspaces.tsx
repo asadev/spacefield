@@ -290,17 +290,21 @@ export function WorkspaceProvider({ children }: ProviderProps) {
 
   const deleteWorkspace = useCallback((id: string) => {
     setWorkspaces((prev) => {
-      // Never delete the only remaining workspace.
-      if (prev.length <= 1) return prev;
       const next = prev.filter((w) => w.id !== id);
       writeJSON(LIST_KEY, next);
 
-      // If the deleted one was active, jump to the first remaining.
+      // If the deleted one was active, jump to the first remaining (or
+      // empty string if none remain — DesktopGate detects this and
+      // surfaces the "create your first workspace" prompt).
       setActiveId((current) => {
         if (current !== id) return current;
-        const fallback = next[0].id;
+        const fallback = next[0]?.id ?? "";
         if (typeof window !== "undefined") {
-          window.localStorage.setItem(ACTIVE_KEY, fallback);
+          if (fallback) {
+            window.localStorage.setItem(ACTIVE_KEY, fallback);
+          } else {
+            window.localStorage.removeItem(ACTIVE_KEY);
+          }
         }
         return fallback;
       });
