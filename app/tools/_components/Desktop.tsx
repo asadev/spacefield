@@ -351,49 +351,9 @@ function DesktopApp() {
         <Widgets onOpenTool={handleOpenTool} />
       )}
 
-      {/* Empty-state hint — only shown when there are no windows.
-        * Text floats directly on the wallpaper (which is theme-independent
-        * — could be a dark gradient, a photo, or an interactive canvas).
-        * Using theme tokens (text-app/text-secondary) breaks readability
-        * when the user is in light mode but has chosen a dark wallpaper:
-        * dark theme text on dark wallpaper = invisible. So this hint
-        * always renders light + drop-shadow regardless of theme. */}
-      {windowsHydrated && onboarded && windows.length === 0 && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center px-8 text-center [text-shadow:0_2px_8px_rgba(0,0,0,0.6)]">
-          <h1
-            className="text-3xl font-bold tracking-tight sm:text-5xl"
-            style={{ color: "#ffffff" }}
-          >
-            What do you want to work on?
-          </h1>
-          <p
-            className="mt-3 max-w-xl text-sm sm:text-base"
-            style={{ color: "rgba(255,255,255,0.85)" }}
-          >
-            Pick a tool from the dock, or press{" "}
-            <kbd
-              className="rounded px-1.5 py-0.5 text-[0.7rem] font-mono"
-              style={{
-                color: "#ffffff",
-                background: "rgba(0,0,0,0.35)",
-                border: "1px solid rgba(255,255,255,0.30)",
-              }}
-            >
-              ⌘ K
-            </kbd>{" "}
-            for all your tools.{" "}
-            <button
-              type="button"
-              onClick={openStore}
-              className="pointer-events-auto underline underline-offset-2"
-              style={{ color: "rgba(255,255,255,0.85)" }}
-            >
-              Browse the Store
-            </button>{" "}
-            for more.
-          </p>
-        </div>
-      )}
+      {/* Empty-state hint removed per design — the workspace home is
+        * just wallpaper + dock + widgets (cleaner, more macOS-like).
+        * Users discover Launchpad via ⌘K or the dock's launcher icon. */}
 
       {/* Edge-snap zone preview — rendered above the desktop background but
        * below the windows so the dragging window stays on top. Only visible
@@ -517,25 +477,8 @@ function DesktopApp() {
         onResetWorkspace={handleResetWorkspace}
       />
 
-      {/* Floating "+ Widgets" button — bottom-right, tucked above the
-       * always-visible dock so they don't fight visually. Sits at z-[1]
-       * alongside the dock as a back-layer affordance; only shows when no
-       * windows are open, so we don't need to worry about windows covering
-       * it (they sit at z-10+ when present and would correctly overlap). */}
-      {windowsHydrated && onboarded && !hasWindows && (
-        <button
-          type="button"
-          onClick={() => setWidgetGalleryOpen(true)}
-          aria-label="Add widget"
-          title="Add widget"
-          className="fixed bottom-32 right-6 z-[1] inline-flex items-center gap-1.5 rounded-full border border-app bg-app-elevated/80 px-3 py-1.5 text-[0.72rem] font-medium text-app shadow-lg backdrop-blur-xl transition-colors hover:bg-surface"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M12 5v14M5 12h14" />
-          </svg>
-          Widgets
-        </button>
-      )}
+      {/* Removed: floating "+ Widgets" button. Widget management lives
+        * in TopBar → View → Add Widget (desktop) and the mobile menu. */}
 
       {/* Create-Workspace dialog — opened from TopBar File menu */}
       <CreateWorkspaceDialog
