@@ -344,11 +344,14 @@ function DesktopApp() {
         }}
       />
 
-      {/* Widgets — always present once onboarded, like macOS desktop widgets.
-       * They sit behind windows (z-10 vs z-20) so they're never in the way,
-       * but they remain draggable/resizable wherever they're not covered. */}
+      {/* Widgets — desktop-only. On mobile (<sm) widgets overflow into
+       * the dock and topbar areas because their default rects are sized
+       * for a wide canvas; hide them entirely on small screens. Users
+       * can still re-enable them on a larger window. */}
       {windowsHydrated && onboarded && (
-        <Widgets onOpenTool={handleOpenTool} />
+        <div className="hidden sm:contents">
+          <Widgets onOpenTool={handleOpenTool} />
+        </div>
       )}
 
       {/* Empty-state hint removed per design — the workspace home is
