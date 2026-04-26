@@ -40,6 +40,7 @@ interface Props {
   onFocusWindow: (id: string) => void;
   onSignOut: () => void;
   onSignIn?: () => void;
+  onOpenProfile?: () => void;
   theme: "light" | "dark" | null;
   onToggleTheme: () => void;
   onCreateWorkspace: () => void;
@@ -71,6 +72,7 @@ export default function TopBar({
   onFocusWindow,
   onSignOut,
   onSignIn,
+  onOpenProfile,
   theme,
   onToggleTheme,
   onCreateWorkspace,
@@ -424,13 +426,14 @@ export default function TopBar({
                     </div>
                   </div>
                 </div>
-                <a
-                  href="/profile"
-                  className="flex w-full items-center rounded px-2 py-2 text-left text-sm text-app transition-colors hover:bg-surface"
-                  role="menuitem"
+                <MobileItem
+                  onClick={() => {
+                    setOpenMenu(null);
+                    onOpenProfile?.();
+                  }}
                 >
                   Profile
-                </a>
+                </MobileItem>
                 <MobileItem onClick={() => { setOpenMenu(null); onSignOut(); }}>Sign out</MobileItem>
               </>
             ) : (
@@ -525,7 +528,14 @@ export default function TopBar({
               </div>
               <div className="truncate text-[11px] text-muted">{user.email}</div>
             </div>
-            <MenuLink href="/profile">Profile</MenuLink>
+            <MenuItem
+              onClick={() => {
+                setOpenMenu(null);
+                onOpenProfile?.();
+              }}
+            >
+              Profile
+            </MenuItem>
             <MenuDivider />
             <MenuItem
               onClick={() => {

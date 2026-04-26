@@ -101,6 +101,25 @@ function DesktopApp() {
   const [notificationsOpen, setNotificationsOpen] = useState(false);
   const [missionControlOpen, setMissionControlOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsSection, setSettingsSection] = useState<
+    | "profile"
+    | "appearance"
+    | "dock"
+    | "widgets"
+    | "sounds"
+    | "hot-corners"
+    | "keyboard"
+    | "reset"
+  >("profile");
+
+  const openSettings = (section: typeof settingsSection = "appearance") => {
+    setSettingsSection(section);
+    setSettingsOpen(true);
+  };
+  const openProfile = () => {
+    setSettingsSection("profile");
+    setSettingsOpen(true);
+  };
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
   const [signInOpen, setSignInOpen] = useState(false);
   const { user: authUser, signOut: authSignOut } = useAuth();
@@ -332,7 +351,8 @@ function DesktopApp() {
         onOpenNotifications={() => setNotificationsOpen((v) => !v)}
         notificationsOpen={notificationsOpen}
         onMissionControl={() => setMissionControlOpen(true)}
-        onOpenSettings={() => setSettingsOpen(true)}
+        onOpenSettings={() => openSettings("appearance")}
+        onOpenProfile={openProfile}
         onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
       />
 
@@ -472,6 +492,7 @@ function DesktopApp() {
       <SettingsPanel
         open={settingsOpen}
         onClose={() => setSettingsOpen(false)}
+        initialSection={settingsSection}
         theme={theme}
         onToggleTheme={toggleTheme}
         onOpenWallpaper={() => setWallpaperPickerOpen(true)}

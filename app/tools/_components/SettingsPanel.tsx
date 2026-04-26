@@ -9,6 +9,7 @@ import { useDesktopSounds } from "./useDesktopSounds";
 import { WIDGET_REGISTRY, useActiveWidgets } from "./Widgets";
 import { useHotCornersEnabled } from "./HotCorners";
 import { useWorkspaceKey } from "./useWorkspaces";
+import ProfilePane from "./ProfilePane";
 
 /* SettingsPanel — single-pane macOS-style System Settings clone.
  *
@@ -22,6 +23,7 @@ import { useWorkspaceKey } from "./useWorkspaces";
  * without changing this surface. */
 
 type SectionId =
+  | "profile"
   | "appearance"
   | "dock"
   | "widgets"
@@ -38,6 +40,12 @@ interface SectionDef {
 }
 
 const SECTIONS: SectionDef[] = [
+  {
+    id: "profile",
+    label: "Profile",
+    description: "Username, name, designation, bio, social links, account.",
+    iconPath: TOOL_ICONS.users,
+  },
   {
     id: "appearance",
     label: "Appearance",
@@ -214,6 +222,8 @@ interface Props {
   onOpenDockCustomizer: () => void;
   onOpenWidgetGallery: () => void;
   onResetWorkspace: () => void;
+  /** Section to land on whenever the panel is opened. Defaults to "profile". */
+  initialSection?: SectionId;
 }
 
 export default function SettingsPanel({
@@ -225,8 +235,15 @@ export default function SettingsPanel({
   onOpenDockCustomizer,
   onOpenWidgetGallery,
   onResetWorkspace,
+  initialSection = "profile",
 }: Props) {
-  const [section, setSection] = useState<SectionId>("appearance");
+  const [section, setSection] = useState<SectionId>(initialSection);
+
+  // When the panel is re-opened with a different initialSection, jump
+  // to that section (e.g. clicking Profile opens Settings → Profile).
+  useEffect(() => {
+    if (open) setSection(initialSection);
+  }, [open, initialSection]);
   const { style: iconStyle, setStyle: setIconStyle } = useIconStyle();
   const sounds = useDesktopSounds();
   const { active: activeWidgets, remove: removeWidget } = useActiveWidgets();
@@ -413,6 +430,7 @@ export default function SettingsPanel({
 
               {/* Pane */}
               <div className="min-h-0 overflow-y-auto px-6 py-5">
+                {section === "profile" && <ProfilePane />}
                 {section === "appearance" && (
                   <AppearancePane
                     theme={theme}
