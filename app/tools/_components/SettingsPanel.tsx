@@ -10,6 +10,7 @@ import { WIDGET_REGISTRY, useActiveWidgets } from "./Widgets";
 import { useHotCornersEnabled } from "./HotCorners";
 import { useWorkspaceKey } from "./useWorkspaces";
 import ProfilePane from "./ProfilePane";
+import WorkspacesPane from "./WorkspacesPane";
 
 /* SettingsPanel — single-pane macOS-style System Settings clone.
  *
@@ -24,6 +25,7 @@ import ProfilePane from "./ProfilePane";
 
 type SectionId =
   | "profile"
+  | "workspaces"
   | "appearance"
   | "dock"
   | "widgets"
@@ -45,6 +47,12 @@ const SECTIONS: SectionDef[] = [
     label: "Profile",
     description: "Username, name, designation, bio, social links, account.",
     iconPath: TOOL_ICONS.users,
+  },
+  {
+    id: "workspaces",
+    label: "Workspaces",
+    description: "Your workspaces, members, invites.",
+    iconPath: TOOL_ICONS.dashboard,
   },
   {
     id: "appearance",
@@ -431,6 +439,7 @@ export default function SettingsPanel({
               {/* Pane */}
               <div className="min-h-0 overflow-y-auto px-6 py-5">
                 {section === "profile" && <ProfilePane />}
+                {section === "workspaces" && <WorkspacesPane />}
                 {section === "appearance" && (
                   <AppearancePane
                     theme={theme}

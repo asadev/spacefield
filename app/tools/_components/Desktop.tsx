@@ -30,6 +30,7 @@ import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import SignInDialog from "./SignInDialog";
 import { AuthProvider, useAuth } from "./useAuth";
 import { useWorkspaceSync } from "./useWorkspaceSync";
+import { useWorkspaceRole } from "./useWorkspaceRole";
 
 /* The exported default is the WorkspaceProvider + a key-based remount
  * gate. When the user switches workspace, activeId changes, the inner
@@ -103,6 +104,7 @@ function DesktopApp() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<
     | "profile"
+    | "workspaces"
     | "appearance"
     | "dock"
     | "widgets"
@@ -111,6 +113,10 @@ function DesktopApp() {
     | "keyboard"
     | "reset"
   >("profile");
+  const openWorkspacesSection = () => {
+    setSettingsSection("workspaces");
+    setSettingsOpen(true);
+  };
 
   const openSettings = (section: typeof settingsSection = "appearance") => {
     setSettingsSection(section);
@@ -124,6 +130,7 @@ function DesktopApp() {
   const [signInOpen, setSignInOpen] = useState(false);
   const { user: authUser, signOut: authSignOut } = useAuth();
   useWorkspaceSync();
+  const { canAdmin } = useWorkspaceRole();
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
   const { resolved } = useTheme();
   const sounds = useDesktopSounds();
@@ -354,6 +361,7 @@ function DesktopApp() {
         onOpenSettings={() => openSettings("appearance")}
         onOpenProfile={openProfile}
         onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
+        canAdmin={canAdmin}
       />
 
       {/* Onboarding takes priority when incomplete */}

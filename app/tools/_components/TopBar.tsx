@@ -41,6 +41,9 @@ interface Props {
   onSignOut: () => void;
   onSignIn?: () => void;
   onOpenProfile?: () => void;
+  /** True for owner / admin in the active workspace. Members get a
+   * stripped-down menu without App Store / install controls. */
+  canAdmin?: boolean;
   theme: "light" | "dark" | null;
   onToggleTheme: () => void;
   onCreateWorkspace: () => void;
@@ -73,6 +76,7 @@ export default function TopBar({
   onSignOut,
   onSignIn,
   onOpenProfile,
+  canAdmin = true,
   theme,
   onToggleTheme,
   onCreateWorkspace,
@@ -242,14 +246,16 @@ export default function TopBar({
         >
           Open tool…
         </MenuItem>
-        <MenuItem
-          onClick={() => {
-            setOpenMenu(null);
-            onStore();
-          }}
-        >
-          Tool Store…
-        </MenuItem>
+        {canAdmin && (
+          <MenuItem
+            onClick={() => {
+              setOpenMenu(null);
+              onStore();
+            }}
+          >
+            Tool Store…
+          </MenuItem>
+        )}
         <MenuDivider />
         <MenuItem
           onClick={() => {
@@ -388,7 +394,9 @@ export default function TopBar({
           <MobileSection label="File">
             <MobileItem onClick={() => { setOpenMenu(null); onCreateWorkspace(); }}>New Workspace…</MobileItem>
             <MobileItem onClick={() => { setOpenMenu(null); onLaunchpad(); }}>Open tool…</MobileItem>
-            <MobileItem onClick={() => { setOpenMenu(null); onStore(); }}>Tool Store…</MobileItem>
+            {canAdmin && (
+              <MobileItem onClick={() => { setOpenMenu(null); onStore(); }}>Tool Store…</MobileItem>
+            )}
             <MobileItem onClick={() => { setOpenMenu(null); onOpenSettings(); }}>Settings…</MobileItem>
             <MobileItem onClick={() => { setOpenMenu(null); onCloseAll(); }} disabled={windows.length === 0}>Close all windows</MobileItem>
             <MobileItem onClick={() => { setOpenMenu(null); onResetWorkspace(); }}>Reset workspace</MobileItem>
