@@ -424,6 +424,13 @@ export default function TopBar({
                     </div>
                   </div>
                 </div>
+                <a
+                  href="/profile"
+                  className="flex w-full items-center rounded px-2 py-2 text-left text-sm text-app transition-colors hover:bg-surface"
+                  role="menuitem"
+                >
+                  Profile
+                </a>
                 <MobileItem onClick={() => { setOpenMenu(null); onSignOut(); }}>Sign out</MobileItem>
               </>
             ) : (
@@ -488,14 +495,22 @@ export default function TopBar({
         onOpen={setOpenMenu}
         align="right"
         label={
-          <span className="inline-flex h-6 w-6 items-center justify-center overflow-hidden rounded-full bg-surface-strong text-[10px] font-medium text-app">
+          <span
+            className="inline-flex items-center justify-center overflow-hidden rounded-full text-[11px] font-semibold ring-1 ring-white/30 h-7 w-7 sm:h-6 sm:w-6"
+            style={{
+              backgroundColor: user
+                ? "var(--accent)"
+                : "rgba(255,255,255,0.18)",
+              color: user ? "#ffffff" : "rgba(255,255,255,0.95)",
+            }}
+          >
             {avatarUrl ? (
               // eslint-disable-next-line @next/next/no-img-element
               <img src={avatarUrl} alt="Profile" className="h-full w-full object-cover" />
             ) : avatarInitial ? (
               avatarInitial
             ) : (
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4.42 0-8 2.24-8 5v3h16v-3c0-2.76-3.58-5-8-5z" />
               </svg>
             )}
@@ -510,6 +525,8 @@ export default function TopBar({
               </div>
               <div className="truncate text-[11px] text-muted">{user.email}</div>
             </div>
+            <MenuLink href="/profile">Profile</MenuLink>
+            <MenuDivider />
             <MenuItem
               onClick={() => {
                 setOpenMenu(null);
