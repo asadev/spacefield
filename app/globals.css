@@ -1,0 +1,1542 @@
+@import "tailwindcss";
+
+/* ── Tailwind v4: route the `dark:` modifier to our explicit theme switch.
+ * We use `data-theme="dark"` on <html> (not the OS preference) so the
+ * default `prefers-color-scheme` strategy NEVER fires for users who
+ * explicitly chose dark or light. This `@custom-variant` makes every
+ * `dark:bg-X` / `dark:text-X` etc. class on the site respond to our
+ * actual theme attribute. Single line, fixes ~60 files. */
+@custom-variant dark (&:where([data-theme="dark"] *, [data-theme="dark"]));
+
+@theme inline {
+  --color-bg: #000000;
+  --color-bg-elevated: #0a0a0a;
+  --color-bg-surface: #0e0e0e;
+
+  --color-white: #f5f5f5;
+  --color-gray-100: #e0e0e0;
+  --color-gray-200: #c4c4c4;
+  --color-gray-300: #a0a0a0;
+  --color-gray-400: #888888;
+  --color-gray-500: #666666;
+  --color-gray-600: #4a4a4a;
+  --color-gray-700: #2a2a2a;
+
+  --color-border: rgba(255, 255, 255, 0.12);
+  --color-border-hover: rgba(255, 255, 255, 0.22);
+
+  /* Accent — neutral silver, used sparingly */
+  --color-accent: #ffffff;
+  --color-accent-light: #e0e0e0;
+  --color-accent-dark: #c4c4c4;
+  --color-accent-glow: rgba(255, 255, 255, 0.08);
+
+  /* Warm highlight */
+  --color-highlight: #f59e0b;
+
+  /* Semantic colors */
+  --color-success: #10b981;
+  --color-warning: #f59e0b;
+  --color-danger: #ef4444;
+
+  /* Semantic text */
+  --color-text-primary: #f5f5f5;
+  --color-text-secondary: #c4c4c4;
+  --color-text-muted: #888888;
+
+  /* Semantic backgrounds */
+  --color-background-secondary: #0a0a0a;
+
+  /* Semantic borders */
+  --color-border-subtle: rgba(255, 255, 255, 0.10);
+
+  --font-sans: var(--font-inter);
+}
+
+/* ─── Theme tokens: dark is default. Light under [data-theme="light"] ─── */
+:root,
+:root[data-theme="dark"] {
+  --bg: #0a0a0a;
+  --bg-elevated: #111111;
+  --surface: rgba(255, 255, 255, 0.05);
+  --surface-hover: rgba(255, 255, 255, 0.08);
+  --surface-strong: rgba(255, 255, 255, 0.10);
+  --border: rgba(255, 255, 255, 0.14);
+  --border-hover: rgba(255, 255, 255, 0.22);
+  --border-focus: rgba(139, 92, 246, 0.45);
+  --text: #ffffff;
+  --text-secondary: rgba(255, 255, 255, 0.75);
+  --text-muted: rgba(255, 255, 255, 0.55);
+  --text-faint: rgba(255, 255, 255, 0.40);
+  --accent: #8b5cf6;
+  --accent-bg: rgba(139, 92, 246, 0.10);
+  --color-scheme: dark;
+
+  /* Shadow tokens — dark mode uses deeper blacks with a trace of glow */
+  --shadow-sm:  0 1px 2px rgba(0, 0, 0, 0.35);
+  --shadow-md:  0 4px 10px rgba(0, 0, 0, 0.45), 0 2px 4px rgba(0, 0, 0, 0.30);
+  --shadow-lg:  0 8px 20px rgba(0, 0, 0, 0.50), 0 4px 8px rgba(0, 0, 0, 0.35);
+  --shadow-xl:  0 16px 32px rgba(0, 0, 0, 0.55), 0 6px 12px rgba(0, 0, 0, 0.40);
+  --shadow-2xl: 0 24px 48px rgba(0, 0, 0, 0.65), 0 10px 20px rgba(0, 0, 0, 0.45);
+  --shadow-menu: 0 12px 32px rgba(0, 0, 0, 0.55), 0 4px 10px rgba(0, 0, 0, 0.30);
+  --shadow-card: 0 4px 14px rgba(0, 0, 0, 0.40);
+  --shadow-elevated: 0 12px 28px rgba(0, 0, 0, 0.45);
+  --shadow-hairline: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+
+  /* Edge-fade base for marquees/masks — matches page bg */
+  --edge-fade: #0a0a0a;
+}
+
+:root[data-theme="light"] {
+  /* Page bg is a subtle warm-gray, not pure white, so white cards lift off it */
+  --bg: #f1f2f4;
+  --bg-elevated: #ffffff;
+  --surface: rgba(0, 0, 0, 0.04);
+  --surface-hover: rgba(0, 0, 0, 0.07);
+  --surface-strong: rgba(0, 0, 0, 0.12);
+  --border: rgba(15, 23, 42, 0.16);
+  --border-hover: rgba(15, 23, 42, 0.28);
+  --border-focus: rgba(124, 58, 237, 0.55);
+  --text: #0a0a0a;
+  --text-secondary: rgba(15, 23, 42, 0.82);
+  --text-muted: rgba(15, 23, 42, 0.64);
+  --text-faint: rgba(15, 23, 42, 0.46);
+  --accent: #7c3aed;
+  --accent-bg: rgba(124, 58, 237, 0.10);
+  --color-scheme: light;
+
+  /* Shadow tokens — light mode uses cool-slate tints, kept soft and short-range */
+  --shadow-sm:  0 1px 2px rgba(15, 23, 42, 0.05);
+  --shadow-md:  0 2px 6px rgba(15, 23, 42, 0.06), 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-lg:  0 6px 16px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
+  --shadow-xl:  0 12px 28px rgba(15, 23, 42, 0.10), 0 4px 8px rgba(15, 23, 42, 0.05);
+  --shadow-2xl: 0 18px 40px rgba(15, 23, 42, 0.12), 0 6px 12px rgba(15, 23, 42, 0.06);
+  --shadow-menu: 0 8px 28px rgba(15, 23, 42, 0.10), 0 2px 6px rgba(15, 23, 42, 0.05);
+  --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.04), 0 4px 10px rgba(15, 23, 42, 0.04);
+  --shadow-elevated: 0 6px 18px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
+  --shadow-hairline: inset 0 0 0 1px rgba(15, 23, 42, 0.04);
+
+  --edge-fade: #f1f2f4;
+
+  /* ─── Site-wide Tailwind color token overrides for light mode ───
+   * Redefines the @theme color tokens so every existing Tailwind class
+   * (text-white, bg-white/[0.05], border-white/[0.10], text-gray-400, etc.)
+   * flips automatically to a light-mode equivalent. No per-page edits needed.
+   */
+  --color-white: #0a0a0a;
+  --color-gray-100: #1a1a1a;
+  --color-gray-200: #2a2a2a;
+  --color-gray-300: #3a3a3a;
+  --color-gray-400: #555555;
+  --color-gray-500: #777777;
+  --color-gray-600: #999999;
+  --color-gray-700: #bbbbbb;
+
+  --color-bg: #f1f2f4;
+  --color-bg-elevated: #ffffff;
+  --color-bg-surface: #e9eaed;
+  --color-background-secondary: #ffffff;
+
+  --color-text-primary: #0a0a0a;
+  --color-text-secondary: #2a2a2a;
+  --color-text-muted: #555555;
+
+  --color-border: rgba(0, 0, 0, 0.16);
+  --color-border-hover: rgba(0, 0, 0, 0.26);
+  --color-border-subtle: rgba(0, 0, 0, 0.10);
+
+  --color-accent: #0a0a0a;
+  --color-accent-light: #2a2a2a;
+  --color-accent-dark: #3a3a3a;
+  --color-accent-glow: rgba(0, 0, 0, 0.06);
+}
+
+/* ─── Shadows ─── Override Tailwind's default shadow-* utilities in LIGHT mode
+ * only. Tailwind bakes black @ 25% into shadow-2xl which reads like a bruise
+ * on a white surface. Use tokenised light shadows instead; dark mode keeps
+ * Tailwind's defaults (they're tuned for dark UIs already). */
+:root[data-theme="light"] .shadow-sm  { box-shadow: var(--shadow-sm) !important; }
+:root[data-theme="light"] .shadow,
+:root[data-theme="light"] .shadow-md  { box-shadow: var(--shadow-md) !important; }
+:root[data-theme="light"] .shadow-lg  { box-shadow: var(--shadow-lg) !important; }
+:root[data-theme="light"] .shadow-xl  { box-shadow: var(--shadow-xl) !important; }
+:root[data-theme="light"] .shadow-2xl { box-shadow: var(--shadow-2xl) !important; }
+:root[data-theme="light"] .shadow-black\/50,
+:root[data-theme="light"] .shadow-black\/40,
+:root[data-theme="light"] .shadow-black\/30,
+:root[data-theme="light"] .shadow-black\/20 { box-shadow: var(--shadow-xl) !important; }
+:root[data-theme="light"] .shadow-inner { box-shadow: inset 0 2px 4px rgba(15, 23, 42, 0.04) !important; }
+
+/* Drop-shadow filter — Tailwind's drop-shadow-* uses black filter, invisible /
+ * muddy on white. Soften in light. */
+:root[data-theme="light"] .drop-shadow     { filter: drop-shadow(0 1px 2px rgba(15,23,42,0.06)) drop-shadow(0 1px 1px rgba(15,23,42,0.04)); }
+:root[data-theme="light"] .drop-shadow-sm  { filter: drop-shadow(0 1px 1px rgba(15,23,42,0.05)); }
+:root[data-theme="light"] .drop-shadow-md  { filter: drop-shadow(0 4px 3px rgba(15,23,42,0.05)) drop-shadow(0 2px 2px rgba(15,23,42,0.04)); }
+:root[data-theme="light"] .drop-shadow-lg  { filter: drop-shadow(0 10px 8px rgba(15,23,42,0.04)) drop-shadow(0 4px 3px rgba(15,23,42,0.05)); }
+:root[data-theme="light"] .drop-shadow-xl  { filter: drop-shadow(0 20px 13px rgba(15,23,42,0.03)) drop-shadow(0 8px 5px rgba(15,23,42,0.04)); }
+:root[data-theme="light"] .drop-shadow-2xl { filter: drop-shadow(0 25px 25px rgba(15,23,42,0.08)); }
+
+/* ─── Gradient stops: dark-named stops mapped to page bg in light mode ───
+ * from-black / via-black / to-black etc. used for edge fades or hero vignettes
+ * would force a dark patch onto a light page. Map them to transparent-on-bg. */
+:root[data-theme="light"] .from-black        { --tw-gradient-from: var(--bg); --tw-gradient-to: color-mix(in srgb, var(--bg) 0%, transparent); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:root[data-theme="light"] .via-black         { --tw-gradient-via: var(--bg); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to, color-mix(in srgb, var(--bg) 0%, transparent)); }
+:root[data-theme="light"] .to-black          { --tw-gradient-to: var(--bg); }
+:root[data-theme="light"] .to-gray-900       { --tw-gradient-to: #f4f4f4; }
+:root[data-theme="light"] .from-gray-900     { --tw-gradient-from: #f4f4f4; --tw-gradient-to: color-mix(in srgb, #f4f4f4 0%, transparent); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:root[data-theme="light"] .from-neutral-900  { --tw-gradient-from: #f4f4f4; --tw-gradient-to: color-mix(in srgb, #f4f4f4 0%, transparent); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:root[data-theme="light"] .to-neutral-900    { --tw-gradient-to: #f4f4f4; }
+
+/* Extended slate/zinc palette flips (only for classes actually used by site
+ * code — print-mode slate text on bg-white stays untouched because that's an
+ * intentional light-on-light document).
+ * Note: .text-slate-700/800/900 are scoped to /solutions/tools/*-template
+ * pages rendering print output — deliberately skipped. */
+
+/* ─── Opacity-modifier coverage — fill the gaps in text-white/X and
+ *     border-white/X (integer form). The existing bracket form is covered. */
+:root[data-theme="light"] .text-white\/90 { color: rgba(0, 0, 0, 0.95); }
+:root[data-theme="light"] .text-white\/85 { color: rgba(0, 0, 0, 0.92); }
+:root[data-theme="light"] .text-white\/75 { color: rgba(0, 0, 0, 0.82); }
+:root[data-theme="light"] .text-white\/65 { color: rgba(0, 0, 0, 0.72); }
+:root[data-theme="light"] .text-white\/55 { color: rgba(0, 0, 0, 0.62); }
+:root[data-theme="light"] .text-white\/45 { color: rgba(0, 0, 0, 0.52); }
+:root[data-theme="light"] .text-white\/35 { color: rgba(0, 0, 0, 0.42); }
+:root[data-theme="light"] .text-white\/25 { color: rgba(0, 0, 0, 0.32); }
+:root[data-theme="light"] .text-white\/15 { color: rgba(0, 0, 0, 0.22); }
+:root[data-theme="light"] .text-white\/5  { color: rgba(0, 0, 0, 0.12); }
+
+:root[data-theme="light"] .border-white\/5  { border-color: rgba(0, 0, 0, 0.08); }
+:root[data-theme="light"] .border-white\/10 { border-color: rgba(0, 0, 0, 0.12); }
+:root[data-theme="light"] .border-white\/15 { border-color: rgba(0, 0, 0, 0.16); }
+:root[data-theme="light"] .border-white\/20 { border-color: rgba(0, 0, 0, 0.20); }
+:root[data-theme="light"] .border-white\/25 { border-color: rgba(0, 0, 0, 0.24); }
+:root[data-theme="light"] .border-white\/30 { border-color: rgba(0, 0, 0, 0.28); }
+:root[data-theme="light"] .border-white\/40 { border-color: rgba(0, 0, 0, 0.34); }
+:root[data-theme="light"] .border-white\/50 { border-color: rgba(0, 0, 0, 0.40); }
+
+/* bg-white/5, /10, /20 simple integer variants also need explicit opacity
+ * mapping (the [class*="bg-white/"] catch-all applies --_op fallback 8%). */
+:root[data-theme="light"] .bg-white\/5  { --_op: 4%; }
+:root[data-theme="light"] .bg-white\/10 { --_op: 7%; }
+:root[data-theme="light"] .bg-white\/20 { --_op: 12%; }
+:root[data-theme="light"] .bg-white\/30 { --_op: 18%; }
+
+/* bg-black/X classes — in dark mode they produce translucent black overlays
+ * (often used for input fills over glass). In light mode a translucent black
+ * on a white page becomes a muddy grey box. Flip to translucent white on
+ * elevated, so inputs keep contrast against page bg. */
+:root[data-theme="light"] .bg-black\/5,
+:root[data-theme="light"] .bg-black\/10,
+:root[data-theme="light"] .bg-black\/20,
+:root[data-theme="light"] .bg-black\/30,
+:root[data-theme="light"] .bg-black\/40,
+:root[data-theme="light"] .bg-black\/50,
+:root[data-theme="light"] .bg-black\/60 {
+  background-color: rgba(0, 0, 0, 0.04) !important;
+}
+:root[data-theme="light"] .hover\:bg-black\/10:hover,
+:root[data-theme="light"] .hover\:bg-black\/20:hover,
+:root[data-theme="light"] .hover\:bg-black\/40:hover {
+  background-color: rgba(0, 0, 0, 0.07) !important;
+}
+
+/* hover:text-white/X integer levels */
+:root[data-theme="light"] .hover\:text-white\/50:hover { color: rgba(0, 0, 0, 0.60); }
+:root[data-theme="light"] .hover\:text-white\/75:hover { color: rgba(0, 0, 0, 0.85); }
+:root[data-theme="light"] .hover\:text-white\/100:hover,
+:root[data-theme="light"] .hover\:text-white\/95:hover { color: rgba(0, 0, 0, 0.96); }
+
+/* ring-white/X coverage */
+:root[data-theme="light"] .ring-white\/10 { --tw-ring-color: rgba(0, 0, 0, 0.12); }
+:root[data-theme="light"] .ring-white\/30 { --tw-ring-color: rgba(0, 0, 0, 0.30); }
+:root[data-theme="light"] .ring-white\/40 { --tw-ring-color: rgba(0, 0, 0, 0.38); }
+:root[data-theme="light"] .ring-white\/50 { --tw-ring-color: rgba(0, 0, 0, 0.46); }
+
+/* Hardcoded cream/ivory bgs used in poster/brand UI — keep them warm-light in
+ * both themes (they're intentional design accents, not theme-driven). */
+:root[data-theme="light"] .bg-\[\#c9a96e\],
+:root[data-theme="light"] .text-\[\#c9a96e\] { /* gold — unchanged */ }
+:root[data-theme="light"] .bg-\[\#f5f5f0\],
+:root[data-theme="light"] .bg-\[\#f8f8f5\] { /* ivory — unchanged */ }
+
+/* Primary-CTA pattern `bg-white text-black` — in dark it's white button /
+ * black text. In light the same classes would produce near-white button on
+ * near-white page (invisible). Flip to dark button / light text so CTAs stay
+ * the most prominent element. */
+:root[data-theme="light"] .bg-white       { background-color: #0a0a0a !important; }
+:root[data-theme="light"] .text-black     { color: #ffffff !important; }
+:root[data-theme="light"] .hover\:bg-white\/90:hover { background-color: rgba(10, 10, 10, 0.92) !important; }
+:root[data-theme="light"] .hover\:bg-white\/95:hover { background-color: rgba(10, 10, 10, 0.96) !important; }
+:root[data-theme="light"] .hover\:bg-white\/100:hover { background-color: #0a0a0a !important; }
+
+/* Accent pastel text (Tailwind color-300/70 etc.) — pastel-on-dark in dark
+ * mode, but on a light page the same tones are near-invisible. Flip to
+ * saturated 700-shade of the same hue so the text/labels actually read. */
+:root[data-theme="light"] [class*="text-purple-200"],
+:root[data-theme="light"] [class*="text-purple-300"] { color: #6d28d9 !important; }
+:root[data-theme="light"] [class*="text-purple-400"] { color: #7c3aed !important; }
+
+:root[data-theme="light"] [class*="text-amber-200"],
+:root[data-theme="light"] [class*="text-amber-300"]  { color: #b45309 !important; }
+:root[data-theme="light"] [class*="text-amber-400"]  { color: #d97706 !important; }
+
+:root[data-theme="light"] [class*="text-blue-200"],
+:root[data-theme="light"] [class*="text-blue-300"]   { color: #1d4ed8 !important; }
+:root[data-theme="light"] [class*="text-blue-400"]   { color: #2563eb !important; }
+
+:root[data-theme="light"] [class*="text-emerald-200"],
+:root[data-theme="light"] [class*="text-emerald-300"] { color: #047857 !important; }
+:root[data-theme="light"] [class*="text-emerald-400"] { color: #059669 !important; }
+
+:root[data-theme="light"] [class*="text-rose-200"],
+:root[data-theme="light"] [class*="text-rose-300"]   { color: #be123c !important; }
+:root[data-theme="light"] [class*="text-rose-400"]   { color: #e11d48 !important; }
+
+:root[data-theme="light"] [class*="text-teal-200"],
+:root[data-theme="light"] [class*="text-teal-300"]   { color: #0f766e !important; }
+:root[data-theme="light"] [class*="text-teal-400"]   { color: #0d9488 !important; }
+
+:root[data-theme="light"] [class*="text-indigo-200"],
+:root[data-theme="light"] [class*="text-indigo-300"] { color: #4338ca !important; }
+:root[data-theme="light"] [class*="text-indigo-400"] { color: #4f46e5 !important; }
+
+:root[data-theme="light"] [class*="text-cyan-200"],
+:root[data-theme="light"] [class*="text-cyan-300"]   { color: #0e7490 !important; }
+:root[data-theme="light"] [class*="text-cyan-400"]   { color: #0891b2 !important; }
+
+:root[data-theme="light"] [class*="text-pink-200"],
+:root[data-theme="light"] [class*="text-pink-300"]   { color: #be185d !important; }
+:root[data-theme="light"] [class*="text-pink-400"]   { color: #db2777 !important; }
+
+/* Accent dot / line pastel fills in SectionLabel and similar — bump to /40
+ * saturated so they're crisp on light. */
+:root[data-theme="light"] .bg-purple-400\/70,
+:root[data-theme="light"] .bg-purple-400\/60,
+:root[data-theme="light"] .bg-purple-400\/50 { background-color: #7c3aed !important; }
+:root[data-theme="light"] .bg-purple-400\/30,
+:root[data-theme="light"] .bg-purple-400\/20 { background-color: rgba(124, 58, 237, 0.40) !important; }
+
+:root[data-theme="light"] .bg-amber-400\/70,
+:root[data-theme="light"] .bg-amber-400\/60  { background-color: #d97706 !important; }
+:root[data-theme="light"] .bg-amber-400\/30,
+:root[data-theme="light"] .bg-amber-400\/20  { background-color: rgba(217, 119, 6, 0.40) !important; }
+
+:root[data-theme="light"] .bg-blue-400\/70,
+:root[data-theme="light"] .bg-blue-400\/60   { background-color: #2563eb !important; }
+:root[data-theme="light"] .bg-blue-400\/30,
+:root[data-theme="light"] .bg-blue-400\/20   { background-color: rgba(37, 99, 235, 0.40) !important; }
+
+:root[data-theme="light"] .bg-emerald-400\/70,
+:root[data-theme="light"] .bg-emerald-400\/60 { background-color: #059669 !important; }
+:root[data-theme="light"] .bg-emerald-400\/30,
+:root[data-theme="light"] .bg-emerald-400\/20 { background-color: rgba(5, 150, 105, 0.40) !important; }
+
+:root[data-theme="light"] .bg-rose-400\/70,
+:root[data-theme="light"] .bg-rose-400\/60   { background-color: #e11d48 !important; }
+:root[data-theme="light"] .bg-rose-400\/30,
+:root[data-theme="light"] .bg-rose-400\/20   { background-color: rgba(225, 29, 72, 0.40) !important; }
+
+/* Pill backgrounds `bg-{color}-500/10` — strengthen to /15 so the fill is
+ * legible on light page without overpowering. */
+:root[data-theme="light"] .bg-purple-500\/10  { background-color: rgba(168, 85, 247, 0.14) !important; }
+:root[data-theme="light"] .bg-amber-500\/10   { background-color: rgba(245, 158, 11, 0.14) !important; }
+:root[data-theme="light"] .bg-blue-500\/10    { background-color: rgba(59, 130, 246, 0.14) !important; }
+:root[data-theme="light"] .bg-emerald-500\/10 { background-color: rgba(16, 185, 129, 0.14) !important; }
+:root[data-theme="light"] .bg-rose-500\/10    { background-color: rgba(244, 63, 94, 0.14) !important; }
+:root[data-theme="light"] .bg-teal-500\/10    { background-color: rgba(20, 184, 166, 0.14) !important; }
+:root[data-theme="light"] .bg-indigo-500\/10  { background-color: rgba(99, 102, 241, 0.14) !important; }
+
+/* Borders on the same pills — strengthen from /20 to /40 for crisper outlines */
+:root[data-theme="light"] .border-purple-400\/20,
+:root[data-theme="light"] .border-purple-400\/30 { border-color: rgba(124, 58, 237, 0.45) !important; }
+:root[data-theme="light"] .border-amber-400\/20,
+:root[data-theme="light"] .border-amber-400\/30  { border-color: rgba(217, 119, 6, 0.45) !important; }
+:root[data-theme="light"] .border-blue-400\/20,
+:root[data-theme="light"] .border-blue-400\/30   { border-color: rgba(37, 99, 235, 0.45) !important; }
+:root[data-theme="light"] .border-emerald-400\/20,
+:root[data-theme="light"] .border-emerald-400\/30,
+:root[data-theme="light"] .border-emerald-400\/40 { border-color: rgba(5, 150, 105, 0.55) !important; }
+:root[data-theme="light"] .border-rose-400\/20,
+:root[data-theme="light"] .border-rose-400\/30,
+:root[data-theme="light"] .border-rose-400\/40   { border-color: rgba(225, 29, 72, 0.45) !important; }
+:root[data-theme="light"] .border-teal-400\/20,
+:root[data-theme="light"] .border-teal-400\/30   { border-color: rgba(20, 184, 166, 0.45) !important; }
+
+/* Base card surfaces: add hairline border + soft card shadow whenever the
+ * element uses any bg-white/[X] class, so translucent-white panels lift off
+ * the slate page by default without per-page edits. */
+:root[data-theme="light"] [class*="bg-white/"][class*="border-white/"] {
+  box-shadow: var(--shadow-card);
+}
+
+/* Residual hardcoded dark text variants */
+:root[data-theme="light"] .text-\[\#ffffff\]\/70 { color: rgba(0, 0, 0, 0.78) !important; }
+:root[data-theme="light"] .text-\[\#ffffff\]\/80 { color: rgba(0, 0, 0, 0.86) !important; }
+
+/* ─── Card + glow utilities — flip in light mode ─── */
+:root[data-theme="light"] .card-elevated {
+  background: rgba(0, 0, 0, 0.025);
+  border: 1px solid rgba(0, 0, 0, 0.10);
+  box-shadow: var(--shadow-card);
+}
+:root[data-theme="light"] .card-elevated:hover {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.16);
+  box-shadow: var(--shadow-elevated);
+}
+:root[data-theme="light"] .glow-white {
+  box-shadow: 0 0 20px rgba(15, 23, 42, 0.06), 0 0 60px rgba(15, 23, 42, 0.03);
+}
+:root[data-theme="light"] .border-gradient::before {
+  background: linear-gradient(135deg, rgba(0, 0, 0, 0.14), transparent, rgba(0, 0, 0, 0.05));
+}
+:root[data-theme="light"] .section-divider {
+  background: linear-gradient(90deg, transparent, rgba(0, 0, 0, 0.14), transparent);
+}
+:root[data-theme="light"] .text-gradient {
+  background: linear-gradient(135deg, #0a0a0a, #555555);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+:root[data-theme="light"] ::selection {
+  background: rgba(124, 58, 237, 0.18);
+  color: var(--text);
+}
+
+/* ─── Opacity-modifier Tailwind classes (bg-white/[0.05], border-white/[0.10],
+ *     text-white/70, etc.) compile to literal rgba() in CSS, bypassing
+ *     --color-white. Flip them explicitly in light mode by inverting the
+ *     base color from white to black while preserving opacity.
+ */
+/* In light mode, `bg-white/[X]` translucent fills are used on site for card /
+ * panel surfaces. Flipping to translucent-black (old approach) made them fade
+ * into the page. Instead render them as NEAR-WHITE surfaces with variable
+ * opacity, so on the slate page-bg they read as clean white cards with lift. */
+:root[data-theme="light"] [class*="bg-white/"] {
+  background-color: rgba(255, 255, 255, var(--_wop, 1));
+}
+:root[data-theme="light"] .bg-white\/\[0\.01\]    { --_wop: 0.55; }
+:root[data-theme="light"] .bg-white\/\[0\.015\]   { --_wop: 0.60; }
+:root[data-theme="light"] .bg-white\/\[0\.02\]    { --_wop: 0.65; }
+:root[data-theme="light"] .bg-white\/\[0\.03\]    { --_wop: 0.72; }
+:root[data-theme="light"] .bg-white\/\[0\.04\]    { --_wop: 0.80; }
+:root[data-theme="light"] .bg-white\/\[0\.05\]    { --_wop: 0.88; }
+:root[data-theme="light"] .bg-white\/\[0\.06\]    { --_wop: 0.94; }
+:root[data-theme="light"] .bg-white\/\[0\.07\]    { --_wop: 0.97; }
+:root[data-theme="light"] .bg-white\/\[0\.08\]    { --_wop: 1.00; }
+:root[data-theme="light"] .bg-white\/\[0\.09\]    { --_wop: 1.00; }
+:root[data-theme="light"] .bg-white\/\[0\.1\],
+:root[data-theme="light"] .bg-white\/\[0\.10\]    { --_wop: 1.00; }
+:root[data-theme="light"] .bg-white\/\[0\.12\]    { --_wop: 1.00; }
+:root[data-theme="light"] .bg-white\/\[0\.14\]    { --_wop: 1.00; }
+:root[data-theme="light"] .bg-white\/\[0\.15\]    { --_wop: 1.00; }
+:root[data-theme="light"] .bg-white\/\[0\.20\]    { --_wop: 1.00; }
+
+:root[data-theme="light"] [class*="border-white/"] {
+  border-color: color-mix(in srgb, #000 var(--_bop, 14%), transparent);
+}
+:root[data-theme="light"] .border-white\/\[0\.03\]  { --_bop: 8%; }
+:root[data-theme="light"] .border-white\/\[0\.04\]  { --_bop: 10%; }
+:root[data-theme="light"] .border-white\/\[0\.05\]  { --_bop: 10%; }
+:root[data-theme="light"] .border-white\/\[0\.06\]  { --_bop: 12%; }
+:root[data-theme="light"] .border-white\/\[0\.08\]  { --_bop: 14%; }
+:root[data-theme="light"] .border-white\/\[0\.1\],
+:root[data-theme="light"] .border-white\/\[0\.10\]  { --_bop: 16%; }
+:root[data-theme="light"] .border-white\/\[0\.12\]  { --_bop: 18%; }
+:root[data-theme="light"] .border-white\/\[0\.14\]  { --_bop: 20%; }
+:root[data-theme="light"] .border-white\/\[0\.15\]  { --_bop: 22%; }
+:root[data-theme="light"] .border-white\/\[0\.16\]  { --_bop: 22%; }
+:root[data-theme="light"] .border-white\/\[0\.18\]  { --_bop: 24%; }
+:root[data-theme="light"] .border-white\/\[0\.2\],
+:root[data-theme="light"] .border-white\/\[0\.20\]  { --_bop: 26%; }
+:root[data-theme="light"] .border-white\/\[0\.22\]  { --_bop: 28%; }
+:root[data-theme="light"] .border-white\/\[0\.25\]  { --_bop: 30%; }
+:root[data-theme="light"] .border-white\/\[0\.40\]  { --_bop: 40%; }
+
+:root[data-theme="light"] .text-white\/80 { color: rgba(0, 0, 0, 0.88); }
+:root[data-theme="light"] .text-white\/70 { color: rgba(0, 0, 0, 0.78); }
+:root[data-theme="light"] .text-white\/60 { color: rgba(0, 0, 0, 0.68); }
+:root[data-theme="light"] .text-white\/50 { color: rgba(0, 0, 0, 0.58); }
+:root[data-theme="light"] .text-white\/40 { color: rgba(0, 0, 0, 0.48); }
+:root[data-theme="light"] .text-white\/30 { color: rgba(0, 0, 0, 0.38); }
+:root[data-theme="light"] .text-white\/20 { color: rgba(0, 0, 0, 0.28); }
+:root[data-theme="light"] .text-white\/10 { color: rgba(0, 0, 0, 0.18); }
+
+/* ─── Tailwind @theme tokens are baked inline at build — override the
+ *     compiled class names directly so light mode flips them.
+ */
+/* Solid `bg-black` is used as the page fill on many tool/game/learn pages
+ * (<main className="min-h-screen bg-black text-white">). Flip to the themed
+ * page bg in light mode so these pages respect the theme toggle. */
+:root[data-theme="light"] .bg-black         { background-color: #f1f2f4 !important; }
+
+:root[data-theme="light"] .bg-bg            { background-color: #f1f2f4 !important; }
+:root[data-theme="light"] .bg-bg\/80        { background-color: rgba(255, 255, 255, 0.92) !important; }
+:root[data-theme="light"] .bg-bg\/70        { background-color: rgba(255, 255, 255, 0.85) !important; }
+:root[data-theme="light"] .bg-bg\/60        { background-color: rgba(255, 255, 255, 0.75) !important; }
+:root[data-theme="light"] .bg-bg\/50        { background-color: rgba(255, 255, 255, 0.65) !important; }
+:root[data-theme="light"] .bg-bg-elevated   { background-color: #ffffff !important; }
+:root[data-theme="light"] .bg-bg-elevated\/80 { background-color: rgba(255, 255, 255, 0.92) !important; }
+:root[data-theme="light"] .bg-bg-surface    { background-color: #e9eaed !important; }
+
+/* Semantic text-token classes — Tailwind bakes @theme inline values at build,
+ * so runtime --color-text-* overrides don't reach them without an explicit
+ * utility-class override in light mode. */
+:root[data-theme="light"] .text-text-primary   { color: #0a0a0a !important; }
+:root[data-theme="light"] .text-text-secondary { color: #2a2a2a !important; }
+:root[data-theme="light"] .text-text-muted     { color: #555555 !important; }
+:root[data-theme="light"] .border-border       { border-color: rgba(0, 0, 0, 0.14) !important; }
+:root[data-theme="light"] .border-border-subtle { border-color: rgba(0, 0, 0, 0.10) !important; }
+
+:root[data-theme="light"] .text-white       { color: #0a0a0a !important; }
+:root[data-theme="light"] .text-gray-100    { color: #1a1a1a !important; }
+:root[data-theme="light"] .text-gray-200    { color: #2a2a2a !important; }
+:root[data-theme="light"] .text-gray-300    { color: #3a3a3a !important; }
+:root[data-theme="light"] .text-gray-400    { color: #555555 !important; }
+:root[data-theme="light"] .text-gray-500    { color: #777777 !important; }
+:root[data-theme="light"] .text-gray-600    { color: #999999 !important; }
+:root[data-theme="light"] .text-gray-700    { color: #bbbbbb !important; }
+
+:root[data-theme="light"] .bg-gray-100      { background-color: #f2f2f2 !important; }
+:root[data-theme="light"] .bg-gray-200      { background-color: #e8e8e8 !important; }
+:root[data-theme="light"] .bg-gray-700      { background-color: #e0e0e0 !important; }
+:root[data-theme="light"] .bg-gray-800      { background-color: #ececec !important; }
+:root[data-theme="light"] .bg-gray-900      { background-color: #f4f4f4 !important; }
+
+:root[data-theme="light"] .border-border,
+:root[data-theme="light"] .border-border-subtle { border-color: rgba(0, 0, 0, 0.16) !important; }
+
+/* Hardcoded hex backgrounds used across pages — flip to light equivalents */
+:root[data-theme="light"] .bg-\[\#0a0a0a\],
+:root[data-theme="light"] .bg-\[\#0a0a0b\],
+:root[data-theme="light"] .bg-\[\#0c0c0c\],
+:root[data-theme="light"] .bg-\[\#09090B\],
+:root[data-theme="light"] .bg-\[\#000000\],
+:root[data-theme="light"] .bg-\[\#000\],
+:root[data-theme="light"] .bg-\[\#050507\],
+:root[data-theme="light"] .bg-\[\#030305\],
+:root[data-theme="light"] .bg-\[\#1a1a2e\] {
+  background-color: #fafafa !important;
+}
+:root[data-theme="light"] .bg-\[\#111\],
+:root[data-theme="light"] .bg-\[\#111111\] {
+  background-color: #f4f4f4 !important;
+}
+
+/* Hardcoded light-on-dark text → dark-on-light */
+:root[data-theme="light"] .text-\[\#f5f5f5\],
+:root[data-theme="light"] .text-\[\#f5f5f0\],
+:root[data-theme="light"] .text-\[\#ffffff\],
+:root[data-theme="light"] .text-\[\#fff\] {
+  color: #0a0a0a !important;
+}
+
+/* Hardcoded dark text used on light surfaces — darken slightly for contrast */
+:root[data-theme="light"] .text-\[\#0c0c0c\],
+:root[data-theme="light"] .text-\[\#2c2c2c\] {
+  color: #0a0a0a !important;
+}
+
+/* Near-black text used on gradient headers */
+:root[data-theme="light"] .text-\[\#1a1a2e\] {
+  color: #0a0a0a !important;
+}
+
+/* ─── Hover state variants — same inversion as base classes ─── */
+:root[data-theme="light"] [class*="hover:bg-white/"]:hover {
+  background-color: color-mix(in srgb, #000 var(--_hop, 8%), transparent);
+}
+:root[data-theme="light"] .hover\:bg-white\/5:hover        { --_hop: 5%; }
+:root[data-theme="light"] .hover\:bg-white\/10:hover       { --_hop: 10%; }
+:root[data-theme="light"] .hover\:bg-white\/20:hover       { --_hop: 20%; }
+:root[data-theme="light"] .hover\:bg-white\/50:hover       { --_hop: 50%; }
+:root[data-theme="light"] .hover\:bg-white\/70:hover       { --_hop: 70%; }
+:root[data-theme="light"] .hover\:bg-white\/90:hover       { --_hop: 90%; }
+:root[data-theme="light"] .hover\:bg-white\/\[0\.02\]:hover { --_hop: 2%; }
+:root[data-theme="light"] .hover\:bg-white\/\[0\.03\]:hover { --_hop: 3%; }
+:root[data-theme="light"] .hover\:bg-white\/\[0\.04\]:hover { --_hop: 4%; }
+:root[data-theme="light"] .hover\:bg-white\/\[0\.05\]:hover { --_hop: 5%; }
+:root[data-theme="light"] .hover\:bg-white\/\[0\.06\]:hover { --_hop: 6%; }
+:root[data-theme="light"] .hover\:bg-white\/\[0\.07\]:hover { --_hop: 7%; }
+:root[data-theme="light"] .hover\:bg-white\/\[0\.08\]:hover { --_hop: 8%; }
+:root[data-theme="light"] .hover\:bg-white\/\[0\.09\]:hover { --_hop: 9%; }
+:root[data-theme="light"] .hover\:bg-white\/\[0\.10\]:hover { --_hop: 10%; }
+
+:root[data-theme="light"] [class*="hover:border-white/"]:hover {
+  border-color: color-mix(in srgb, #000 var(--_hbop, 18%), transparent);
+}
+:root[data-theme="light"] .hover\:border-white\/\[0\.12\]:hover { --_hbop: 18%; }
+:root[data-theme="light"] .hover\:border-white\/\[0\.15\]:hover { --_hbop: 22%; }
+:root[data-theme="light"] .hover\:border-white\/\[0\.16\]:hover { --_hbop: 24%; }
+:root[data-theme="light"] .hover\:border-white\/\[0\.18\]:hover { --_hbop: 26%; }
+:root[data-theme="light"] .hover\:border-white\/\[0\.20\]:hover { --_hbop: 28%; }
+:root[data-theme="light"] .hover\:border-white\/\[0\.22\]:hover { --_hbop: 30%; }
+:root[data-theme="light"] .hover\:border-white\/\[0\.25\]:hover { --_hbop: 32%; }
+
+:root[data-theme="light"] .hover\:text-white:hover     { color: #0a0a0a; }
+:root[data-theme="light"] .hover\:text-white\/60:hover { color: rgba(0, 0, 0, 0.70); }
+:root[data-theme="light"] .hover\:text-white\/70:hover { color: rgba(0, 0, 0, 0.80); }
+:root[data-theme="light"] .hover\:text-white\/80:hover { color: rgba(0, 0, 0, 0.88); }
+:root[data-theme="light"] .hover\:text-white\/85:hover { color: rgba(0, 0, 0, 0.92); }
+:root[data-theme="light"] .hover\:text-white\/90:hover { color: rgba(0, 0, 0, 0.95); }
+
+/* ─── Placeholder + ring ─── */
+:root[data-theme="light"] .placeholder\:text-white\/30::placeholder { color: rgba(0, 0, 0, 0.45); }
+:root[data-theme="light"] .ring-white\/20 { --tw-ring-color: rgba(0, 0, 0, 0.22); }
+
+/* ─── Divide (vertical / horizontal dividers between list items) ─── */
+:root[data-theme="light"] .divide-white\/5 > :not([hidden]) ~ :not([hidden]),
+:root[data-theme="light"] .divide-white\/\[0\.05\] > :not([hidden]) ~ :not([hidden]),
+:root[data-theme="light"] .divide-white\/\[0\.06\] > :not([hidden]) ~ :not([hidden]) {
+  border-color: rgba(0, 0, 0, 0.10);
+}
+
+/* ─── Gradient stops — from-white/X / via-white/X / to-white/X ─── */
+:root[data-theme="light"] .from-white\/10  { --tw-gradient-from: rgba(0,0,0,0.10); --tw-gradient-to: rgba(0,0,0,0); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:root[data-theme="light"] .from-white\/15  { --tw-gradient-from: rgba(0,0,0,0.15); --tw-gradient-to: rgba(0,0,0,0); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:root[data-theme="light"] .from-white\/20  { --tw-gradient-from: rgba(0,0,0,0.20); --tw-gradient-to: rgba(0,0,0,0); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:root[data-theme="light"] .from-white\/30  { --tw-gradient-from: rgba(0,0,0,0.30); --tw-gradient-to: rgba(0,0,0,0); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:root[data-theme="light"] .from-white\/35  { --tw-gradient-from: rgba(0,0,0,0.35); --tw-gradient-to: rgba(0,0,0,0); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:root[data-theme="light"] .from-white\/40  { --tw-gradient-from: rgba(0,0,0,0.40); --tw-gradient-to: rgba(0,0,0,0); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+:root[data-theme="light"] .via-white\/8    { --tw-gradient-via: rgba(0,0,0,0.08); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to, rgba(0,0,0,0)); }
+:root[data-theme="light"] .via-white\/10   { --tw-gradient-via: rgba(0,0,0,0.10); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to, rgba(0,0,0,0)); }
+:root[data-theme="light"] .via-white\/40   { --tw-gradient-via: rgba(0,0,0,0.40); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to, rgba(0,0,0,0)); }
+:root[data-theme="light"] .via-white\/\[0\.04\] { --tw-gradient-via: rgba(0,0,0,0.04); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to, rgba(0,0,0,0)); }
+:root[data-theme="light"] .via-white\/\[0\.06\] { --tw-gradient-via: rgba(0,0,0,0.06); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to, rgba(0,0,0,0)); }
+:root[data-theme="light"] .via-white\/\[0\.08\] { --tw-gradient-via: rgba(0,0,0,0.08); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to, rgba(0,0,0,0)); }
+:root[data-theme="light"] .to-white\/8     { --tw-gradient-to: rgba(0,0,0,0.08); }
+:root[data-theme="light"] .to-white\/50    { --tw-gradient-to: rgba(0,0,0,0.50); }
+
+/* ─── Alternate palette (neutral / slate) hardcoded dark backgrounds ─── */
+:root[data-theme="light"] .bg-neutral-900 { background-color: #f4f4f4 !important; }
+:root[data-theme="light"] .text-neutral-900 { color: #0a0a0a !important; }
+
+/* ─── Glass panels with hardcoded dark rgba() fills ─── */
+:root[data-theme="light"] .glass {
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(0, 0, 0, 0.14);
+}
+:root[data-theme="light"] .glass-panel {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.14);
+}
+
+/* ─── Status pulse keyframe uses white shadow — flip to black ─── */
+:root[data-theme="light"] .status-pulse {
+  animation-name: pulse-ring-light;
+}
+@keyframes pulse-ring-light {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(0, 0, 0, 0.28); }
+  50%      { box-shadow: 0 0 0 4px rgba(0, 0, 0, 0); }
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  color-scheme: var(--color-scheme, dark);
+  font-family: var(--font-sans), system-ui, sans-serif;
+  overflow-x: hidden;
+}
+
+::selection {
+  background: rgba(139, 92, 246, 0.25);
+  color: var(--text);
+}
+
+/* ─── Semantic utility classes that use theme tokens ─── */
+@layer utilities {
+  .bg-app { background-color: var(--bg); }
+  .bg-app-elevated { background-color: var(--bg-elevated); }
+  .bg-surface { background-color: var(--surface); }
+  .bg-surface-hover:hover { background-color: var(--surface-hover); }
+  .bg-surface-strong { background-color: var(--surface-strong); }
+  .bg-accent-soft { background-color: var(--accent-bg); }
+
+  .border-app { border-color: var(--border); }
+  .border-app-hover:hover { border-color: var(--border-hover); }
+  .border-app-strong { border-color: var(--border-hover); }
+  .focus\:border-app-focus:focus { border-color: var(--border-focus); }
+
+  .text-app { color: var(--text); }
+  .text-secondary { color: var(--text-secondary); }
+  .text-muted { color: var(--text-muted); }
+  .text-faint { color: var(--text-faint); }
+  .placeholder\:text-faint::placeholder { color: var(--text-faint); }
+
+  /* Themed shadow utilities — use these on new code rather than Tailwind's
+   * shadow-lg/xl/2xl so the shadow adapts to the theme automatically. */
+  .shadow-card     { box-shadow: var(--shadow-card); }
+  .shadow-elevated { box-shadow: var(--shadow-elevated); }
+  .shadow-menu     { box-shadow: var(--shadow-menu); }
+  .shadow-hairline { box-shadow: var(--shadow-hairline); }
+
+  /* Theme-aware button variants — primary inverts between themes so a CTA
+   * always stays high-contrast (white-on-dark / dark-on-light). */
+  .btn-primary {
+    background: var(--text);
+    color: var(--bg);
+  }
+  .btn-primary:hover {
+    background: var(--text);
+    filter: brightness(0.95);
+  }
+  .btn-outline {
+    background: transparent;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+  }
+  .btn-outline:hover {
+    border-color: var(--border-hover);
+    color: var(--text);
+  }
+}
+
+/* ─── Grain texture ─── */
+.grain::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.03'/%3E%3C/svg%3E");
+  pointer-events: none;
+  opacity: 0.5;
+}
+
+/* ─── Glass surface ─── */
+.glass {
+  background: rgba(10, 10, 10, 0.5);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+/* ─── Glass panel (elevated surface) ─── */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+/* ─── Status pulse ─── */
+@keyframes pulse-ring {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(255, 255, 255, 0.3); }
+  50% { box-shadow: 0 0 0 4px rgba(255, 255, 255, 0); }
+}
+.status-pulse {
+  animation: pulse-ring 2.5s ease-in-out infinite;
+}
+
+/* ─── Brain float animation ─── */
+@keyframes brain-float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-4px); }
+}
+.brain-float {
+  animation: brain-float 4s ease-in-out infinite;
+}
+
+/* ─── Gradient text — neutral shimmer ─── */
+.text-gradient {
+  background: linear-gradient(135deg, #ffffff, #a0a0a0);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ─── Card variants ─── */
+.card-elevated {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  transition: all 0.3s ease;
+}
+.card-elevated:hover {
+  background: rgba(255, 255, 255, 0.07);
+  border-color: rgba(255, 255, 255, 0.20);
+  box-shadow: 0 0 30px rgba(255, 255, 255, 0.04);
+}
+
+/* ─── Glow effects — subtle white ─── */
+.glow-white {
+  box-shadow: 0 0 20px rgba(255, 255, 255, 0.08), 0 0 60px rgba(255, 255, 255, 0.03);
+}
+
+/* ─── Animated gradient border ─── */
+.border-gradient {
+  position: relative;
+}
+.border-gradient::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.15), transparent, rgba(255, 255, 255, 0.06));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ─── Section divider ─── */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.15), transparent);
+}
+
+/* ─── Animated pulse for live indicators ─── */
+.pulse-live {
+  animation: pulse-live 2s ease-in-out infinite;
+}
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* ─── Number counter animation ─── */
+@keyframes count-up {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+ * PER-TOOL DESIGN THEMES
+ * Each tool page wraps its body in <div data-tool-theme="{key}" data-tool="{slug}">
+ * Every theme exposes the same six CSS variables so tool pages can bind to
+ * them (directly or via the .bg-tool-accent / .tool-hero utility classes
+ * below) without knowing the category they're rendered under.
+ *
+ *   --tool-accent          strong accent (CTAs, active states)
+ *   --tool-accent-soft     translucent tint of the accent
+ *   --tool-accent-ring     focus-ring color (use with `ring-tool-accent`)
+ *   --tool-chrome          subtle chrome/header background
+ *   --tool-surface         card surface tint (adapts to light/dark base)
+ *   --tool-heading-family  optional heading font variant
+ *   --tool-hero-gradient   2-stop gradient usable as a hero background
+ *
+ * Hue values themselves are mode-agnostic; translucents are expressed with
+ * `color-mix(in srgb, <hue> X%, transparent)` so they adapt against both
+ * the dark and light page bg.
+ * ══════════════════════════════════════════════════════════════════════════ */
+
+[data-tool-theme="intelligence"] {
+  --tool-hue: #8b5cf6;   /* violet — home category */
+  --tool-hue-deep: #6d28d9;
+  --tool-accent: var(--tool-hue);
+  --tool-accent-soft: color-mix(in srgb, var(--tool-hue) 14%, transparent);
+  --tool-accent-ring: color-mix(in srgb, var(--tool-hue) 55%, transparent);
+  --tool-chrome: color-mix(in srgb, var(--tool-hue) 6%, transparent);
+  --tool-surface: color-mix(in srgb, var(--tool-hue) 4%, transparent);
+  --tool-heading-family: var(--font-sans);
+  --tool-hero-gradient: linear-gradient(135deg,
+    color-mix(in srgb, var(--tool-hue) 22%, transparent) 0%,
+    color-mix(in srgb, var(--tool-hue-deep) 8%, transparent) 100%);
+}
+
+[data-tool-theme="calculators"] {
+  --tool-hue: #3b82f6;   /* blue — numerical, trustworthy */
+  --tool-hue-deep: #1d4ed8;
+  --tool-accent: var(--tool-hue);
+  --tool-accent-soft: color-mix(in srgb, var(--tool-hue) 14%, transparent);
+  --tool-accent-ring: color-mix(in srgb, var(--tool-hue) 55%, transparent);
+  --tool-chrome: color-mix(in srgb, var(--tool-hue) 6%, transparent);
+  --tool-surface: color-mix(in srgb, var(--tool-hue) 4%, transparent);
+  --tool-heading-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+  --tool-hero-gradient: linear-gradient(135deg,
+    color-mix(in srgb, var(--tool-hue) 22%, transparent) 0%,
+    color-mix(in srgb, var(--tool-hue-deep) 8%, transparent) 100%);
+}
+
+[data-tool-theme="investment"] {
+  --tool-hue: #10b981;   /* emerald — money, growth */
+  --tool-hue-deep: #047857;
+  --tool-accent: var(--tool-hue);
+  --tool-accent-soft: color-mix(in srgb, var(--tool-hue) 14%, transparent);
+  --tool-accent-ring: color-mix(in srgb, var(--tool-hue) 55%, transparent);
+  --tool-chrome: color-mix(in srgb, var(--tool-hue) 6%, transparent);
+  --tool-surface: color-mix(in srgb, var(--tool-hue) 4%, transparent);
+  --tool-heading-family: var(--font-sans);
+  --tool-hero-gradient: linear-gradient(135deg,
+    color-mix(in srgb, var(--tool-hue) 22%, transparent) 0%,
+    color-mix(in srgb, var(--tool-hue-deep) 8%, transparent) 100%);
+}
+
+[data-tool-theme="research"] {
+  --tool-hue: #f59e0b;   /* amber — documents, spotlight */
+  --tool-hue-deep: #b45309;
+  --tool-accent: var(--tool-hue);
+  --tool-accent-soft: color-mix(in srgb, var(--tool-hue) 14%, transparent);
+  --tool-accent-ring: color-mix(in srgb, var(--tool-hue) 55%, transparent);
+  --tool-chrome: color-mix(in srgb, var(--tool-hue) 6%, transparent);
+  --tool-surface: color-mix(in srgb, var(--tool-hue) 4%, transparent);
+  --tool-heading-family: var(--font-sans);
+  --tool-hero-gradient: linear-gradient(135deg,
+    color-mix(in srgb, var(--tool-hue) 22%, transparent) 0%,
+    color-mix(in srgb, var(--tool-hue-deep) 8%, transparent) 100%);
+}
+
+[data-tool-theme="compliance"] {
+  --tool-hue: #f43f5e;   /* rose — risk, regulatory */
+  --tool-hue-deep: #be123c;
+  --tool-accent: var(--tool-hue);
+  --tool-accent-soft: color-mix(in srgb, var(--tool-hue) 14%, transparent);
+  --tool-accent-ring: color-mix(in srgb, var(--tool-hue) 55%, transparent);
+  --tool-chrome: color-mix(in srgb, var(--tool-hue) 6%, transparent);
+  --tool-surface: color-mix(in srgb, var(--tool-hue) 4%, transparent);
+  --tool-heading-family: var(--font-sans);
+  --tool-hero-gradient: linear-gradient(135deg,
+    color-mix(in srgb, var(--tool-hue) 22%, transparent) 0%,
+    color-mix(in srgb, var(--tool-hue-deep) 8%, transparent) 100%);
+}
+
+[data-tool-theme="agent"] {
+  --tool-hue: #06b6d4;   /* cyan — agentic, systems */
+  --tool-hue-deep: #0e7490;
+  --tool-accent: var(--tool-hue);
+  --tool-accent-soft: color-mix(in srgb, var(--tool-hue) 14%, transparent);
+  --tool-accent-ring: color-mix(in srgb, var(--tool-hue) 55%, transparent);
+  --tool-chrome: color-mix(in srgb, var(--tool-hue) 6%, transparent);
+  --tool-surface: color-mix(in srgb, var(--tool-hue) 4%, transparent);
+  --tool-heading-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+  --tool-hero-gradient: linear-gradient(135deg,
+    color-mix(in srgb, var(--tool-hue) 22%, transparent) 0%,
+    color-mix(in srgb, var(--tool-hue-deep) 8%, transparent) 100%);
+}
+
+[data-tool-theme="productivity"] {
+  --tool-hue: #0ea5e9;   /* sky — calm, focused */
+  --tool-hue-deep: #0369a1;
+  --tool-accent: var(--tool-hue);
+  --tool-accent-soft: color-mix(in srgb, var(--tool-hue) 14%, transparent);
+  --tool-accent-ring: color-mix(in srgb, var(--tool-hue) 55%, transparent);
+  --tool-chrome: color-mix(in srgb, var(--tool-hue) 6%, transparent);
+  --tool-surface: color-mix(in srgb, var(--tool-hue) 4%, transparent);
+  --tool-heading-family: var(--font-sans);
+  --tool-hero-gradient: linear-gradient(135deg,
+    color-mix(in srgb, var(--tool-hue) 22%, transparent) 0%,
+    color-mix(in srgb, var(--tool-hue-deep) 8%, transparent) 100%);
+}
+
+[data-tool-theme="finance"] {
+  --tool-hue: #14b8a6;   /* teal-emerald — sibling of investment, shifted blue */
+  --tool-hue-deep: #0f766e;
+  --tool-accent: var(--tool-hue);
+  --tool-accent-soft: color-mix(in srgb, var(--tool-hue) 14%, transparent);
+  --tool-accent-ring: color-mix(in srgb, var(--tool-hue) 55%, transparent);
+  --tool-chrome: color-mix(in srgb, var(--tool-hue) 6%, transparent);
+  --tool-surface: color-mix(in srgb, var(--tool-hue) 4%, transparent);
+  --tool-heading-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+  --tool-hero-gradient: linear-gradient(135deg,
+    color-mix(in srgb, var(--tool-hue) 22%, transparent) 0%,
+    color-mix(in srgb, var(--tool-hue-deep) 8%, transparent) 100%);
+}
+
+[data-tool-theme="hr"] {
+  --tool-hue: #d946ef;   /* fuchsia — people, culture */
+  --tool-hue-deep: #a21caf;
+  --tool-accent: var(--tool-hue);
+  --tool-accent-soft: color-mix(in srgb, var(--tool-hue) 14%, transparent);
+  --tool-accent-ring: color-mix(in srgb, var(--tool-hue) 55%, transparent);
+  --tool-chrome: color-mix(in srgb, var(--tool-hue) 6%, transparent);
+  --tool-surface: color-mix(in srgb, var(--tool-hue) 4%, transparent);
+  --tool-heading-family: var(--font-sans);
+  --tool-hero-gradient: linear-gradient(135deg,
+    color-mix(in srgb, var(--tool-hue) 22%, transparent) 0%,
+    color-mix(in srgb, var(--tool-hue-deep) 8%, transparent) 100%);
+}
+
+[data-tool-theme="marketing"] {
+  --tool-hue: #ec4899;   /* pink — campaigns, energy */
+  --tool-hue-deep: #be185d;
+  --tool-accent: var(--tool-hue);
+  --tool-accent-soft: color-mix(in srgb, var(--tool-hue) 14%, transparent);
+  --tool-accent-ring: color-mix(in srgb, var(--tool-hue) 55%, transparent);
+  --tool-chrome: color-mix(in srgb, var(--tool-hue) 6%, transparent);
+  --tool-surface: color-mix(in srgb, var(--tool-hue) 4%, transparent);
+  --tool-heading-family: var(--font-sans);
+  --tool-hero-gradient: linear-gradient(135deg,
+    color-mix(in srgb, var(--tool-hue) 22%, transparent) 0%,
+    color-mix(in srgb, var(--tool-hue-deep) 8%, transparent) 100%);
+}
+
+[data-tool-theme="sales"] {
+  --tool-hue: #f97316;   /* orange — heat, deals */
+  --tool-hue-deep: #c2410c;
+  --tool-accent: var(--tool-hue);
+  --tool-accent-soft: color-mix(in srgb, var(--tool-hue) 14%, transparent);
+  --tool-accent-ring: color-mix(in srgb, var(--tool-hue) 55%, transparent);
+  --tool-chrome: color-mix(in srgb, var(--tool-hue) 6%, transparent);
+  --tool-surface: color-mix(in srgb, var(--tool-hue) 4%, transparent);
+  --tool-heading-family: var(--font-sans);
+  --tool-hero-gradient: linear-gradient(135deg,
+    color-mix(in srgb, var(--tool-hue) 22%, transparent) 0%,
+    color-mix(in srgb, var(--tool-hue-deep) 8%, transparent) 100%);
+}
+
+[data-tool-theme="legal"] {
+  --tool-hue: #64748b;   /* slate — grounded, editorial */
+  --tool-hue-deep: #334155;
+  --tool-accent: var(--tool-hue);
+  --tool-accent-soft: color-mix(in srgb, var(--tool-hue) 16%, transparent);
+  --tool-accent-ring: color-mix(in srgb, var(--tool-hue) 55%, transparent);
+  --tool-chrome: color-mix(in srgb, var(--tool-hue) 8%, transparent);
+  --tool-surface: color-mix(in srgb, var(--tool-hue) 5%, transparent);
+  --tool-heading-family: var(--font-serif, "Times New Roman", Georgia, serif);
+  --tool-hero-gradient: linear-gradient(135deg,
+    color-mix(in srgb, var(--tool-hue) 22%, transparent) 0%,
+    color-mix(in srgb, var(--tool-hue-deep) 10%, transparent) 100%);
+}
+
+[data-tool-theme="data"] {
+  --tool-hue: #6366f1;   /* indigo — analysis, depth */
+  --tool-hue-deep: #4338ca;
+  --tool-accent: var(--tool-hue);
+  --tool-accent-soft: color-mix(in srgb, var(--tool-hue) 14%, transparent);
+  --tool-accent-ring: color-mix(in srgb, var(--tool-hue) 55%, transparent);
+  --tool-chrome: color-mix(in srgb, var(--tool-hue) 6%, transparent);
+  --tool-surface: color-mix(in srgb, var(--tool-hue) 4%, transparent);
+  --tool-heading-family: var(--font-mono, ui-monospace, SFMono-Regular, monospace);
+  --tool-hero-gradient: linear-gradient(135deg,
+    color-mix(in srgb, var(--tool-hue) 22%, transparent) 0%,
+    color-mix(in srgb, var(--tool-hue-deep) 8%, transparent) 100%);
+}
+
+[data-tool-theme="design"] {
+  --tool-hue: #14b8a6;   /* teal — craft, precision (slightly different tint from finance via different deep stop) */
+  --tool-hue-deep: #115e59;
+  --tool-accent: var(--tool-hue);
+  --tool-accent-soft: color-mix(in srgb, var(--tool-hue) 14%, transparent);
+  --tool-accent-ring: color-mix(in srgb, var(--tool-hue) 55%, transparent);
+  --tool-chrome: color-mix(in srgb, var(--tool-hue) 6%, transparent);
+  --tool-surface: color-mix(in srgb, var(--tool-hue) 4%, transparent);
+  --tool-heading-family: var(--font-sans);
+  --tool-hero-gradient: linear-gradient(135deg,
+    color-mix(in srgb, var(--tool-hue) 24%, transparent) 0%,
+    color-mix(in srgb, var(--tool-hue-deep) 10%, transparent) 100%);
+}
+
+[data-tool-theme="support"] {
+  --tool-hue: #84cc16;   /* lime — helpful, responsive */
+  --tool-hue-deep: #4d7c0f;
+  --tool-accent: var(--tool-hue);
+  --tool-accent-soft: color-mix(in srgb, var(--tool-hue) 14%, transparent);
+  --tool-accent-ring: color-mix(in srgb, var(--tool-hue) 55%, transparent);
+  --tool-chrome: color-mix(in srgb, var(--tool-hue) 6%, transparent);
+  --tool-surface: color-mix(in srgb, var(--tool-hue) 4%, transparent);
+  --tool-heading-family: var(--font-sans);
+  --tool-hero-gradient: linear-gradient(135deg,
+    color-mix(in srgb, var(--tool-hue) 22%, transparent) 0%,
+    color-mix(in srgb, var(--tool-hue-deep) 8%, transparent) 100%);
+}
+
+[data-tool-theme="growth"] {
+  --tool-hue: #a855f7;   /* violet — sibling of intelligence, brighter / more saturated */
+  --tool-hue-deep: #7e22ce;
+  --tool-accent: var(--tool-hue);
+  --tool-accent-soft: color-mix(in srgb, var(--tool-hue) 14%, transparent);
+  --tool-accent-ring: color-mix(in srgb, var(--tool-hue) 55%, transparent);
+  --tool-chrome: color-mix(in srgb, var(--tool-hue) 6%, transparent);
+  --tool-surface: color-mix(in srgb, var(--tool-hue) 4%, transparent);
+  --tool-heading-family: var(--font-sans);
+  --tool-hero-gradient: linear-gradient(135deg,
+    color-mix(in srgb, var(--tool-hue) 24%, transparent) 0%,
+    color-mix(in srgb, var(--tool-hue-deep) 10%, transparent) 100%);
+}
+
+[data-tool-theme="content"] {
+  --tool-hue: #eab308;   /* yellow — brightness, editorial */
+  --tool-hue-deep: #a16207;
+  --tool-accent: var(--tool-hue);
+  --tool-accent-soft: color-mix(in srgb, var(--tool-hue) 16%, transparent);
+  --tool-accent-ring: color-mix(in srgb, var(--tool-hue) 55%, transparent);
+  --tool-chrome: color-mix(in srgb, var(--tool-hue) 7%, transparent);
+  --tool-surface: color-mix(in srgb, var(--tool-hue) 4%, transparent);
+  --tool-heading-family: var(--font-serif, "Times New Roman", Georgia, serif);
+  --tool-hero-gradient: linear-gradient(135deg,
+    color-mix(in srgb, var(--tool-hue) 22%, transparent) 0%,
+    color-mix(in srgb, var(--tool-hue-deep) 8%, transparent) 100%);
+}
+
+[data-tool-theme="crm"] {
+  --tool-hue: #0891b2;   /* cyan — sibling of agent, deeper / more navy */
+  --tool-hue-deep: #155e75;
+  --tool-accent: var(--tool-hue);
+  --tool-accent-soft: color-mix(in srgb, var(--tool-hue) 14%, transparent);
+  --tool-accent-ring: color-mix(in srgb, var(--tool-hue) 55%, transparent);
+  --tool-chrome: color-mix(in srgb, var(--tool-hue) 6%, transparent);
+  --tool-surface: color-mix(in srgb, var(--tool-hue) 4%, transparent);
+  --tool-heading-family: var(--font-sans);
+  --tool-hero-gradient: linear-gradient(135deg,
+    color-mix(in srgb, var(--tool-hue) 22%, transparent) 0%,
+    color-mix(in srgb, var(--tool-hue-deep) 10%, transparent) 100%);
+}
+
+/* ─── Tool-theme utility classes ───────────────────────────────────────────
+ * Bound to the tokens above so any descendant of a [data-tool-theme] element
+ * can use these utility classes without knowing the category. */
+@layer utilities {
+  .bg-tool-accent        { background-color: var(--tool-accent); }
+  .text-tool-accent      { color: var(--tool-accent); }
+  .border-tool-accent    { border-color: var(--tool-accent); }
+
+  .bg-tool-accent-soft     { background-color: var(--tool-accent-soft); }
+  .text-tool-accent-soft   { color: var(--tool-accent-soft); }
+  .border-tool-accent-soft { border-color: var(--tool-accent-soft); }
+
+  .bg-tool-surface { background-color: var(--tool-surface); }
+
+  .ring-tool-accent {
+    --tw-ring-color: var(--tool-accent-ring);
+  }
+
+  .tool-hero {
+    background-image: var(--tool-hero-gradient);
+  }
+
+  .font-tool-heading {
+    font-family: var(--tool-heading-family);
+  }
+}
+
+/* ============================================================
+ * TOOL THEME PARITY — light/dark color leak fixes
+ * Scoped to [data-tool-theme] so the rest of the site is unaffected.
+ * The redesigned tool pages defaulted to dark-mode-first markup
+ * (text-white, bg-slate-900, etc.). These rules flip those to readable
+ * equivalents in the opposite mode without touching per-file source.
+ * ============================================================ */
+
+/* ── LIGHT MODE FIXES (tools were authored for dark) ── */
+
+/* Solid white text → primary text token (the slash-opacity variants are
+ * already covered earlier in this file). */
+:root[data-theme="light"] [data-tool-theme] .text-white { color: var(--text) !important; }
+
+/* Inside a tool theme, bg-white means "paper card surface" — keep it white
+ * in both modes (overrides the global flip-to-dark for CTAs). */
+:root[data-theme="light"] [data-tool-theme] .bg-white { background-color: #ffffff !important; }
+
+/* Dark surface backgrounds — flip to neutral light card so anything
+ * inside still sits on a subtle paper-style surface. */
+:root[data-theme="light"] [data-tool-theme] .bg-slate-950,
+:root[data-theme="light"] [data-tool-theme] .bg-zinc-950,
+:root[data-theme="light"] [data-tool-theme] .bg-neutral-950,
+:root[data-theme="light"] [data-tool-theme] .bg-gray-950 { background-color: #f5f6f8 !important; }
+
+:root[data-theme="light"] [data-tool-theme] .bg-slate-900,
+:root[data-theme="light"] [data-tool-theme] .bg-zinc-900,
+:root[data-theme="light"] [data-tool-theme] .bg-neutral-900,
+:root[data-theme="light"] [data-tool-theme] .bg-gray-900 { background-color: #f8f9fb !important; }
+
+:root[data-theme="light"] [data-tool-theme] .bg-slate-800,
+:root[data-theme="light"] [data-tool-theme] .bg-zinc-800,
+:root[data-theme="light"] [data-tool-theme] .bg-neutral-800,
+:root[data-theme="light"] [data-tool-theme] .bg-gray-800 { background-color: #eef0f3 !important; }
+
+:root[data-theme="light"] [data-tool-theme] .bg-slate-700,
+:root[data-theme="light"] [data-tool-theme] .bg-zinc-700,
+:root[data-theme="light"] [data-tool-theme] .bg-neutral-700,
+:root[data-theme="light"] [data-tool-theme] .bg-gray-700 { background-color: #e6e9ed !important; }
+
+/* Light-shade text (slate-50..300, zinc/neutral/gray-50..300) was meant to
+ * be readable on a dark surface. On a light surface it disappears. Flip to
+ * primary text. */
+:root[data-theme="light"] [data-tool-theme] .text-slate-50,
+:root[data-theme="light"] [data-tool-theme] .text-slate-100,
+:root[data-theme="light"] [data-tool-theme] .text-slate-200,
+:root[data-theme="light"] [data-tool-theme] .text-slate-300,
+:root[data-theme="light"] [data-tool-theme] .text-zinc-50,
+:root[data-theme="light"] [data-tool-theme] .text-zinc-100,
+:root[data-theme="light"] [data-tool-theme] .text-zinc-200,
+:root[data-theme="light"] [data-tool-theme] .text-zinc-300,
+:root[data-theme="light"] [data-tool-theme] .text-neutral-50,
+:root[data-theme="light"] [data-tool-theme] .text-neutral-100,
+:root[data-theme="light"] [data-tool-theme] .text-neutral-200,
+:root[data-theme="light"] [data-tool-theme] .text-neutral-300,
+:root[data-theme="light"] [data-tool-theme] .text-gray-50,
+:root[data-theme="light"] [data-tool-theme] .text-gray-100,
+:root[data-theme="light"] [data-tool-theme] .text-gray-200,
+:root[data-theme="light"] [data-tool-theme] .text-gray-300 { color: var(--text) !important; }
+
+:root[data-theme="light"] [data-tool-theme] .text-slate-400,
+:root[data-theme="light"] [data-tool-theme] .text-zinc-400,
+:root[data-theme="light"] [data-tool-theme] .text-neutral-400,
+:root[data-theme="light"] [data-tool-theme] .text-gray-400 { color: var(--text-secondary) !important; }
+
+:root[data-theme="light"] [data-tool-theme] .text-slate-500,
+:root[data-theme="light"] [data-tool-theme] .text-zinc-500,
+:root[data-theme="light"] [data-tool-theme] .text-neutral-500,
+:root[data-theme="light"] [data-tool-theme] .text-gray-500 { color: var(--text-muted) !important; }
+
+/* Dark borders — soften to light-mode border token. */
+:root[data-theme="light"] [data-tool-theme] .border-slate-950,
+:root[data-theme="light"] [data-tool-theme] .border-slate-900,
+:root[data-theme="light"] [data-tool-theme] .border-slate-800,
+:root[data-theme="light"] [data-tool-theme] .border-slate-700,
+:root[data-theme="light"] [data-tool-theme] .border-zinc-950,
+:root[data-theme="light"] [data-tool-theme] .border-zinc-900,
+:root[data-theme="light"] [data-tool-theme] .border-zinc-800,
+:root[data-theme="light"] [data-tool-theme] .border-zinc-700,
+:root[data-theme="light"] [data-tool-theme] .border-neutral-950,
+:root[data-theme="light"] [data-tool-theme] .border-neutral-900,
+:root[data-theme="light"] [data-tool-theme] .border-neutral-800,
+:root[data-theme="light"] [data-tool-theme] .border-neutral-700,
+:root[data-theme="light"] [data-tool-theme] .border-gray-950,
+:root[data-theme="light"] [data-tool-theme] .border-gray-900,
+:root[data-theme="light"] [data-tool-theme] .border-gray-800,
+:root[data-theme="light"] [data-tool-theme] .border-gray-700 { border-color: var(--border) !important; }
+
+/* Dark gradient stops used for hero panels — collapse to subtle light gradient. */
+:root[data-theme="light"] [data-tool-theme] .from-slate-900,
+:root[data-theme="light"] [data-tool-theme] .from-slate-950,
+:root[data-theme="light"] [data-tool-theme] .from-zinc-900,
+:root[data-theme="light"] [data-tool-theme] .from-zinc-950,
+:root[data-theme="light"] [data-tool-theme] .from-neutral-900,
+:root[data-theme="light"] [data-tool-theme] .from-neutral-950,
+:root[data-theme="light"] [data-tool-theme] .from-gray-900,
+:root[data-theme="light"] [data-tool-theme] .from-gray-950 { --tw-gradient-from: #f5f6f8 !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to, transparent); }
+
+:root[data-theme="light"] [data-tool-theme] .to-slate-900,
+:root[data-theme="light"] [data-tool-theme] .to-slate-950,
+:root[data-theme="light"] [data-tool-theme] .to-zinc-900,
+:root[data-theme="light"] [data-tool-theme] .to-zinc-950,
+:root[data-theme="light"] [data-tool-theme] .to-neutral-900,
+:root[data-theme="light"] [data-tool-theme] .to-neutral-950,
+:root[data-theme="light"] [data-tool-theme] .to-gray-900,
+:root[data-theme="light"] [data-tool-theme] .to-gray-950 { --tw-gradient-to: #ffffff !important; }
+
+:root[data-theme="light"] [data-tool-theme] .via-slate-900,
+:root[data-theme="light"] [data-tool-theme] .via-zinc-900,
+:root[data-theme="light"] [data-tool-theme] .via-neutral-900,
+:root[data-theme="light"] [data-tool-theme] .via-gray-900 { --tw-gradient-via: #f8f9fb !important; --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-via), var(--tw-gradient-to, transparent); }
+
+/* ── DARK MODE FIXES (a few agents inverted and used dark text on light) ── */
+
+/* Dark slate text in dark mode = invisible. Flip to light. */
+:root[data-theme="dark"] [data-tool-theme] .text-slate-700,
+:root[data-theme="dark"] [data-tool-theme] .text-slate-800,
+:root[data-theme="dark"] [data-tool-theme] .text-slate-900,
+:root[data-theme="dark"] [data-tool-theme] .text-slate-950,
+:root[data-theme="dark"] [data-tool-theme] .text-zinc-700,
+:root[data-theme="dark"] [data-tool-theme] .text-zinc-800,
+:root[data-theme="dark"] [data-tool-theme] .text-zinc-900,
+:root[data-theme="dark"] [data-tool-theme] .text-zinc-950,
+:root[data-theme="dark"] [data-tool-theme] .text-neutral-700,
+:root[data-theme="dark"] [data-tool-theme] .text-neutral-800,
+:root[data-theme="dark"] [data-tool-theme] .text-neutral-900,
+:root[data-theme="dark"] [data-tool-theme] .text-neutral-950,
+:root[data-theme="dark"] [data-tool-theme] .text-gray-700,
+:root[data-theme="dark"] [data-tool-theme] .text-gray-800,
+:root[data-theme="dark"] [data-tool-theme] .text-gray-900,
+:root[data-theme="dark"] [data-tool-theme] .text-gray-950 { color: var(--text) !important; }
+
+:root[data-theme="dark"] [data-tool-theme] .text-slate-600,
+:root[data-theme="dark"] [data-tool-theme] .text-zinc-600,
+:root[data-theme="dark"] [data-tool-theme] .text-neutral-600,
+:root[data-theme="dark"] [data-tool-theme] .text-gray-600 { color: var(--text-secondary) !important; }
+
+/* Light backgrounds inside tool theme in dark mode → flip to a dark
+ * surface. Several agents drew "paper" cards (invoices, quotes, letters)
+ * with bg-white that stayed glaring-white when the workspace is dark.
+ * Flip them to an elevated dark surface so the inner app feels native to
+ * the dark workspace. */
+:root[data-theme="dark"] [data-tool-theme] .bg-white,
+:root[data-theme="dark"] [data-tool-theme] .bg-slate-50,
+:root[data-theme="dark"] [data-tool-theme] .bg-slate-100,
+:root[data-theme="dark"] [data-tool-theme] .bg-zinc-50,
+:root[data-theme="dark"] [data-tool-theme] .bg-zinc-100,
+:root[data-theme="dark"] [data-tool-theme] .bg-neutral-50,
+:root[data-theme="dark"] [data-tool-theme] .bg-neutral-100,
+:root[data-theme="dark"] [data-tool-theme] .bg-gray-50,
+:root[data-theme="dark"] [data-tool-theme] .bg-gray-100 { background-color: var(--bg-elevated) !important; color: var(--text); }
+
+/* When a "paper card" wrapper turns dark, its inner dark text must flip
+ * to light. Most agents used Tailwind slate/zinc/neutral/gray text shades
+ * already covered above, but specifically text-black (used inside paper
+ * docs) needs an explicit flip — it would otherwise stay black on a now-
+ * dark card. */
+:root[data-theme="dark"] [data-tool-theme] .text-black { color: var(--text) !important; }
+
+/* Dark hue text shades (text-{hue}-{700,800,900,950}) on tools that didn't
+ * supply a dark: variant — they were authored for a light card background
+ * and disappear on dark surfaces. Flip every such shade to a -300 light
+ * counterpart so headings and labels stay readable in dark mode. Covers
+ * every common Tailwind hue in one block; ~70 selectors but they all map
+ * to the same idea: dark-shade-on-dark → light-shade-on-dark. */
+:root[data-theme="dark"] [data-tool-theme] [class*="text-amber-700"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-amber-800"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-amber-900"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-amber-950"] { color: rgb(252 211 77) !important; }
+
+:root[data-theme="dark"] [data-tool-theme] [class*="text-orange-700"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-orange-800"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-orange-900"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-orange-950"] { color: rgb(253 186 116) !important; }
+
+:root[data-theme="dark"] [data-tool-theme] [class*="text-yellow-700"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-yellow-800"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-yellow-900"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-yellow-950"] { color: rgb(253 224 71) !important; }
+
+:root[data-theme="dark"] [data-tool-theme] [class*="text-lime-700"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-lime-800"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-lime-900"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-lime-950"] { color: rgb(190 242 100) !important; }
+
+:root[data-theme="dark"] [data-tool-theme] [class*="text-green-700"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-green-800"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-green-900"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-green-950"] { color: rgb(134 239 172) !important; }
+
+:root[data-theme="dark"] [data-tool-theme] [class*="text-emerald-700"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-emerald-800"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-emerald-900"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-emerald-950"] { color: rgb(110 231 183) !important; }
+
+:root[data-theme="dark"] [data-tool-theme] [class*="text-teal-700"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-teal-800"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-teal-900"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-teal-950"] { color: rgb(94 234 212) !important; }
+
+:root[data-theme="dark"] [data-tool-theme] [class*="text-cyan-700"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-cyan-800"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-cyan-900"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-cyan-950"] { color: rgb(103 232 249) !important; }
+
+:root[data-theme="dark"] [data-tool-theme] [class*="text-sky-700"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-sky-800"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-sky-900"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-sky-950"] { color: rgb(125 211 252) !important; }
+
+:root[data-theme="dark"] [data-tool-theme] [class*="text-blue-700"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-blue-800"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-blue-900"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-blue-950"] { color: rgb(147 197 253) !important; }
+
+:root[data-theme="dark"] [data-tool-theme] [class*="text-indigo-700"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-indigo-800"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-indigo-900"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-indigo-950"] { color: rgb(165 180 252) !important; }
+
+:root[data-theme="dark"] [data-tool-theme] [class*="text-violet-700"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-violet-800"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-violet-900"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-violet-950"] { color: rgb(196 181 253) !important; }
+
+:root[data-theme="dark"] [data-tool-theme] [class*="text-purple-700"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-purple-800"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-purple-900"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-purple-950"] { color: rgb(216 180 254) !important; }
+
+:root[data-theme="dark"] [data-tool-theme] [class*="text-fuchsia-700"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-fuchsia-800"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-fuchsia-900"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-fuchsia-950"] { color: rgb(240 171 252) !important; }
+
+:root[data-theme="dark"] [data-tool-theme] [class*="text-pink-700"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-pink-800"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-pink-900"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-pink-950"] { color: rgb(249 168 212) !important; }
+
+:root[data-theme="dark"] [data-tool-theme] [class*="text-rose-700"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-rose-800"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-rose-900"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-rose-950"] { color: rgb(253 164 175) !important; }
+
+:root[data-theme="dark"] [data-tool-theme] [class*="text-red-700"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-red-800"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-red-900"],
+:root[data-theme="dark"] [data-tool-theme] [class*="text-red-950"] { color: rgb(252 165 165) !important; }
+
+/* And the inverse: light hue text shades (text-{hue}-{200,300}) on tools
+ * that didn't supply a light: variant — invisible on light surfaces in
+ * light mode. Flip to -700 dark counterpart. */
+:root[data-theme="light"] [data-tool-theme] [class*="text-amber-200"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-amber-300"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-orange-200"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-orange-300"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-yellow-200"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-yellow-300"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-emerald-200"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-emerald-300"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-teal-200"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-teal-300"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-cyan-200"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-cyan-300"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-sky-200"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-sky-300"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-blue-200"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-blue-300"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-indigo-200"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-indigo-300"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-violet-200"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-violet-300"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-purple-200"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-purple-300"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-fuchsia-200"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-fuchsia-300"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-pink-200"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-pink-300"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-rose-200"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-rose-300"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-red-200"],
+:root[data-theme="light"] [data-tool-theme] [class*="text-red-300"] { color: var(--text-secondary) !important; }
+
+/* Bright accent backgrounds (Tailwind 50/100 shades on color hues) used
+ * for inline tags — soften so they aren't blinding strips on dark. */
+:root[data-theme="dark"] [data-tool-theme] [class*="bg-amber-50"],
+:root[data-theme="dark"] [data-tool-theme] [class*="bg-amber-100"],
+:root[data-theme="dark"] [data-tool-theme] [class*="bg-emerald-50"],
+:root[data-theme="dark"] [data-tool-theme] [class*="bg-emerald-100"],
+:root[data-theme="dark"] [data-tool-theme] [class*="bg-rose-50"],
+:root[data-theme="dark"] [data-tool-theme] [class*="bg-rose-100"],
+:root[data-theme="dark"] [data-tool-theme] [class*="bg-blue-50"],
+:root[data-theme="dark"] [data-tool-theme] [class*="bg-blue-100"],
+:root[data-theme="dark"] [data-tool-theme] [class*="bg-violet-50"],
+:root[data-theme="dark"] [data-tool-theme] [class*="bg-violet-100"],
+:root[data-theme="dark"] [data-tool-theme] [class*="bg-indigo-50"],
+:root[data-theme="dark"] [data-tool-theme] [class*="bg-indigo-100"] { background-color: rgba(255, 255, 255, 0.04) !important; }
+
+/* ============================================================
+ * FRAMED MODE — when a tool is loaded inside the desktop iframe
+ * (?frame=1), <html> gets data-framed="1" via themeInitScript.
+ * The desktop's outer Window already provides traffic lights,
+ * a draggable title bar, and resize handles, so the inner page
+ * must NOT render its own bespoke macOS chrome.
+ * ============================================================ */
+
+/* Hide any chrome bar that contains a 3-dot row, regardless of which
+ * exact colors the agent picked. We cover three patterns:
+ *   - macOS hex values (#ff5f57, #febc2e, #28c840)
+ *   - Tailwind named colors with /opacity (bg-red-400/70, bg-amber-400/70…)
+ *   - Tailwind plain (bg-red-500, bg-amber-500…)
+ * Two depths: dots as direct children, AND dots wrapped in a flex div
+ * inside a larger title bar (the second case is what poster-creator,
+ * deal-scoring, etc. actually use). */
+:root[data-framed="1"] *:has(> [class*="bg-[#ff5f57]"]):has(> [class*="bg-[#28c840]"]),
+:root[data-framed="1"] *:has(> * > [class*="bg-[#ff5f57]"]):has(> * > [class*="bg-[#28c840]"]),
+:root[data-framed="1"] *:has(> [class*="bg-red-400"]):has(> [class*="bg-emerald-400"]),
+:root[data-framed="1"] *:has(> * > [class*="bg-red-400"]):has(> * > [class*="bg-emerald-400"]),
+:root[data-framed="1"] *:has(> [class*="bg-red-400"]):has(> [class*="bg-green-400"]),
+:root[data-framed="1"] *:has(> * > [class*="bg-red-400"]):has(> * > [class*="bg-green-400"]),
+:root[data-framed="1"] *:has(> [class*="bg-red-500"]):has(> [class*="bg-emerald-500"]),
+:root[data-framed="1"] *:has(> * > [class*="bg-red-500"]):has(> * > [class*="bg-emerald-500"]),
+:root[data-framed="1"] *:has(> [class*="bg-red-500"]):has(> [class*="bg-green-500"]),
+:root[data-framed="1"] *:has(> * > [class*="bg-red-500"]):has(> * > [class*="bg-green-500"]),
+:root[data-framed="1"] *:has(> [class*="bg-rose-400"]):has(> [class*="bg-emerald-400"]),
+:root[data-framed="1"] *:has(> * > [class*="bg-rose-400"]):has(> * > [class*="bg-emerald-400"]) {
+  display: none !important;
+}
+
+/* Hide "navigate away" links inside framed iframes — back-to-index links
+ * (e.g. "← All Tools") break out of the workspace metaphor; the desktop's
+ * own dock and traffic lights already provide navigation. Targets the
+ * exact destinations tools link to, not generic <a>s. */
+:root[data-framed="1"] a[href="/tools"],
+:root[data-framed="1"] a[href="/solutions"],
+:root[data-framed="1"] a[href="/solutions/tools"],
+:root[data-framed="1"] a[href$="/tools/"],
+:root[data-framed="1"] [data-tool-back-link] {
+  display: none !important;
+}
+
+/* Force tool content to fit inside the desktop window — most tools were
+ * authored for a full browser viewport (max-w-[1280px], multi-column
+ * grids) so they overflow a narrow window. When framed, collapse those
+ * containers to 100% and stop horizontal overflow. */
+:root[data-framed="1"] [class*="max-w-["],
+:root[data-framed="1"] .max-w-3xl,
+:root[data-framed="1"] .max-w-4xl,
+:root[data-framed="1"] .max-w-5xl,
+:root[data-framed="1"] .max-w-6xl,
+:root[data-framed="1"] .max-w-7xl {
+  max-width: 100% !important;
+}
+
+:root[data-framed="1"] body,
+:root[data-framed="1"] [data-tool-theme] {
+  overflow-x: hidden;
+}
+
+/* Drop heavy lg: padding inside the iframe — desktop windows are typically
+ * narrower than a real lg: breakpoint anyway. */
+@media (max-width: 900px) {
+  :root[data-framed="1"] [class*="lg:px-10"],
+  :root[data-framed="1"] [class*="lg:px-8"],
+  :root[data-framed="1"] [class*="px-10"],
+  :root[data-framed="1"] [class*="px-8"] {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+  }
+
+  /* Stack 2/3-column grids that won't fit a narrow window */
+  :root[data-framed="1"] [class*="lg:grid-cols-3"],
+  :root[data-framed="1"] [class*="md:grid-cols-3"],
+  :root[data-framed="1"] [class*="lg:grid-cols-2"],
+  :root[data-framed="1"] [class*="md:grid-cols-2"] {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+/* Framed iframe body keeps its theme bg — earlier I set it to transparent
+ * to avoid "double padding" but that revealed the iframe element's
+ * user-agent default (white in Chrome) and made dark-mode pages look
+ * cream/light. The body's own var(--bg) is correct in both modes. */
+
+/* Belt-and-braces: hide the global site nav/footer/banner if any leak in
+ * (ChromeGate is React-side; this is the CSS safety net). */
+:root[data-framed="1"] body > nav:first-of-type,
+:root[data-framed="1"] body > footer,
+:root[data-framed="1"] [data-site-banner] {
+  display: none !important;
+}
+
+/* ============================================================
+ * MOBILE LAYER — desktop OS adapts on small screens.
+ * The draggable-window metaphor doesn't work on touch screens
+ * with limited real estate; mobile gets fullscreen tools and a
+ * compact dock/topbar.
+ * ============================================================ */
+
+@media (max-width: 640px) {
+  /* Force every tool window fullscreen on mobile — overrides the inline
+   * width/height/x/y styles set by useWindowManager. */
+  [data-tools-desktop] [role="dialog"][aria-label] {
+    left: 0 !important;
+    top: 32px !important; /* leave room for top bar */
+    width: 100vw !important;
+    height: calc(100dvh - 32px) !important;
+    border-radius: 0 !important;
+    border-left-width: 0 !important;
+    border-right-width: 0 !important;
+  }
+
+  /* Hide the resize handle (no resizing on mobile) */
+  [data-tools-desktop] [role="dialog"][aria-label] [aria-label="Resize window"] {
+    display: none !important;
+  }
+
+  /* Dock: compact, scrollable, hugs bottom safe area */
+  [data-tools-desktop] [data-dock] {
+    bottom: env(safe-area-inset-bottom, 0) !important;
+    max-width: calc(100vw - 16px) !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    scrollbar-width: none;
+  }
+  [data-tools-desktop] [data-dock]::-webkit-scrollbar { display: none; }
+
+  /* TopBar: hide menu labels, keep icons + clock */
+  [data-tools-desktop] [data-topbar-menu-label] {
+    display: none !important;
+  }
+
+  /* Widgets: hide on mobile (they assume a wide canvas) */
+  [data-tools-desktop] [data-widget] {
+    display: none !important;
+  }
+}
+
