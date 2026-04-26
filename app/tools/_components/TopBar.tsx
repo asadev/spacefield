@@ -403,6 +403,41 @@ export default function TopBar({
             <MobileItem onClick={() => { setOpenMenu(null); onToggleTheme(); }}>{theme === "light" ? "Switch to dark" : "Switch to light"}</MobileItem>
             <MobileItem onClick={() => { setOpenMenu(null); onToggleSounds(); }}>{soundsMuted ? "Unmute sounds" : "Mute sounds"}</MobileItem>
           </MobileSection>
+          <MobileSection label="Account">
+            {user ? (
+              <>
+                <div className="flex items-center gap-3 rounded px-2 py-2">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-full bg-tool-accent-soft text-sm font-semibold text-tool-accent">
+                    {(user.user_metadata?.full_name?.[0] ||
+                      user.user_metadata?.name?.[0] ||
+                      user.email?.[0] ||
+                      "?").toUpperCase()}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-sm font-medium text-app">
+                      {user.user_metadata?.full_name ||
+                        user.user_metadata?.name ||
+                        user.email?.split("@")[0]}
+                    </div>
+                    <div className="truncate text-[11px] text-muted">
+                      {user.email}
+                    </div>
+                  </div>
+                </div>
+                <MobileItem onClick={() => { setOpenMenu(null); onSignOut(); }}>Sign out</MobileItem>
+              </>
+            ) : (
+              <MobileItem
+                onClick={() => {
+                  setOpenMenu(null);
+                  if (onSignIn) onSignIn();
+                }}
+                disabled={!onSignIn}
+              >
+                Sign in
+              </MobileItem>
+            )}
+          </MobileSection>
         </MobilePopover>
       )}
 
@@ -475,9 +510,6 @@ export default function TopBar({
               </div>
               <div className="truncate text-[11px] text-muted">{user.email}</div>
             </div>
-            <MenuLink href="/dashboard">Dashboard</MenuLink>
-            <MenuLink href="/dashboard/profile">Profile</MenuLink>
-            <MenuDivider />
             <MenuItem
               onClick={() => {
                 setOpenMenu(null);
