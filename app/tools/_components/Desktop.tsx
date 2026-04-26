@@ -2,8 +2,6 @@
 
 import { AnimatePresence } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { createClient } from "@/lib/supabase/client";
-import type { User } from "@supabase/supabase-js";
 import { useTheme } from "@/components/ThemeProvider";
 import { TOOLS, toolBySlug, type ToolItem } from "../_data/tools-list";
 import { DesktopShellProvider } from "./DesktopShellContext";
@@ -99,19 +97,9 @@ function DesktopApp() {
   const [missionControlOpen, setMissionControlOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
-  const [user, setUser] = useState<User | null>(null);
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
   const { resolved } = useTheme();
-  const supabase = useRef(createClient()).current;
   const sounds = useDesktopSounds();
-
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data }) => setUser(data.user));
-    const { data: sub } = supabase.auth.onAuthStateChange((_e, session) => {
-      setUser(session?.user ?? null);
-    });
-    return () => sub.subscription.unsubscribe();
-  }, [supabase]);
 
   useEffect(() => {
     const read = () =>
@@ -237,9 +225,9 @@ function DesktopApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [installed]);
 
-  const handleSignOut = async () => {
-    await supabase.auth.signOut();
-    window.location.href = "/";
+  const handleSignOut = () => {
+    // No auth in spacefield — sign-out is a no-op (kept so TopBar's
+    // existing menu item still has a handler).
   };
 
   const toggleTheme = () => {
@@ -316,7 +304,7 @@ function DesktopApp() {
       <DesktopBackground />
 
       <TopBar
-        user={user}
+        user={null}
         windows={windows}
         onLaunchpad={openLaunchpad}
         onStore={openStore}

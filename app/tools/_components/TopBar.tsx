@@ -3,9 +3,21 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import type { User } from "@supabase/supabase-js";
 import type { WindowState } from "./useWindowManager";
 import { useWorkspaces } from "./useWorkspaces";
+
+/* Auth in spacefield is opt-in / not yet wired. Minimal user shape so
+ * the avatar / email row can render if a user does sign in later,
+ * without depending on @supabase/supabase-js types. */
+type User = {
+  email?: string | null;
+  user_metadata?: {
+    full_name?: string | null;
+    name?: string | null;
+    avatar_url?: string | null;
+    custom_avatar_url?: string | null;
+  } | null;
+};
 
 interface Props {
   user: User | null;
