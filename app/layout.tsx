@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
@@ -39,6 +39,20 @@ export const metadata: Metadata = {
   alternates: {
     canonical: "https://spacefield.co",
   },
+};
+
+/* Critical for mobile — without this, iOS Safari uses a 980px default
+ * layout viewport which makes Tailwind's sm: (640px) media query match
+ * even on small phones, hiding the mobile UI (hamburger, etc.) and
+ * showing desktop-only chrome instead. */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+    { media: "(prefers-color-scheme: light)", color: "#f1f2f4" },
+  ],
 };
 
 export default function RootLayout({
