@@ -44,5 +44,9 @@ jobs:
       - name: Build (Vercel-style)
         run: vercel build --prod --token "$VERCEL_TOKEN"
 
+      # Upload as a single archive instead of hundreds of files. The
+      # spacefield project has 138 tools and a fat .vercel/output dir;
+      # without --archive=tgz we trip Vercel's free-tier rate limit
+      # (5000 file uploads/day, code "api-upload-free").
       - name: Deploy prebuilt to production
-        run: vercel deploy --prebuilt --prod --yes --token "$VERCEL_TOKEN"
+        run: vercel deploy --prebuilt --prod --archive=tgz --yes --token "$VERCEL_TOKEN"
