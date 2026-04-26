@@ -124,6 +124,11 @@
    * flips automatically to a light-mode equivalent. No per-page edits needed.
    */
   --color-white: #0a0a0a;
+  /* Inverse — `text-black` was rendering dark-on-dark for selected-state
+   * pills (e.g. Onboarding buttons that use `bg-white text-black` to flip
+   * for emphasis). Tailwind v4 maps text-black to var(--color-black), so
+   * we also flip that in light mode. */
+  --color-black: #ffffff;
   --color-gray-100: #1a1a1a;
   --color-gray-200: #2a2a2a;
   --color-gray-300: #3a3a3a;
