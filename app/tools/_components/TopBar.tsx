@@ -139,18 +139,38 @@ export default function TopBar({
       ref={barRef}
       className="fixed inset-x-0 top-0 z-[1] flex h-8 items-center gap-1 bg-app-elevated/70 px-2 text-[0.72rem] backdrop-blur-xl"
     >
-      {/* Home — back to the main example.com site */}
-      <Link
-        href="/"
-        aria-label="Back to example.com"
-        title="Back to example.com"
-        className="flex h-6 w-6 items-center justify-center rounded text-app hover:bg-surface transition-colors"
+      {/* Mobile-only trigger. On <sm screens File/Window/View/Help don't
+       * fit horizontally, so we collapse them behind a single button that
+       * opens the same menus as a vertical stack. The menu primitives
+       * already portal their dropdowns out of the topbar's stacking
+       * context, so the same Menu components work for both layouts —
+       * we just gate them with sm:flex / hidden on the desktop row. */}
+      <button
+        type="button"
+        onClick={() => setOpenMenu(openMenu === "mobile" ? null : "mobile")}
+        aria-label="Open menu"
+        title="Menu"
+        className="flex h-6 w-6 items-center justify-center rounded text-app hover:bg-surface transition-colors sm:hidden"
+        data-topbar-menu-label
       >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M3 12l9-9 9 9v9a2 2 0 01-2 2h-4v-7h-6v7H5a2 2 0 01-2-2v-9zm9-6.2L5 12v8h3v-7h8v7h3v-8l-7-6.2z" />
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <line x1="3" y1="6" x2="21" y2="6" />
+          <line x1="3" y1="12" x2="21" y2="12" />
+          <line x1="3" y1="18" x2="21" y2="18" />
         </svg>
-      </Link>
+      </button>
 
+      {/* Spacefield wordmark — small label, never linked anywhere
+       * (this site IS the workspace; nothing to "go back" to). */}
+      <span
+        aria-label="Space Field"
+        className="ml-1 mr-1 hidden select-none text-[0.72rem] font-semibold tracking-tight text-app sm:inline"
+      >
+        Space Field
+      </span>
+
+      {/* Desktop menu row — hidden on mobile, replaced by the hamburger. */}
+      <div className="hidden items-center gap-1 sm:flex">
       <Menu id="file" open={openMenu} onOpen={setOpenMenu} label="File">
         {/* Workspace switcher — list of workspaces with active checkmark,
           * plus "New Workspace…" entry to create a new one. */}
@@ -357,6 +377,34 @@ export default function TopBar({
         <MenuLink href="/network">Broker network</MenuLink>
         <MenuLink href="/learn">Courses</MenuLink>
       </Menu>
+      </div>
+
+      {/* Mobile menu — flat list of every action. Portaled out via the
+       * Menu primitive so it floats above the back-layer topbar. */}
+      {openMenu === "mobile" && (
+        <MobilePopover onClose={() => setOpenMenu(null)}>
+          <MobileSection label="File">
+            <MobileItem onClick={() => { setOpenMenu(null); onCreateWorkspace(); }}>New Workspace…</MobileItem>
+            <MobileItem onClick={() => { setOpenMenu(null); onLaunchpad(); }}>Open tool…</MobileItem>
+            <MobileItem onClick={() => { setOpenMenu(null); onStore(); }}>Tool Store…</MobileItem>
+            <MobileItem onClick={() => { setOpenMenu(null); onOpenSettings(); }}>Settings…</MobileItem>
+            <MobileItem onClick={() => { setOpenMenu(null); onCloseAll(); }} disabled={windows.length === 0}>Close all windows</MobileItem>
+            <MobileItem onClick={() => { setOpenMenu(null); onResetWorkspace(); }}>Reset workspace</MobileItem>
+          </MobileSection>
+          <MobileSection label="Window">
+            <MobileItem onClick={() => { setOpenMenu(null); onMinimizeAll(); }} disabled={windows.length === 0}>Minimize all</MobileItem>
+            <MobileItem onClick={() => { setOpenMenu(null); onMissionControl(); }}>Mission Control</MobileItem>
+          </MobileSection>
+          <MobileSection label="View">
+            <MobileItem onClick={() => { setOpenMenu(null); onCustomizeWallpaper(); }}>Wallpaper…</MobileItem>
+            <MobileItem onClick={() => { setOpenMenu(null); onCustomizeIconStyle(); }}>Icon style…</MobileItem>
+            <MobileItem onClick={() => { setOpenMenu(null); onCustomizeWidgets(); }}>Add widgets…</MobileItem>
+            <MobileItem onClick={() => { setOpenMenu(null); onCustomizeDock(); }}>Customize dock…</MobileItem>
+            <MobileItem onClick={() => { setOpenMenu(null); onToggleTheme(); }}>{theme === "light" ? "Switch to dark" : "Switch to light"}</MobileItem>
+            <MobileItem onClick={() => { setOpenMenu(null); onToggleSounds(); }}>{soundsMuted ? "Unmute sounds" : "Mute sounds"}</MobileItem>
+          </MobileSection>
+        </MobilePopover>
+      )}
 
       {/* Spacer */}
       <div className="flex-1" />
@@ -602,4 +650,80 @@ function MenuLink({ href, children }: { href: string; children: ReactNode }) {
 
 function MenuDivider() {
   return <div className="my-1 h-px bg-app" aria-hidden="true" />;
+}
+
+/* ───────────── Mobile menu primitives ─────────────
+ * Portaled flat list of every action when the hamburger is tapped.
+ * Sits above the back-layer topbar/dock with z-[60]. */
+
+function MobilePopover({
+  onClose,
+  children,
+}: {
+  onClose: () => void;
+  children: ReactNode;
+}) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+  if (!mounted) return null;
+  return createPortal(
+    <div
+      data-topbar-portal=""
+      className="fixed inset-x-0 top-8 z-[60] mx-2 max-h-[calc(100dvh-3rem)] overflow-y-auto rounded-xl border border-app bg-app-elevated p-2 shadow-2xl sm:hidden"
+      role="menu"
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close menu"
+        className="absolute right-2 top-2 flex h-7 w-7 items-center justify-center rounded text-secondary hover:bg-surface hover:text-app transition-colors"
+      >
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <line x1="18" y1="6" x2="6" y2="18" />
+          <line x1="6" y1="6" x2="18" y2="18" />
+        </svg>
+      </button>
+      {children}
+    </div>,
+    document.body
+  );
+}
+
+function MobileSection({
+  label,
+  children,
+}: {
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <div className="mb-2 last:mb-0">
+      <div className="px-2 pb-1 pt-1 text-[0.6rem] uppercase tracking-[0.14em] text-muted">
+        {label}
+      </div>
+      <div className="space-y-0.5">{children}</div>
+    </div>
+  );
+}
+
+function MobileItem({
+  children,
+  onClick,
+  disabled,
+}: {
+  children: ReactNode;
+  onClick?: () => void;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="flex w-full items-center rounded px-2 py-2 text-left text-sm text-app transition-colors hover:bg-surface disabled:cursor-not-allowed disabled:opacity-40"
+      role="menuitem"
+    >
+      {children}
+    </button>
+  );
 }
