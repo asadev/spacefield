@@ -351,22 +351,42 @@ function DesktopApp() {
         <Widgets onOpenTool={handleOpenTool} />
       )}
 
-      {/* Empty-state hint — only shown when there are no windows */}
+      {/* Empty-state hint — only shown when there are no windows.
+        * Text floats directly on the wallpaper (which is theme-independent
+        * — could be a dark gradient, a photo, or an interactive canvas).
+        * Using theme tokens (text-app/text-secondary) breaks readability
+        * when the user is in light mode but has chosen a dark wallpaper:
+        * dark theme text on dark wallpaper = invisible. So this hint
+        * always renders light + drop-shadow regardless of theme. */}
       {windowsHydrated && onboarded && windows.length === 0 && (
-        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center px-8 text-center">
-          <h1 className="text-3xl font-bold tracking-tight text-app sm:text-5xl">
+        <div className="pointer-events-none absolute inset-0 z-10 flex flex-col items-center justify-center px-8 text-center [text-shadow:0_2px_8px_rgba(0,0,0,0.6)]">
+          <h1
+            className="text-3xl font-bold tracking-tight sm:text-5xl"
+            style={{ color: "#ffffff" }}
+          >
             What do you want to work on?
           </h1>
-          <p className="mt-3 max-w-xl text-sm text-secondary sm:text-base">
+          <p
+            className="mt-3 max-w-xl text-sm sm:text-base"
+            style={{ color: "rgba(255,255,255,0.85)" }}
+          >
             Pick a tool from the dock, or press{" "}
-            <kbd className="rounded border border-app bg-surface px-1.5 py-0.5 text-[0.7rem] font-mono">
+            <kbd
+              className="rounded px-1.5 py-0.5 text-[0.7rem] font-mono"
+              style={{
+                color: "#ffffff",
+                background: "rgba(0,0,0,0.35)",
+                border: "1px solid rgba(255,255,255,0.30)",
+              }}
+            >
               ⌘ K
             </kbd>{" "}
             for all your tools.{" "}
             <button
               type="button"
               onClick={openStore}
-              className="pointer-events-auto underline underline-offset-2 hover:text-app"
+              className="pointer-events-auto underline underline-offset-2"
+              style={{ color: "rgba(255,255,255,0.85)" }}
             >
               Browse the Store
             </button>{" "}
