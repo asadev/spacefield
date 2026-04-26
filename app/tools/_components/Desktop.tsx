@@ -277,13 +277,37 @@ function DesktopApp() {
     await authSignOut();
   };
 
+  /* Toggle cycles: system → light → dark → system. Default is system
+   * (follows OS) so dark/light flips with the OS unless the user has
+   * explicitly picked one. The cycle returns to system on the third
+   * click so users can always get back to auto. */
   const toggleTheme = () => {
-    const next = theme === "light" ? "dark" : "light";
-    document.documentElement.setAttribute("data-theme", next);
-    try {
-      localStorage.setItem("theme", next);
-    } catch {}
-    setTheme(next);
+    const stored =
+      typeof window !== "undefined"
+        ? (localStorage.getItem("theme") as "light" | "dark" | "system" | null)
+        : null;
+    const current = stored ?? "system";
+    const next: "light" | "dark" | "system" =
+      current === "system" ? "light" : current === "light" ? "dark" : "system";
+
+    if (typeof window !== "undefined") {
+      try {
+        localStorage.setItem("theme", next);
+      } catch {}
+      // Resolve "system" against current OS preference for the data-theme attr.
+      const resolved =
+        next === "system"
+          ? window.matchMedia("(prefers-color-scheme: light)").matches
+            ? "light"
+            : "dark"
+          : next;
+      document.documentElement.setAttribute("data-theme", resolved);
+      // Notify other listeners (Theme picker, system-mode hook).
+      window.dispatchEvent(
+        new StorageEvent("storage", { key: "theme", newValue: next })
+      );
+      setTheme(resolved);
+    }
   };
 
   const handleUninstall = (slug: string) => {
