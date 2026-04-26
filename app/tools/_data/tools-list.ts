@@ -20,7 +20,8 @@ export type ToolCategoryKey =
   | "support"
   | "growth"
   | "content"
-  | "crm";
+  | "crm"
+  | "files";
 
 export interface ToolCategory {
   key: ToolCategoryKey;
@@ -380,6 +381,13 @@ export const TOOL_CATEGORIES: ToolCategory[] = [
     accent: "red",
     icon: "M3 4h18v2H3V4zm1 4h4v12H4V8zm6 0h4v8h-4V8zm6 0h4v10h-4V8z",
   },
+  {
+    key: "files",
+    label: "Files",
+    short: "Files",
+    accent: "stone",
+    icon: "M6 2h9l5 5v15a2 2 0 01-2 2H6a2 2 0 01-2-2V4a2 2 0 012-2zm7 1.5V8h4.5L13 3.5z",
+  },
 ];
 
 export const TOOLS: ToolItem[] = [
@@ -562,6 +570,9 @@ export const TOOLS: ToolItem[] = [
   { slug: "sdr-cadence-builder", title: "SDR Cadence Builder", description: "Multi-touch outbound sequence designer across email, call, LinkedIn, and video. Visual timeline, preset variants for enterprise, SMB, inbound follow-up.", category: "crm", icon: "flow", route: "/solutions/tools/sdr-cadence-builder" },
   { slug: "churn-risk-calculator", title: "Churn Risk Calculator", description: "Score customer accounts on usage trend, support volume, NPS, renewal proximity, sponsor changes, and payment issues. 0-100 risk with recommended action.", category: "crm", icon: "bell", route: "/solutions/tools/churn-risk-calculator" },
   { slug: "commission-statement", title: "Commission Statement", description: "Per-rep commission statement with deals, SPIFs, and clawbacks. Period quota, attainment, YTD running totals. Matches typical AE comp plan format. Print-ready.", category: "crm", icon: "receipt", route: "/solutions/tools/commission-statement" },
+
+  // Files Manager — workspace storage, backed by Cloudflare R2.
+  { slug: "files-manager", title: "Files", description: "Upload, organize, and share files inside this workspace. Storage is shared across members. Free workspaces include 100 MB.", category: "files", icon: "document", route: "/tools/files-manager", topRated: true, app: () => import("../files-manager/_app").then((m) => ({ default: m.default })) },
 ];
 
 export function toolsByCategory(key: ToolCategoryKey): ToolItem[] {

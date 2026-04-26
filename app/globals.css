@@ -1079,6 +1079,20 @@ body {
     color-mix(in srgb, var(--tool-hue-deep) 10%, transparent) 100%);
 }
 
+[data-tool-theme="files"] {
+  --tool-hue: #78716c;   /* stone — neutral, archival */
+  --tool-hue-deep: #44403c;
+  --tool-accent: var(--tool-hue);
+  --tool-accent-soft: color-mix(in srgb, var(--tool-hue) 16%, transparent);
+  --tool-accent-ring: color-mix(in srgb, var(--tool-hue) 55%, transparent);
+  --tool-chrome: color-mix(in srgb, var(--tool-hue) 8%, transparent);
+  --tool-surface: color-mix(in srgb, var(--tool-hue) 5%, transparent);
+  --tool-heading-family: var(--font-sans);
+  --tool-hero-gradient: linear-gradient(135deg,
+    color-mix(in srgb, var(--tool-hue) 22%, transparent) 0%,
+    color-mix(in srgb, var(--tool-hue-deep) 10%, transparent) 100%);
+}
+
 /* ─── Tool-theme utility classes ───────────────────────────────────────────
  * Bound to the tokens above so any descendant of a [data-tool-theme] element
  * can use these utility classes without knowing the category. */

@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import Desktop from "./tools/_components/Desktop";
+import HomeGate from "./_components/HomeGate";
 
 export const metadata: Metadata = {
   title: "Space Field — Your Workspace",
@@ -7,8 +7,10 @@ export const metadata: Metadata = {
     "A multi-workspace desktop with native apps for real estate, finance, marketing, sales, and everything in between. Create workspaces, install tools, run them like apps.",
 };
 
-/* spacefield.co IS the desktop OS. No marketing, no chrome — you land
- * straight into your workspace. */
+/* spacefield.co serves two faces from one URL:
+ *   - First-time, signed-out visitors → marketing Landing.
+ *   - Returning users (local workspace OR signed in) → Desktop OS.
+ * HomeGate decides which to render based on localStorage + Supabase session. */
 export default function SpaceFieldHome() {
-  return <Desktop />;
+  return <HomeGate />;
 }
