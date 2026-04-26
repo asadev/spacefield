@@ -14,12 +14,10 @@
 
 import "server-only";
 import { Resend } from "resend";
+import { SENDERS, type EmailRole } from "./email-senders";
 
 const apiKey = process.env.RESEND_API_KEY;
 const resend = apiKey ? new Resend(apiKey) : null;
-
-const DEFAULT_FROM = "Space Field <noreply@spacefield.co>";
-const FRIENDLY_FROM = "Space Field <hello@spacefield.co>";
 
 export interface SendEmailArgs {
   to: string | string[];
@@ -27,9 +25,9 @@ export interface SendEmailArgs {
   html: string;
   /** Plain-text fallback. Auto-derived from html if not given. */
   text?: string;
-  /** Sender override. Defaults to noreply@. Use FRIENDLY_FROM for
-   *  human-feeling messages. */
-  from?: string | "noreply" | "hello";
+  /** Sender role (info / support / sales / hello / noreply / invites /
+   *  security / legal) OR a literal "Name <addr>" string for ad-hoc use. */
+  from?: EmailRole | string;
   replyTo?: string;
 }
 
@@ -45,15 +43,16 @@ export async function sendEmail({
     console.warn("[email] RESEND_API_KEY not set — skipping send");
     return null;
   }
-  const sender =
-    from === "noreply"
-      ? DEFAULT_FROM
-      : from === "hello"
-        ? FRIENDLY_FROM
-        : from;
+
+  // Resolve role → sender or use literal string
+  const role = SENDERS[from as EmailRole] as
+    | (typeof SENDERS)[EmailRole]
+    | undefined;
+  const fromHeader = role ? role.from : (from as string);
+  const replyToHeader = replyTo ?? role?.replyTo;
 
   const { data, error } = await resend.emails.send({
-    from: sender,
+    from: fromHeader,
     to: Array.isArray(to) ? to : [to],
     subject,
     html,
@@ -64,13 +63,34 @@ export async function sendEmail({
         .replace(/<[^>]+>/g, " ")
         .replace(/\s+/g, " ")
         .trim(),
-    replyTo,
+    replyTo: replyToHeader,
   });
   if (error) {
     console.error("[email] send failed:", error);
     throw new Error(error.message ?? "email send failed");
   }
   return data ? { id: data.id } : null;
+}
+
+/* Notify the team inbox about something that happened in the app
+ * (new contact form submission, payment lead, security report, etc.).
+ * Goes to the role's `inbox` (currently hello@example.com via
+ * forwards once inbound is wired). */
+export async function notifyTeam(args: {
+  role: EmailRole;
+  subject: string;
+  html: string;
+  /** Optional reply-to so the team can reply directly to the user. */
+  replyTo?: string;
+}): Promise<{ id: string } | null> {
+  const sender = SENDERS[args.role];
+  return sendEmail({
+    from: args.role,
+    to: sender.inbox,
+    subject: args.subject,
+    html: args.html,
+    replyTo: args.replyTo,
+  });
 }
 
 /* Pre-built templates — keep markup minimal and inline-styled so it

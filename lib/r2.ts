@@ -1,5 +1,9 @@
 import "server-only";
-import { S3Client, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import {
+  S3Client,
+  DeleteObjectCommand,
+  HeadObjectCommand,
+} from "@aws-sdk/client-s3";
 import {
   getSignedUrl,
 } from "@aws-sdk/s3-request-presigner";
@@ -105,4 +109,29 @@ export async function presignedDownloadUrl(args: {
 
 export async function deleteR2Object(key: string): Promise<void> {
   await r2().send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
+}
+
+/* Read the actual size of an object from R2. Used by /api/files/finalize
+ * to verify the client-supplied sizeBytes against ground truth before
+ * inserting the metadata row + counting against quota. Returns null if
+ * the object doesn't exist (upload didn't actually happen). */
+export async function r2ObjectSize(key: string): Promise<number | null> {
+  try {
+    const res = await r2().send(
+      new HeadObjectCommand({ Bucket: BUCKET, Key: key })
+    );
+    return res.ContentLength ?? null;
+  } catch (err: unknown) {
+    const code =
+      (err as { name?: string; $metadata?: { httpStatusCode?: number } } | null)
+        ?.name ??
+      (err as { Code?: string } | null)?.Code ??
+      "";
+    const status = (err as { $metadata?: { httpStatusCode?: number } } | null)
+      ?.$metadata?.httpStatusCode;
+    if (code === "NotFound" || code === "NoSuchKey" || status === 404) {
+      return null;
+    }
+    throw err;
+  }
 }
