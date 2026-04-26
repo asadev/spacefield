@@ -36,6 +36,8 @@ interface AuthContextValue {
   supabase: SupabaseClient;
   /** Send a magic link to the given email. Throws if Supabase isn't configured. */
   signInWithEmail: (email: string) => Promise<void>;
+  /** Redirect to Google's OAuth flow. Returns to the current origin. */
+  signInWithGoogle: () => Promise<void>;
   /** Sign out the current user. No-op if not configured / not signed in. */
   signOut: () => Promise<void>;
 }
@@ -91,6 +93,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [supabase, enabled]
   );
 
+  const signInWithGoogle = useCallback(async () => {
+    if (!enabled) throw new Error("Supabase not configured");
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo:
+          typeof window !== "undefined" ? window.location.origin : undefined,
+      },
+    });
+    if (error) throw error;
+    // signInWithOAuth redirects the page; control flow won't resume.
+  }, [supabase, enabled]);
+
   const signOut = useCallback(async () => {
     if (!enabled) return;
     await supabase.auth.signOut();
@@ -104,9 +119,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       enabled,
       supabase,
       signInWithEmail,
+      signInWithGoogle,
       signOut,
     }),
-    [user, hydrated, enabled, supabase, signInWithEmail, signOut]
+    [user, hydrated, enabled, supabase, signInWithEmail, signInWithGoogle, signOut]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
