@@ -531,10 +531,17 @@ export default function FilesManagerApp({
   // call repeatedly. Without this, a user whose client-side workspace
   // sync raced (or hasn't run) sees "0 B of 0 B" and gets a 403 on
   // upload because workspace_members has no row for them.
+  //
+  // The Postgres workspace_owner_quota trigger throws when the user is
+  // already at their tier's max_owned_workspaces — we surface that as a
+  // dedicated `ensureError` banner so the user can act on it (delete a
+  // workspace or upgrade) instead of just seeing a half-broken UI.
   const [ensured, setEnsured] = useState(false);
+  const [ensureError, setEnsureError] = useState<string | null>(null);
   useEffect(() => {
     if (!activeId) return;
     setEnsured(false);
+    setEnsureError(null);
     let cancelled = false;
     (async () => {
       try {
@@ -548,11 +555,12 @@ export default function FilesManagerApp({
           const body = (await res.json().catch(() => ({}))) as {
             error?: string;
           };
-          setListError(body?.error ?? "could not prepare workspace");
+          const msg = body?.error ?? `could not prepare workspace (${res.status})`;
+          setEnsureError(msg);
           return;
         }
       } catch {
-        if (!cancelled) setListError("could not prepare workspace");
+        if (!cancelled) setEnsureError("network error preparing workspace");
         return;
       }
       if (!cancelled) setEnsured(true);
@@ -563,6 +571,14 @@ export default function FilesManagerApp({
     // activeName change shouldn't re-trigger (rename happens elsewhere).
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId]);
+
+  // Recognise specific ensure failure modes so we can render actionable
+  // banners. The Postgres trigger raises an exception that surfaces here
+  // as a string containing "workspace limit reached".
+  const ensureAtCap =
+    !!ensureError && /workspace limit reached/i.test(ensureError);
+  const ensureNotMember =
+    !!ensureError && /not a member|caller is not a member/i.test(ensureError);
 
   // Data
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
@@ -658,6 +674,11 @@ export default function FilesManagerApp({
   const startUploads = useCallback(
     async (incoming: File[]) => {
       if (!activeId) return;
+      // Block uploads if the workspace hasn't been materialized in DB
+      // yet (or materialization failed). Without this, every file would
+      // 403 with "not a member of that workspace" and we'd waste
+      // presigned-URL requests against R2.
+      if (!ensured) return;
       // Local pre-flight: project remaining cap, skip files that overflow.
       let projected = used;
       // Sum existing pending jobs' sizes that haven't completed yet
@@ -1037,6 +1058,70 @@ export default function FilesManagerApp({
         </div>
       </header>
 
+      {/* Workspace materialization error — at-cap or other */}
+      <AnimatePresence>
+        {ensureAtCap && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden border-b border-amber-400/30 bg-amber-400/10"
+          >
+            <div className="flex flex-wrap items-center gap-3 px-4 py-2 text-xs">
+              <span className="font-semibold text-amber-300">
+                Workspace not active
+              </span>
+              <span className="text-secondary">
+                Your plan&apos;s workspace limit is reached, so this
+                workspace was created locally but couldn&apos;t be saved
+                to the cloud. Upload won&apos;t work here. Switch to your
+                primary workspace, delete one, or upgrade.
+              </span>
+              <a
+                href="/pricing"
+                className="ml-auto rounded-md bg-tool-accent px-2.5 py-1 text-[11px] font-semibold text-white"
+              >
+                Upgrade
+              </a>
+            </div>
+          </motion.div>
+        )}
+        {ensureNotMember && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden border-b border-rose-500/30 bg-rose-500/10"
+          >
+            <div className="flex flex-wrap items-center gap-3 px-4 py-2 text-xs">
+              <span className="font-semibold text-rose-400">
+                Not a member
+              </span>
+              <span className="text-secondary">
+                This workspace exists in the cloud but you&apos;re not a
+                member. Ask the owner to invite you, or switch to a
+                workspace you own.
+              </span>
+            </div>
+          </motion.div>
+        )}
+        {ensureError && !ensureAtCap && !ensureNotMember && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            className="overflow-hidden border-b border-rose-500/30 bg-rose-500/10"
+          >
+            <div className="flex flex-wrap items-center gap-3 px-4 py-2 text-xs">
+              <span className="font-semibold text-rose-400">
+                Couldn&apos;t prepare workspace
+              </span>
+              <span className="text-secondary">{ensureError}</span>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Quota banner */}
       <AnimatePresence>
         {quotaBanner && (
@@ -1088,17 +1173,26 @@ export default function FilesManagerApp({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-semibold text-app">
-                  Drag files here, or choose from your computer
+                  {ensureError
+                    ? "Workspace not ready"
+                    : !ensured
+                    ? "Preparing workspace…"
+                    : "Drag files here, or choose from your computer"}
                 </div>
                 <div className="font-mono text-[10px] tabular-nums text-muted">
                   {activeJobCount > 0
                     ? `${activeJobCount} uploading · ${fmtBytes(activeJobBytes)}`
-                    : `Free tier: ${fmtBytes(cap)} of storage`}
+                    : ensured && cap > 0
+                    ? `${fmtBytes(cap)} of storage available`
+                    : ensureError
+                    ? "Resolve the issue above to upload"
+                    : "Connecting to your workspace…"}
                 </div>
               </div>
               <button
                 onClick={handlePickFiles}
-                className="rounded-lg bg-tool-accent px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90"
+                disabled={!ensured}
+                className="rounded-lg bg-tool-accent px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
                 Choose files
               </button>

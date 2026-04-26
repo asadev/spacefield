@@ -12,7 +12,22 @@ import { useWorkspaces } from "./useWorkspaces";
  * keyed on activeId so it remounts and every hook reads from the new
  * empty namespace. The user lands on a fresh workspace.
  *
+ * Tier gating: every open hits /api/me to fetch the user's tier and
+ * owned-workspace count. If they're at the cap (free tier = 1 owned
+ * workspace), the form is replaced by an "upgrade or delete" message
+ * with a link to /pricing. Without this, the user can keep creating
+ * workspaces locally that the DB then refuses to materialize, which
+ * cascades into "0 B of 0 B" + "not a member" in Files Manager.
+ *
  * Portaled so it always sits above whatever window/modal is active. */
+
+interface MeResponse {
+  tier: string;
+  tier_config: { name?: string } | null;
+  owned_workspaces: number;
+  max_owned_workspaces: number;
+  can_create_workspace: boolean;
+}
 
 interface Props {
   open: boolean;
@@ -23,22 +38,67 @@ export default function CreateWorkspaceDialog({ open, onClose }: Props) {
   const { createWorkspace, workspaces } = useWorkspaces();
   const [name, setName] = useState("");
   const [mounted, setMounted] = useState(false);
+  const [me, setMe] = useState<MeResponse | null>(null);
+  const [meLoading, setMeLoading] = useState(false);
+  const [meError, setMeError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     setMounted(true);
   }, []);
 
+  // Fetch tier + counts each time the dialog opens. We don't cache —
+  // the user might have just deleted a workspace, so freshness matters.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    setMeLoading(true);
+    setMeError(null);
+    setMe(null);
+    (async () => {
+      try {
+        const res = await fetch("/api/me", { cache: "no-store" });
+        if (cancelled) return;
+        if (res.status === 401) {
+          // Not signed in — fall back to letting them create locally.
+          // (Free tier client-only mode doesn't enforce caps.)
+          setMe({
+            tier: "free",
+            tier_config: { name: "Free" },
+            owned_workspaces: 0,
+            max_owned_workspaces: 1,
+            can_create_workspace: true,
+          });
+          return;
+        }
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as {
+            error?: string;
+          };
+          setMeError(body?.error ?? `Failed to load (${res.status})`);
+          return;
+        }
+        const data = (await res.json()) as MeResponse;
+        if (!cancelled) setMe(data);
+      } catch {
+        if (!cancelled) setMeError("network error");
+      } finally {
+        if (!cancelled) setMeLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
+
   // Reset + autofocus on every open
   useEffect(() => {
     if (!open) return;
-    const fallback = `Workspace ${workspaces.length + 1}`;
     setName("");
     const t = window.setTimeout(() => {
       inputRef.current?.focus();
       inputRef.current?.select();
     }, 80);
-    void fallback;
     return () => window.clearTimeout(t);
   }, [open, workspaces.length]);
 
@@ -52,8 +112,12 @@ export default function CreateWorkspaceDialog({ open, onClose }: Props) {
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  const canCreate = me?.can_create_workspace ?? false;
+  const atCap = me !== null && !me.can_create_workspace;
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!canCreate) return;
     const trimmed = name.trim() || `Workspace ${workspaces.length + 1}`;
     createWorkspace(trimmed);
     onClose();
@@ -100,20 +164,61 @@ export default function CreateWorkspaceDialog({ open, onClose }: Props) {
                 own dock, widgets, wallpaper, and open windows.
               </p>
 
-              <label className="mt-5 block">
-                <span className="text-[0.72rem] uppercase tracking-[0.14em] text-muted">
-                  Name
-                </span>
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder={`Workspace ${workspaces.length + 1}`}
-                  maxLength={48}
-                  className="mt-1 block w-full rounded-lg border border-app bg-app px-3 py-2 text-sm text-app placeholder:text-faint focus:border-tool-accent focus:outline-none focus:ring-2 focus:ring-tool-accent-soft"
-                />
-              </label>
+              {meError && (
+                <p className="mt-4 rounded-lg border border-rose-500/40 bg-rose-500/10 px-3 py-2 text-xs text-rose-300">
+                  Couldn&apos;t check your plan: {meError}
+                </p>
+              )}
+
+              {atCap && me && (
+                <div className="mt-5 rounded-lg border border-amber-400/40 bg-amber-400/10 px-3 py-3 text-sm">
+                  <div className="font-medium text-amber-300">
+                    You&apos;ve reached your workspace limit
+                  </div>
+                  <div className="mt-1 text-xs text-amber-200/80">
+                    Your{" "}
+                    <span className="font-medium">
+                      {me.tier_config?.name ?? me.tier}
+                    </span>{" "}
+                    plan includes {me.max_owned_workspaces}{" "}
+                    {me.max_owned_workspaces === 1 ? "workspace" : "workspaces"}
+                    , and you already own {me.owned_workspaces}. Delete one,
+                    or upgrade to add more.
+                  </div>
+                  <div className="mt-3 flex gap-2">
+                    <a
+                      href="/pricing"
+                      className="rounded-lg bg-tool-accent px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90"
+                    >
+                      View plans
+                    </a>
+                  </div>
+                </div>
+              )}
+
+              {!atCap && (
+                <label className="mt-5 block">
+                  <span className="text-[0.72rem] uppercase tracking-[0.14em] text-muted">
+                    Name
+                    {me && (
+                      <span className="ml-2 normal-case tracking-normal text-faint">
+                        ({me.owned_workspaces}/{me.max_owned_workspaces} on{" "}
+                        {me.tier_config?.name ?? me.tier})
+                      </span>
+                    )}
+                  </span>
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    value={name}
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={`Workspace ${workspaces.length + 1}`}
+                    maxLength={48}
+                    disabled={meLoading}
+                    className="mt-1 block w-full rounded-lg border border-app bg-app px-3 py-2 text-sm text-app placeholder:text-faint focus:border-tool-accent focus:outline-none focus:ring-2 focus:ring-tool-accent-soft disabled:opacity-50"
+                  />
+                </label>
+              )}
 
               <div className="mt-6 flex items-center justify-end gap-2">
                 <button
@@ -121,14 +226,17 @@ export default function CreateWorkspaceDialog({ open, onClose }: Props) {
                   onClick={onClose}
                   className="rounded-lg border border-app bg-app px-3 py-1.5 text-sm text-secondary transition-colors hover:bg-surface hover:text-app"
                 >
-                  Cancel
+                  {atCap ? "Close" : "Cancel"}
                 </button>
-                <button
-                  type="submit"
-                  className="rounded-lg bg-tool-accent px-4 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
-                >
-                  Create
-                </button>
+                {!atCap && (
+                  <button
+                    type="submit"
+                    disabled={!canCreate || meLoading}
+                    className="rounded-lg bg-tool-accent px-4 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {meLoading ? "Checking…" : "Create"}
+                  </button>
+                )}
               </div>
             </motion.form>
           </div>
