@@ -381,9 +381,11 @@ export default function TopBar({
       </Menu>
 
       <Menu id="help" open={openMenu} onOpen={setOpenMenu} label="Help">
-        <MenuLink href="/about">About</MenuLink>
-        <MenuLink href="/network">Broker network</MenuLink>
-        <MenuLink href="/learn">Courses</MenuLink>
+        <MenuLink href="/about">About Space Field</MenuLink>
+        <MenuLink href="/contact">Contact</MenuLink>
+        <MenuDivider />
+        <MenuLink href="/privacy">Privacy Policy</MenuLink>
+        <MenuLink href="/terms">Terms of Service</MenuLink>
       </Menu>
       </div>
 

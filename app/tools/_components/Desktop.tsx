@@ -217,6 +217,20 @@ function DesktopApp() {
   ) => {
     // Auto-install if user opens a tool from the Store
     if (!isInstalled(slug)) install(slug);
+    // Close any open modal/overlay so the new window comes to the front
+    // instead of opening behind Settings / Launchpad / AppStore /
+    // Notifications / Mission Control / Wallpaper / etc.
+    setSettingsOpen(false);
+    setLaunchpadOpen(false);
+    setStoreOpen(false);
+    setNotificationsOpen(false);
+    setMissionControlOpen(false);
+    setDockCustomizerOpen(false);
+    setWidgetGalleryOpen(false);
+    setWallpaperPickerOpen(false);
+    setIconStylePickerOpen(false);
+    setSignInOpen(false);
+    setCreateWorkspaceOpen(false);
     open(slug, title, params);
     sounds.tap();
   };
