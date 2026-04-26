@@ -82,9 +82,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.signInWithOtp({
         email,
         options: {
+          // Magic links go through /auth/callback for the same reason as
+          // OAuth: server-side code exchange so cookies are set on the
+          // redirect response.
           emailRedirectTo:
             typeof window !== "undefined"
-              ? window.location.origin
+              ? `${window.location.origin}/auth/callback`
               : undefined,
         },
       });
@@ -95,11 +98,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signInWithGoogle = useCallback(async () => {
     if (!enabled) throw new Error("Supabase not configured");
+    // Redirect to our server-side /auth/callback so the PKCE code is
+    // exchanged for a session SERVER-SIDE — that way auth cookies are
+    // set by the response (rather than only by the browser SDK), and
+    // every Route Handler immediately sees the user. Without this, the
+    // first Files Manager upload after sign-in returns 401.
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo:
-          typeof window !== "undefined" ? window.location.origin : undefined,
+          typeof window !== "undefined"
+            ? `${window.location.origin}/auth/callback`
+            : undefined,
       },
     });
     if (error) throw error;

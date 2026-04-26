@@ -73,8 +73,81 @@ const LEGACY_KEYS = [
   "tools-desktop-onboarded-v1",
 ] as const;
 
-function uid() {
-  return Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+/* Workspace ids must be UUIDs — public.workspaces.id is `uuid`, and so
+ * are workspace_members.workspace_id, workspace_files.workspace_id etc.
+ * Using non-UUID strings here causes silent upsert failures, which then
+ * cascade into "0 B of 0 B" quotas and "not a member" upload errors. */
+function uid(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+  // RFC4122 v4 fallback for very old browsers.
+  const b = new Uint8Array(16);
+  if (typeof crypto !== "undefined" && crypto.getRandomValues) {
+    crypto.getRandomValues(b);
+  } else {
+    for (let i = 0; i < 16; i++) b[i] = Math.floor(Math.random() * 256);
+  }
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = Array.from(b, (x) => x.toString(16).padStart(2, "0"));
+  return `${h.slice(0, 4).join("")}-${h.slice(4, 6).join("")}-${h
+    .slice(6, 8)
+    .join("")}-${h.slice(8, 10).join("")}-${h.slice(10, 16).join("")}`;
+}
+
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+function isUuid(s: string): boolean {
+  return UUID_RE.test(s);
+}
+
+/* One-time migration: existing localStorage workspaces whose ids aren't
+ * valid UUIDs (created by the old uid() impl) get renamed in-place. We
+ * also rewrite every `ws:<oldId>:*` key + the active-pointer + any
+ * cross-workspace pointers we know about. After this fires the cloud
+ * upsert path will actually accept the id and rows will materialise in
+ * public.workspaces, fixing both the "0 B of 0 B" quota readout and
+ * the membership-based upload checks. */
+function migrateNonUuidIds(list: Workspace[]): Workspace[] {
+  if (typeof window === "undefined") return list;
+  const remap: Record<string, string> = {};
+  const next = list.map((w) => {
+    if (isUuid(w.id)) return w;
+    const newId = uid();
+    remap[w.id] = newId;
+    return { ...w, id: newId };
+  });
+  if (Object.keys(remap).length === 0) return list;
+
+  // Rewrite every `ws:<oldId>:*` key.
+  const renames: Array<{ from: string; to: string; value: string }> = [];
+  for (let i = 0; i < window.localStorage.length; i++) {
+    const k = window.localStorage.key(i);
+    if (!k || !k.startsWith("ws:")) continue;
+    const rest = k.slice(3);
+    const colon = rest.indexOf(":");
+    if (colon === -1) continue;
+    const oldId = rest.slice(0, colon);
+    const suffix = rest.slice(colon + 1);
+    const newId = remap[oldId];
+    if (!newId) continue;
+    const value = window.localStorage.getItem(k);
+    if (value === null) continue;
+    renames.push({ from: k, to: `ws:${newId}:${suffix}`, value });
+  }
+  for (const r of renames) {
+    window.localStorage.setItem(r.to, r.value);
+    window.localStorage.removeItem(r.from);
+  }
+
+  // Update the active-pointer if it pointed at an old id.
+  const active = window.localStorage.getItem(ACTIVE_KEY);
+  if (active && remap[active]) {
+    window.localStorage.setItem(ACTIVE_KEY, remap[active]);
+  }
+
+  return next;
 }
 
 function readJSON<T>(key: string, fallback: T): T {
@@ -155,10 +228,21 @@ export function WorkspaceProvider({ children }: ProviderProps) {
 
       writeJSON(LIST_KEY, list);
       window.localStorage.setItem(ACTIVE_KEY, id);
-    } else if (!active || !list.find((w) => w.id === active)) {
-      // Active id missing or stale — fall back to the first workspace.
-      active = list[0].id;
-      window.localStorage.setItem(ACTIVE_KEY, active);
+    } else {
+      // Migrate any non-UUID ids left over from old uid() implementation.
+      // Must run BEFORE the active-id fallback so we don't fall back to
+      // a stale non-UUID id we're about to discard.
+      const migrated = migrateNonUuidIds(list);
+      if (migrated !== list) {
+        list = migrated;
+        writeJSON(LIST_KEY, list);
+        active = window.localStorage.getItem(ACTIVE_KEY) || "";
+      }
+      if (!active || !list.find((w) => w.id === active)) {
+        // Active id missing or stale — fall back to the first workspace.
+        active = list[0].id;
+        window.localStorage.setItem(ACTIVE_KEY, active);
+      }
     }
 
     setWorkspaces(list);
