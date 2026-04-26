@@ -27,6 +27,9 @@ import { useWindowManager } from "./useWindowManager";
 import { useDesktopSounds } from "./useDesktopSounds";
 import { useWorkspaceKey, useWorkspaces, WorkspaceProvider } from "./useWorkspaces";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
+import SignInDialog from "./SignInDialog";
+import { AuthProvider, useAuth } from "./useAuth";
+import { useWorkspaceSync } from "./useWorkspaceSync";
 
 /* The exported default is the WorkspaceProvider + a key-based remount
  * gate. When the user switches workspace, activeId changes, the inner
@@ -34,9 +37,11 @@ import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
  * namespace. No surgery needed in individual hooks. */
 export default function Desktop() {
   return (
-    <WorkspaceProvider>
-      <DesktopGate />
-    </WorkspaceProvider>
+    <AuthProvider>
+      <WorkspaceProvider>
+        <DesktopGate />
+      </WorkspaceProvider>
+    </AuthProvider>
   );
 }
 
@@ -97,6 +102,9 @@ function DesktopApp() {
   const [missionControlOpen, setMissionControlOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [createWorkspaceOpen, setCreateWorkspaceOpen] = useState(false);
+  const [signInOpen, setSignInOpen] = useState(false);
+  const { user: authUser, signOut: authSignOut } = useAuth();
+  useWorkspaceSync();
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
   const { resolved } = useTheme();
   const sounds = useDesktopSounds();
@@ -225,9 +233,8 @@ function DesktopApp() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [installed]);
 
-  const handleSignOut = () => {
-    // No auth in spacefield — sign-out is a no-op (kept so TopBar's
-    // existing menu item still has a handler).
+  const handleSignOut = async () => {
+    await authSignOut();
   };
 
   const toggleTheme = () => {
@@ -304,7 +311,8 @@ function DesktopApp() {
       <DesktopBackground />
 
       <TopBar
-        user={null}
+        user={authUser}
+        onSignIn={() => setSignInOpen(true)}
         windows={windows}
         onLaunchpad={openLaunchpad}
         onStore={openStore}
@@ -513,6 +521,12 @@ function DesktopApp() {
       <CreateWorkspaceDialog
         open={createWorkspaceOpen}
         onClose={() => setCreateWorkspaceOpen(false)}
+      />
+
+      {/* Sign-in dialog — opened from TopBar avatar / "Sign in" item */}
+      <SignInDialog
+        open={signInOpen}
+        onClose={() => setSignInOpen(false)}
       />
     </div>
     </DesktopShellProvider>

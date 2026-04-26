@@ -39,6 +39,7 @@ interface Props {
   onResetWorkspace: () => void;
   onFocusWindow: (id: string) => void;
   onSignOut: () => void;
+  onSignIn?: () => void;
   theme: "light" | "dark" | null;
   onToggleTheme: () => void;
   onCreateWorkspace: () => void;
@@ -69,6 +70,7 @@ export default function TopBar({
   onResetWorkspace,
   onFocusWindow,
   onSignOut,
+  onSignIn,
   theme,
   onToggleTheme,
   onCreateWorkspace,
@@ -439,8 +441,18 @@ export default function TopBar({
           </>
         ) : (
           <>
-            <MenuLink href="/auth/sign-in">Sign in</MenuLink>
-            <MenuLink href="/">Back to site</MenuLink>
+            {onSignIn ? (
+              <MenuItem
+                onClick={() => {
+                  setOpenMenu(null);
+                  onSignIn();
+                }}
+              >
+                Sign in
+              </MenuItem>
+            ) : (
+              <MenuLink href="/auth/sign-in">Sign in</MenuLink>
+            )}
           </>
         )}
       </Menu>
