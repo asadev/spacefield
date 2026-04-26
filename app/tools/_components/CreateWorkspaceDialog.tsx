@@ -112,8 +112,17 @@ export default function CreateWorkspaceDialog({ open, onClose }: Props) {
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  const canCreate = me?.can_create_workspace ?? false;
-  const atCap = me !== null && !me.can_create_workspace;
+  // Local count is the source of truth for the cap check, NOT
+  // me.owned_workspaces. The server count lags — it only updates after
+  // /api/workspaces/ensure runs, which doesn't happen until Files
+  // Manager opens. Without this, a fast double-click creates two
+  // workspaces locally, only the first of which actually materializes
+  // in the cloud (the second hits the workspace_owner_quota trigger
+  // and silently fails to ensure).
+  const cap = me?.max_owned_workspaces ?? 1;
+  const owned = Math.max(workspaces.length, me?.owned_workspaces ?? 0);
+  const canCreate = me !== null && owned < cap;
+  const atCap = me !== null && owned >= cap;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -180,10 +189,9 @@ export default function CreateWorkspaceDialog({ open, onClose }: Props) {
                     <span className="font-medium">
                       {me.tier_config?.name ?? me.tier}
                     </span>{" "}
-                    plan includes {me.max_owned_workspaces}{" "}
-                    {me.max_owned_workspaces === 1 ? "workspace" : "workspaces"}
-                    , and you already own {me.owned_workspaces}. Delete one,
-                    or upgrade to add more.
+                    plan includes {cap}{" "}
+                    {cap === 1 ? "workspace" : "workspaces"}, and you already
+                    have {owned}. Delete one, or upgrade to add more.
                   </div>
                   <div className="mt-3 flex gap-2">
                     <a
@@ -202,8 +210,7 @@ export default function CreateWorkspaceDialog({ open, onClose }: Props) {
                     Name
                     {me && (
                       <span className="ml-2 normal-case tracking-normal text-faint">
-                        ({me.owned_workspaces}/{me.max_owned_workspaces} on{" "}
-                        {me.tier_config?.name ?? me.tier})
+                        ({owned}/{cap} on {me.tier_config?.name ?? me.tier})
                       </span>
                     )}
                   </span>

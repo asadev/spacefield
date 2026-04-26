@@ -228,22 +228,45 @@ export default function WorkspacesPane() {
   };
 
   const handleDelete = async (workspaceId: string, name: string) => {
-    if (!confirm(`Delete workspace "${name}"? This deletes all its state and removes everyone. Cannot be undone.`)) return;
+    if (
+      !confirm(
+        `Delete workspace "${name}"? This deletes all its state and removes everyone. Cannot be undone.`
+      )
+    )
+      return;
+
+    // Optimistic UI: drop the row + local copy immediately so the user
+    // sees the delete take effect in the same frame. Stash the snapshot
+    // so we can restore on failure.
+    const snapshotRows = rows;
+    const snapshotPending = pending;
+    setRows((prev) => prev.filter((r) => r.id !== workspaceId));
+    setPending((prev) => prev.filter((p) => p.workspace_id !== workspaceId));
+    deleteLocalWorkspace(workspaceId);
+    setMsg({ type: "success", text: "Workspace deleted." });
+
+    // Cloud delete in the background. We don't await refresh() here —
+    // the optimistic update is already in place. If the delete fails
+    // we restore from the snapshot.
     setBusy(workspaceId);
-    try {
-      const { error } = await supabase.from("workspaces").delete().eq("id", workspaceId);
-      if (error) throw error;
-      // Mirror the delete into localStorage too — otherwise the desktop
-      // keeps showing the workspace and `ensure` happily re-creates it
-      // in the cloud on the next mount, defeating the delete.
-      deleteLocalWorkspace(workspaceId);
-      setMsg({ type: "success", text: "Workspace deleted." });
-      await refresh();
-    } catch (err) {
-      setMsg({ type: "error", text: err instanceof Error ? err.message : "Delete failed" });
-    } finally {
-      setBusy(null);
-    }
+    void (async () => {
+      try {
+        const { error } = await supabase
+          .from("workspaces")
+          .delete()
+          .eq("id", workspaceId);
+        if (error) throw error;
+      } catch (err) {
+        setRows(snapshotRows);
+        setPending(snapshotPending);
+        setMsg({
+          type: "error",
+          text: err instanceof Error ? err.message : "Delete failed",
+        });
+      } finally {
+        setBusy((b) => (b === workspaceId ? null : b));
+      }
+    })();
   };
 
   const openMembers = async (workspaceId: string) => {

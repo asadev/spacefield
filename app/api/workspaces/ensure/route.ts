@@ -64,7 +64,33 @@ export async function POST(req: NextRequest) {
   }
 
   if (existing) {
-    // Already in DB. If caller isn't a member, they don't own this id.
+    // Workspace already in DB. The caller's relationship is one of:
+    //   (a) owner — existing.user_id === user.id. Always treat as
+    //       member; upsert the workspace_members row so a missing
+    //       owner-membership (e.g. trigger never fired for a row
+    //       inserted pre-migration) is self-healed instead of bricking
+    //       the workspace with a false "not a member" error.
+    //   (b) explicitly added member — has a row in workspace_members.
+    //   (c) neither — someone else owns this UUID, reject.
+    if (existing.user_id === user.id) {
+      // Self-heal owner membership idempotently.
+      await supabase
+        .from("workspace_members")
+        .upsert(
+          {
+            workspace_id: id,
+            user_id: user.id,
+            role: "owner",
+            invited_by: user.id,
+          },
+          { onConflict: "workspace_id,user_id", ignoreDuplicates: false }
+        );
+      return NextResponse.json({
+        workspace: existing,
+        role: "owner",
+        created: false,
+      });
+    }
     const { data: member } = await supabase
       .from("workspace_members")
       .select("role")

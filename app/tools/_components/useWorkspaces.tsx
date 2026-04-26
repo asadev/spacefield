@@ -263,6 +263,22 @@ export function WorkspaceProvider({ children }: ProviderProps) {
     if (typeof window !== "undefined") {
       window.localStorage.setItem(ACTIVE_KEY, id);
     }
+    // Eagerly materialize in the cloud — fire-and-forget. Without this,
+    // the workspace only reaches the DB when Files Manager next opens
+    // (which calls /api/workspaces/ensure). That left a window where
+    // /api/me's owned-count was stale and the user could race past
+    // the workspace cap. We swallow errors here because the cap-trigger
+    // legitimately rejects creates beyond the tier limit, and the
+    // dialog already enforces the cap client-side using the local list.
+    if (typeof window !== "undefined") {
+      void fetch("/api/workspaces/ensure", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, name: trimmed }),
+      }).catch(() => {
+        /* swallow — Files Manager will retry on next open */
+      });
+    }
     return id;
   }, []);
 
