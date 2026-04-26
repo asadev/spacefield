@@ -505,15 +505,64 @@ export default function FilesManagerApp({
 
   // Workspace
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [activeName, setActiveName] = useState<string>("Workspace");
   useEffect(() => {
     if (typeof window === "undefined") return;
     try {
       const v = window.localStorage.getItem(ACTIVE_WS_KEY);
       setActiveId(v && v.length > 0 ? v : null);
+
+      // Pull the workspace's display name out of workspaces:list:v1 so
+      // we can pass it to /api/workspaces/ensure below.
+      const listRaw = window.localStorage.getItem("workspaces:list:v1");
+      if (listRaw && v) {
+        const list = JSON.parse(listRaw) as Array<{ id: string; name: string }>;
+        const match = list.find((w) => w.id === v);
+        if (match) setActiveName(match.name);
+      }
     } catch {
       setActiveId(null);
     }
   }, []);
+
+  // Lazy materializer — guarantees the workspace + owner-membership rows
+  // exist in the DB before any upload/refresh is attempted. Runs once
+  // per active workspace. The endpoint is idempotent so this is safe to
+  // call repeatedly. Without this, a user whose client-side workspace
+  // sync raced (or hasn't run) sees "0 B of 0 B" and gets a 403 on
+  // upload because workspace_members has no row for them.
+  const [ensured, setEnsured] = useState(false);
+  useEffect(() => {
+    if (!activeId) return;
+    setEnsured(false);
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/workspaces/ensure", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: activeId, name: activeName }),
+        });
+        if (cancelled) return;
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as {
+            error?: string;
+          };
+          setListError(body?.error ?? "could not prepare workspace");
+          return;
+        }
+      } catch {
+        if (!cancelled) setListError("could not prepare workspace");
+        return;
+      }
+      if (!cancelled) setEnsured(true);
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // activeName change shouldn't re-trigger (rename happens elsewhere).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId]);
 
   // Data
   const [files, setFiles] = useState<WorkspaceFile[]>([]);
@@ -585,10 +634,12 @@ export default function FilesManagerApp({
   }, [activeId, supabase]);
 
   useEffect(() => {
-    if (activeId) refresh();
+    // Wait for the lazy materializer so workspace_storage returns real
+    // values (not 0/0) and the membership check on upload passes.
+    if (activeId && ensured) refresh();
     // re-list on re-open via openApp()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeId, initialParamsKey]);
+  }, [activeId, ensured, initialParamsKey]);
 
   // -----------------------------------------------------------------------
   // Upload pipeline
