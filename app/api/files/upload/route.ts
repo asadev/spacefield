@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { buildR2Key, presignedUploadUrl } from "@/lib/r2";
 
 /* POST /api/files/upload
@@ -9,8 +10,15 @@ import { buildR2Key, presignedUploadUrl } from "@/lib/r2";
  *
  * Server-side checks:
  *   1. user is authenticated
- *   2. user is a member of the workspace
+ *   2. user is a member of the workspace (self-healed if they own it
+ *      but the membership row is missing for any reason)
  *   3. workspace + file size doesn't exceed the owner's tier cap
+ *
+ * Membership check uses the SERVICE-ROLE client so RLS visibility quirks
+ * (e.g. caller can't read someone else's workspaces but can still try
+ * to upload to it) can't produce false negatives. If the workspace row
+ * itself doesn't exist we fail with `workspace_not_found` so the client
+ * can re-trigger /api/workspaces/ensure rather than silently 403'ing.
  */
 
 export async function POST(req: NextRequest) {
@@ -34,18 +42,50 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "missing fields" }, { status: 400 });
   }
 
-  // Membership + role check (any member can upload)
-  const { data: member } = await supabase
+  // Membership check (admin-side so we see the truth across RLS).
+  const admin = createAdminClient();
+  const { data: workspace, error: wsErr } = await admin
+    .from("workspaces")
+    .select("id, user_id")
+    .eq("id", workspaceId)
+    .maybeSingle();
+  if (wsErr) {
+    return NextResponse.json({ error: wsErr.message }, { status: 500 });
+  }
+  if (!workspace) {
+    return NextResponse.json(
+      { error: "workspace_not_found" },
+      { status: 404 }
+    );
+  }
+
+  const { data: member } = await admin
     .from("workspace_members")
     .select("role")
     .eq("workspace_id", workspaceId)
     .eq("user_id", user.id)
     .maybeSingle();
+
   if (!member) {
-    return NextResponse.json(
-      { error: "not a member of that workspace" },
-      { status: 403 }
-    );
+    if (workspace.user_id === user.id) {
+      // Caller owns this workspace but the membership row is missing.
+      // Self-heal — same shape as the ensure route's owner branch.
+      await admin.from("workspace_members").upsert(
+        {
+          workspace_id: workspaceId,
+          user_id: user.id,
+          role: "owner",
+          invited_by: user.id,
+        },
+        { onConflict: "workspace_id,user_id", ignoreDuplicates: false }
+      );
+    } else {
+      // Caller has no business uploading to this workspace.
+      return NextResponse.json(
+        { error: "not a member of that workspace" },
+        { status: 403 }
+      );
+    }
   }
 
   // Quota check
