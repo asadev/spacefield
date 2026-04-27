@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1200" preserveAspectRatio="xMidYMid slice" width="1920" height="1200">
+  <defs>
+    <linearGradient id="cream" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fdfbf5"/>
+      <stop offset="55%" stop-color="#f7f1e6"/>
+      <stop offset="100%" stop-color="#ece5d6"/>
+    </linearGradient>
+    <linearGradient id="ridge1" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#cbd5e1" stop-opacity="0.3"/>
+      <stop offset="100%" stop-color="#94a3b8" stop-opacity="0.5"/>
+    </linearGradient>
+    <linearGradient id="ridge2" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#94a3b8" stop-opacity="0.55"/>
+      <stop offset="100%" stop-color="#64748b" stop-opacity="0.7"/>
+    </linearGradient>
+    <linearGradient id="ridge3" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#64748b" stop-opacity="0.7"/>
+      <stop offset="100%" stop-color="#475569" stop-opacity="0.85"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.7" cy="0.25" r="0.18">
+      <stop offset="0%" stop-color="#fff7ed" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#fff7ed" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1920" height="1200" fill="url(#cream)"/>
+  <ellipse cx="1344" cy="300" rx="320" ry="320" fill="url(#sun)"/>
+  <path d="M0 720 L120 660 L260 700 L420 640 L580 690 L740 620 L900 680 L1060 630 L1220 690 L1380 640 L1560 700 L1720 660 L1920 700 L1920 1200 L0 1200 Z" fill="url(#ridge1)"/>
+  <path d="M0 820 L160 760 L320 810 L480 740 L640 800 L800 760 L960 810 L1120 760 L1280 820 L1440 770 L1600 820 L1760 780 L1920 830 L1920 1200 L0 1200 Z" fill="url(#ridge2)"/>
+  <path d="M0 940 L200 880 L380 940 L560 880 L740 940 L920 890 L1100 940 L1280 880 L1460 940 L1640 880 L1820 940 L1920 920 L1920 1200 L0 1200 Z" fill="url(#ridge3)"/>
+</svg>

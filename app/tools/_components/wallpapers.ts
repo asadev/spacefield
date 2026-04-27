@@ -153,10 +153,10 @@ export const INTERACTIVE_FALLBACK: Record<string, string> = {
 export const WALLPAPER_STORAGE_SUFFIX = "tools-desktop-wallpaper-v1";
 export const WALLPAPER_CHANGE_EVENT = "tools-desktop-wallpaper-change";
 
-/* Default = first gradient. Used by both DesktopBackground (initial
- * render) and WallpaperPicker (resetting selection if storage is
- * empty / corrupt). */
-export const DEFAULT_WALLPAPER_ID = WALLPAPERS[0].id;
+/* Default = the new "Aurora" paired wallpaper. Adapts to light/dark
+ * automatically. We namespace paired ids with a `pair:` prefix in
+ * the resolver so they never collide with the legacy slugs above. */
+export const DEFAULT_WALLPAPER_ID = "pair:aurora";
 
 export function getWallpaperById(id: string | null | undefined): Wallpaper {
   if (!id) return WALLPAPERS[0];

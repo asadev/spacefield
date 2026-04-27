@@ -10,6 +10,8 @@ const NAV: { href: string; label: string }[] = [
   { href: "/admin/workspaces", label: "Workspaces" },
   { href: "/admin/messages", label: "Messages" },
   { href: "/admin/tiers", label: "Tiers" },
+  { href: "/admin/tools", label: "Tools" },
+  { href: "/admin/wallpapers", label: "Wallpapers" },
 ];
 
 export default function Sidebar() {

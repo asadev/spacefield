@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1200" preserveAspectRatio="xMidYMid slice" width="1920" height="1200">
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#f4faf9"/>
+      <stop offset="55%" stop-color="#dff1ee"/>
+      <stop offset="100%" stop-color="#c4e3df"/>
+    </linearGradient>
+    <linearGradient id="sea" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#a7d4ce"/>
+      <stop offset="100%" stop-color="#7ab9b1"/>
+    </linearGradient>
+    <radialGradient id="haze" cx="0.5" cy="0.55" r="0.4">
+      <stop offset="0%" stop-color="#ffffff" stop-opacity="0.6"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+    <radialGradient id="sun" cx="0.5" cy="0.55" r="0.07">
+      <stop offset="0%" stop-color="#fffbeb" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#fffbeb" stop-opacity="0"/>
+    </radialGradient>
+  </defs>
+  <rect width="1920" height="1200" fill="url(#sky)"/>
+  <rect y="660" width="1920" height="540" fill="url(#sea)"/>
+  <line x1="0" y1="660" x2="1920" y2="660" stroke="#9ec9c3" stroke-width="1.2" opacity="0.5"/>
+  <ellipse cx="960" cy="660" rx="900" ry="200" fill="url(#haze)"/>
+  <ellipse cx="960" cy="660" rx="160" ry="60" fill="url(#sun)"/>
+</svg>

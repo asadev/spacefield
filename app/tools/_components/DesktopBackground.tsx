@@ -1,38 +1,50 @@
 "use client";
 
 import { motion, useMotionValue, useSpring } from "framer-motion";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   DEFAULT_WALLPAPER_ID,
   WALLPAPER_CHANGE_EVENT,
   WALLPAPER_STORAGE_SUFFIX,
-  getWallpaperById,
-  wallpaperBackground,
 } from "./wallpapers";
+import {
+  buildUnified,
+  findEntry,
+  type CustomWallpaper,
+} from "./wallpaper-resolver";
 import { useWorkspaceKey } from "./useWorkspaces";
+import { useTheme } from "@/components/ThemeProvider";
+import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
 
 /* Animated on-brand background:
- *   1. The user-selected wallpaper (gradient / photo / interactive
- *      placeholder) painted as an inline style on the base layer.
- *   2. Three drifting gradient glows (CSS animation, pauses on
- *      prefers-reduced-motion) layered on top.
+ *   1. The user-selected wallpaper, theme-aware (light + dark variants
+ *      cross-fade when the user flips the theme on the same wallpaper).
+ *   2. Three drifting gradient glows.
  *   3. A subtle dot grid mask.
- *   4. A cursor-follow glow that spring-trails the pointer — adds the
- *      "alive wallpaper" feel without breaking readability of content.
+ *   4. A cursor-follow glow.
  *
- * The wallpaper id lives in localStorage and we subscribe to a custom
+ * The wallpaper id lives in localStorage. We listen for both the
+ * cross-tab `storage` event and a same-tab custom
  * `tools-desktop-wallpaper-change` event so the picker can update the
- * background in the same tab without a reload. */
+ * background instantly.
+ *
+ * Custom (admin-uploaded) wallpapers are pulled once at mount from
+ * `public.wallpapers` and merged into the unified entry list. The
+ * fetch is best-effort — if Supabase isn't configured or the request
+ * fails, only the builtin entries are available. */
+
+const CUSTOM_RELOAD_EVENT = "tools-desktop-custom-wallpapers-reload";
 
 export default function DesktopBackground() {
   const WALLPAPER_STORAGE_KEY = useWorkspaceKey(WALLPAPER_STORAGE_SUFFIX);
+  const { resolved } = useTheme();
   const mx = useMotionValue(-1000);
   const my = useMotionValue(-1000);
   const sx = useSpring(mx, { stiffness: 70, damping: 20, mass: 1.2 });
   const sy = useSpring(my, { stiffness: 70, damping: 20, mass: 1.2 });
 
-  // Default to the canonical default; SSR never has localStorage.
   const [wallpaperId, setWallpaperId] = useState<string>(DEFAULT_WALLPAPER_ID);
+  const [customs, setCustoms] = useState<CustomWallpaper[]>([]);
 
   useEffect(() => {
     if (window.matchMedia("(hover: none)").matches) return;
@@ -44,9 +56,7 @@ export default function DesktopBackground() {
     return () => window.removeEventListener("pointermove", handle);
   }, [mx, my]);
 
-  // Hydrate from localStorage + listen for changes. We listen for both
-  // the cross-tab `storage` event and our same-tab custom event so the
-  // picker can trigger an immediate re-render without a page reload.
+  // Hydrate selected id from localStorage.
   useEffect(() => {
     const read = () => {
       try {
@@ -68,10 +78,54 @@ export default function DesktopBackground() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [WALLPAPER_STORAGE_KEY]);
 
-  const wallpaper = getWallpaperById(wallpaperId);
-  const wallpaperStyle: React.CSSProperties = {
-    background: wallpaperBackground(wallpaper),
-  };
+  // Pull custom (admin-uploaded) wallpapers once at mount, and again
+  // whenever the picker fires CUSTOM_RELOAD_EVENT (e.g. after admin
+  // uploads a new one in another tab).
+  useEffect(() => {
+    let cancelled = false;
+    const fetchCustoms = async () => {
+      if (!isSupabaseConfigured()) return;
+      try {
+        const supabase = getSupabase();
+        const { data, error } = await supabase
+          .from("wallpapers")
+          .select(
+            "id, slug, name, light_url, dark_url, mode_preference, created_at"
+          )
+          .order("created_at", { ascending: false });
+        if (cancelled) return;
+        if (error || !data) {
+          setCustoms([]);
+          return;
+        }
+        setCustoms(data as CustomWallpaper[]);
+      } catch {
+        if (!cancelled) setCustoms([]);
+      }
+    };
+    void fetchCustoms();
+    const onReload = () => void fetchCustoms();
+    window.addEventListener(CUSTOM_RELOAD_EVENT, onReload);
+    return () => {
+      cancelled = true;
+      window.removeEventListener(CUSTOM_RELOAD_EVENT, onReload);
+    };
+  }, []);
+
+  const entries = useMemo(() => buildUnified(customs), [customs]);
+  const entry = useMemo(
+    () => findEntry(wallpaperId, entries),
+    [wallpaperId, entries]
+  );
+  const background = useMemo(
+    () => entry.getBackground(resolved),
+    [entry, resolved]
+  );
+
+  // Use a key on the background layer so React mounts a fresh element
+  // on every change — the previous one stays in the DOM during the
+  // exit animation, producing a clean cross-fade between variants.
+  const bgKey = `${entry.id}:${resolved}`;
 
   return (
     <>
@@ -79,18 +133,22 @@ export default function DesktopBackground() {
         aria-hidden="true"
         className="pointer-events-none fixed inset-0 z-0 overflow-hidden bg-app"
       >
-        {/* Selected wallpaper painted as the base layer. */}
-        <div
+        <motion.div
+          key={bgKey}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.28, ease: "easeOut" }}
           className="absolute inset-0"
-          style={wallpaperStyle}
-          data-wallpaper-id={wallpaper.id}
+          style={{ background }}
+          data-wallpaper-id={entry.id}
+          data-wallpaper-theme={resolved}
         />
         <div className="desktop-glow desktop-glow-1" />
         <div className="desktop-glow desktop-glow-2" />
         <div className="desktop-glow desktop-glow-3" />
         <div className="desktop-grid" />
 
-        {/* Cursor-follow glow — springs to the pointer and gently fades */}
+        {/* Cursor-follow glow */}
         <motion.div
           className="desktop-cursor-glow"
           style={{
@@ -210,3 +268,8 @@ export default function DesktopBackground() {
     </>
   );
 }
+
+/** Broadcast that the picker should re-fetch custom wallpapers (e.g.
+ *  immediately after admin upload). Exported so other surfaces can
+ *  trigger a refresh without reload. */
+export const TOOLS_CUSTOM_WALLPAPERS_RELOAD_EVENT = CUSTOM_RELOAD_EVENT;

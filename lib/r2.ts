@@ -111,6 +111,46 @@ export async function deleteR2Object(key: string): Promise<void> {
   await r2().send(new DeleteObjectCommand({ Bucket: BUCKET, Key: key }));
 }
 
+/* Direct server-side upload to R2. Used by routes (e.g. wallpapers
+ * admin) that receive a small file via multipart and don't need the
+ * presign-then-PUT-from-browser dance. */
+export async function putR2Object(args: {
+  key: string;
+  body: Uint8Array | Buffer;
+  contentType?: string;
+  cacheControl?: string;
+}): Promise<void> {
+  await r2().send(
+    new PutObjectCommand({
+      Bucket: BUCKET,
+      Key: args.key,
+      Body: args.body,
+      ContentType: args.contentType,
+      CacheControl: args.cacheControl,
+    })
+  );
+}
+
+/* Build a stable URL for an R2 object. Uses R2_PUBLIC_URL if set
+ * (the recommended setup — Cloudflare custom domain or r2.dev), and
+ * falls back to the same-origin proxy route /api/wallpapers/asset
+ * for wallpaper assets. The fallback is transparent at the call site:
+ * pass `assetProxy: 'wallpapers'` and we'll route through the proxy. */
+export function r2PublicUrl(args: {
+  key: string;
+  assetProxy?: "wallpapers";
+}): string {
+  const base = process.env.R2_PUBLIC_URL?.replace(/\/+$/, "");
+  if (base) return `${base}/${args.key}`;
+  if (args.assetProxy === "wallpapers") {
+    return `/api/wallpapers/asset?key=${encodeURIComponent(args.key)}`;
+  }
+  // Last-resort: presigned long-lived URL. Caller should prefer the
+  // proxy or set R2_PUBLIC_URL — this branch keeps things from blowing
+  // up in environments where neither is configured.
+  return `/api/wallpapers/asset?key=${encodeURIComponent(args.key)}`;
+}
+
 /* Read the actual size of an object from R2. Used by /api/files/finalize
  * to verify the client-supplied sizeBytes against ground truth before
  * inserting the metadata row + counting against quota. Returns null if

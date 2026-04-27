@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1200" preserveAspectRatio="xMidYMid slice" width="1920" height="1200">
+  <defs>
+    <linearGradient id="sand" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#1a0f08"/>
+      <stop offset="55%" stop-color="#321d10"/>
+      <stop offset="100%" stop-color="#5a3418"/>
+    </linearGradient>
+    <linearGradient id="curveA" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#7a4720" stop-opacity="0.85"/>
+      <stop offset="100%" stop-color="#5a3418" stop-opacity="0.95"/>
+    </linearGradient>
+    <linearGradient id="curveB" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#3d2310" stop-opacity="0.95"/>
+      <stop offset="100%" stop-color="#1a0d05" stop-opacity="1"/>
+    </linearGradient>
+  </defs>
+  <rect width="1920" height="1200" fill="url(#sand)"/>
+  <path d="M0 720 C 480 600 960 760 1440 660 S 1920 700 1920 700 L 1920 880 C 1440 820 960 920 480 840 S 0 880 0 880 Z" fill="url(#curveA)"/>
+  <path d="M0 940 C 480 880 960 1000 1440 920 S 1920 960 1920 960 L 1920 1200 L 0 1200 Z" fill="url(#curveB)"/>
+</svg>

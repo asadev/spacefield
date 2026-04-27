@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1200" preserveAspectRatio="xMidYMid slice" width="1920" height="1200">
+  <defs>
+    <linearGradient id="sage" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#e8efe2"/>
+      <stop offset="55%" stop-color="#d6e2cc"/>
+      <stop offset="100%" stop-color="#c0d2b3"/>
+    </linearGradient>
+    <radialGradient id="bokeh">
+      <stop offset="0%" stop-color="#fffaeb" stop-opacity="0.85"/>
+      <stop offset="60%" stop-color="#fef3c7" stop-opacity="0.35"/>
+      <stop offset="100%" stop-color="#fef3c7" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="blur1"><feGaussianBlur stdDeviation="6"/></filter>
+    <filter id="blur2"><feGaussianBlur stdDeviation="14"/></filter>
+    <filter id="blur3"><feGaussianBlur stdDeviation="22"/></filter>
+  </defs>
+  <rect width="1920" height="1200" fill="url(#sage)"/>
+  <g filter="url(#blur3)" opacity="0.7">
+    <circle cx="200" cy="240" r="90" fill="url(#bokeh)"/>
+    <circle cx="1700" cy="180" r="120" fill="url(#bokeh)"/>
+    <circle cx="500" cy="900" r="140" fill="url(#bokeh)"/>
+    <circle cx="1500" cy="980" r="100" fill="url(#bokeh)"/>
+  </g>
+  <g filter="url(#blur2)" opacity="0.85">
+    <circle cx="380" cy="500" r="55" fill="url(#bokeh)"/>
+    <circle cx="900" cy="320" r="65" fill="url(#bokeh)"/>
+    <circle cx="1300" cy="540" r="50" fill="url(#bokeh)"/>
+    <circle cx="1100" cy="800" r="60" fill="url(#bokeh)"/>
+    <circle cx="650" cy="700" r="48" fill="url(#bokeh)"/>
+    <circle cx="1750" cy="650" r="55" fill="url(#bokeh)"/>
+  </g>
+  <g filter="url(#blur1)" opacity="0.95">
+    <circle cx="280" cy="380" r="22" fill="#fffaeb"/>
+    <circle cx="780" cy="600" r="18" fill="#fffaeb"/>
+    <circle cx="1200" cy="220" r="20" fill="#fffaeb"/>
+    <circle cx="1450" cy="780" r="16" fill="#fffaeb"/>
+    <circle cx="600" cy="200" r="14" fill="#fffaeb"/>
+    <circle cx="1620" cy="420" r="20" fill="#fffaeb"/>
+    <circle cx="900" cy="950" r="22" fill="#fffaeb"/>
+  </g>
+</svg>
