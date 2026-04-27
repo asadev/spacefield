@@ -1,29 +1,37 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /* POST /api/workspaces/ensure
  *   body: { id, name }
  *
  * Lazy materializer for workspaces. The desktop creates workspaces in
- * localStorage and relies on a client-side sync hook to push them up
- * to public.workspaces. That push has been racing — by the time Files
- * Manager opens, the row may not exist yet, which makes
- * `workspace_storage` return 0 (so the quota bar shows "0 B of 0 B")
- * and the membership check on /api/files/upload reject with 403
- * "not a member of that workspace".
+ * localStorage and we mirror them into public.workspaces here.
  *
- * Idempotency contract:
- *   - If the workspace already exists in DB and the caller is its
- *     owner: no-op, returns existing row.
- *   - If the workspace already exists and the caller is NOT a member:
- *     403 (someone else owns this UUID — the caller is fishing).
- *   - If the workspace does NOT exist: insert it with caller as
- *     owner. The on_workspace_created trigger then adds the
- *     workspace_members row automatically.
+ * The hard part is RLS: when the caller doesn't own a workspace, the
+ * SELECT-side RLS policy hides the row. So a stale localStorage id that
+ * collides with another user's workspace looks like "doesn't exist" to
+ * the caller, the route tries INSERT, and it fails with a duplicate-key
+ * error that's a misleading symptom of the real problem.
  *
- * UUIDs are 122-bit-random so there's no realistic collision risk
- * between different users' local workspaces — if a row for this id
- * already exists, treat it as authoritative.
+ * Fix: do the lookup with the SERVICE-ROLE client (bypasses RLS) so we
+ * see the truth, then branch correctly:
+ *
+ *   a. Row exists, caller is owner       → upsert membership, return 200
+ *   b. Row exists, caller is member      → return 200
+ *   c. Row exists, caller is unrelated   → return 409 with code
+ *      "id_collision" so the client can regenerate the local id and
+ *      retry. (Not 403 — this isn't a permissions check, it's a stale
+ *      local-id collision.)
+ *   d. Row does not exist                → INSERT as caller-owned. The
+ *      on_workspace_created trigger handles workspace_members. If the
+ *      INSERT fails because of the workspace_owner_quota trigger, that
+ *      bubbles up as a 400 with the original message which the client
+ *      already special-cases to surface "Workspace limit reached".
+ *
+ * The route returns the canonical id in `workspace.id` — for normal
+ * cases this matches the request id, but the client should always
+ * trust the response over its local copy.
  */
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
@@ -43,8 +51,6 @@ export async function POST(req: NextRequest) {
   if (!id || typeof id !== "string") {
     return NextResponse.json({ error: "missing id" }, { status: 400 });
   }
-  // Reject obvious non-UUIDs so we don't pollute the table with
-  // legacy short-string ids.
   const UUID_RE =
     /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   if (!UUID_RE.test(id)) {
@@ -53,8 +59,9 @@ export async function POST(req: NextRequest) {
 
   const safeName = (name ?? "").toString().trim().slice(0, 80) || "Workspace";
 
-  // Does this workspace already exist?
-  const { data: existing, error: lookupErr } = await supabase
+  // Service-role lookup — sees the row regardless of caller's RLS.
+  const admin = createAdminClient();
+  const { data: existing, error: lookupErr } = await admin
     .from("workspaces")
     .select("id, user_id, name")
     .eq("id", id)
@@ -64,17 +71,10 @@ export async function POST(req: NextRequest) {
   }
 
   if (existing) {
-    // Workspace already in DB. The caller's relationship is one of:
-    //   (a) owner — existing.user_id === user.id. Always treat as
-    //       member; upsert the workspace_members row so a missing
-    //       owner-membership (e.g. trigger never fired for a row
-    //       inserted pre-migration) is self-healed instead of bricking
-    //       the workspace with a false "not a member" error.
-    //   (b) explicitly added member — has a row in workspace_members.
-    //   (c) neither — someone else owns this UUID, reject.
     if (existing.user_id === user.id) {
-      // Self-heal owner membership idempotently.
-      await supabase
+      // (a) Caller owns this workspace. Self-heal owner-membership in
+      //     case the trigger ever missed.
+      await admin
         .from("workspace_members")
         .upsert(
           {
@@ -91,35 +91,46 @@ export async function POST(req: NextRequest) {
         created: false,
       });
     }
-    const { data: member } = await supabase
+    // (b) or (c) — service-role check membership.
+    const { data: member } = await admin
       .from("workspace_members")
       .select("role")
       .eq("workspace_id", id)
       .eq("user_id", user.id)
       .maybeSingle();
-    if (!member) {
-      return NextResponse.json(
-        { error: "workspace exists but caller is not a member" },
-        { status: 403 }
-      );
+    if (member) {
+      return NextResponse.json({
+        workspace: { id, name: existing.name, user_id: existing.user_id },
+        role: member.role,
+        created: false,
+      });
     }
-    return NextResponse.json({
-      workspace: existing,
-      role: member.role,
-      created: false,
-    });
+    // (c) Stale localStorage id collides with someone else's workspace.
+    //     The caller has no business with this row. Tell the client to
+    //     regenerate locally and retry — they can't access this UUID.
+    return NextResponse.json(
+      {
+        error: "id_collision",
+        message:
+          "This workspace id is already used by another account. Drop it and try again with a fresh id.",
+      },
+      { status: 409 }
+    );
   }
 
-  // Doesn't exist — create it with caller as owner. RLS allows this
-  // because the policy is `with check (auth.uid() = user_id)`. The
-  // on_workspace_created trigger inserts the workspace_members row.
+  // (d) Row doesn't exist anywhere. INSERT as caller-owned via the
+  //     user-scoped client (so RLS check fires and we get a real 400 if
+  //     the quota trigger blocks us).
   const { data: created, error: insertErr } = await supabase
     .from("workspaces")
     .insert({ id, user_id: user.id, name: safeName })
     .select("id, user_id, name")
     .single();
   if (insertErr) {
-    return NextResponse.json({ error: insertErr.message }, { status: 400 });
+    return NextResponse.json(
+      { error: insertErr.message },
+      { status: insertErr.message?.includes("workspace limit reached") ? 403 : 400 }
+    );
   }
 
   return NextResponse.json({

@@ -551,6 +551,68 @@ export default function FilesManagerApp({
           body: JSON.stringify({ id: activeId, name: activeName }),
         });
         if (cancelled) return;
+
+        // 409 id_collision — this localStorage workspace id is already
+        // used by another account in the cloud (caller signed out of
+        // one account into another, but their browser kept the old
+        // workspace UUID). Auto-recover: generate a fresh UUID, rename
+        // every `ws:<old>:*` key to `ws:<new>:*`, fix the active-id
+        // pointer + the workspaces:list entry, then reload so every
+        // hook re-hydrates against the new id.
+        if (res.status === 409) {
+          const body = (await res.json().catch(() => ({}))) as {
+            error?: string;
+          };
+          if (body?.error === "id_collision") {
+            const newId = crypto.randomUUID();
+            try {
+              const renames: Array<{ from: string; to: string; v: string }> =
+                [];
+              for (let i = 0; i < window.localStorage.length; i++) {
+                const k = window.localStorage.key(i);
+                if (!k) continue;
+                if (k.startsWith(`ws:${activeId}:`)) {
+                  const v = window.localStorage.getItem(k);
+                  if (v !== null) {
+                    renames.push({
+                      from: k,
+                      to: `ws:${newId}:${k.slice(`ws:${activeId}:`.length)}`,
+                      v,
+                    });
+                  }
+                }
+              }
+              for (const r of renames) {
+                window.localStorage.setItem(r.to, r.v);
+                window.localStorage.removeItem(r.from);
+              }
+              const listRaw = window.localStorage.getItem(
+                "workspaces:list:v1"
+              );
+              if (listRaw) {
+                const list = JSON.parse(listRaw) as Array<{
+                  id: string;
+                  name: string;
+                  createdAt: number;
+                }>;
+                const next = list.map((w) =>
+                  w.id === activeId ? { ...w, id: newId } : w
+                );
+                window.localStorage.setItem(
+                  "workspaces:list:v1",
+                  JSON.stringify(next)
+                );
+              }
+              window.localStorage.setItem(ACTIVE_WS_KEY, newId);
+              window.location.reload();
+            } catch {
+              setEnsureError(
+                "couldn't auto-recover from id collision — please sign out and back in"
+              );
+            }
+            return;
+          }
+        }
         if (!res.ok) {
           const body = (await res.json().catch(() => ({}))) as {
             error?: string;
@@ -574,7 +636,8 @@ export default function FilesManagerApp({
 
   // Recognise specific ensure failure modes so we can render actionable
   // banners. The Postgres trigger raises an exception that surfaces here
-  // as a string containing "workspace limit reached".
+  // as a string containing "workspace limit reached". The id_collision
+  // case is auto-recovered above so we don't render a banner for it.
   const ensureAtCap =
     !!ensureError && /workspace limit reached/i.test(ensureError);
   const ensureNotMember =
