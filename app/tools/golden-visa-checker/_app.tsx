@@ -322,7 +322,7 @@ function FAQItem({ question, answer }: { question: string; answer: string }) {
       <button
         type="button"
         onClick={() => setOpen((p) => !p)}
-        className="w-full text-left px-5 py-4 flex items-start justify-between gap-4 hover:bg-tool-accent-soft transition-colors"
+        className="w-full text-left px-5 py-4 min-h-[44px] flex items-start justify-between gap-4 hover:bg-tool-accent-soft transition-colors"
       >
         <span className="text-sm font-medium text-app">{question}</span>
         <span className="text-tool-accent text-lg shrink-0 mt-[-2px] font-light">
@@ -1196,7 +1196,7 @@ export default function GoldenVisaCheckerApp(props: NativeAppProps) {
                       <button
                         type="button"
                         onClick={() => openApp("deal-scoring")}
-                        className="w-full flex items-center justify-between py-3 px-1 text-sm text-secondary hover:text-tool-accent transition-colors text-left"
+                        className="w-full flex items-center justify-between min-h-[44px] py-3 px-1 text-sm text-secondary hover:text-tool-accent transition-colors text-left"
                       >
                         <span>Find properties that qualify — Deal Scoring with AED 2M+ filter</span>
                         <span className="text-tool-accent">→</span>
@@ -1204,7 +1204,7 @@ export default function GoldenVisaCheckerApp(props: NativeAppProps) {
                       <button
                         type="button"
                         onClick={() => openApp("affordability")}
-                        className="w-full flex items-center justify-between py-3 px-1 text-sm text-secondary hover:text-tool-accent transition-colors border-t border-app text-left"
+                        className="w-full flex items-center justify-between min-h-[44px] py-3 px-1 text-sm text-secondary hover:text-tool-accent transition-colors border-t border-app text-left"
                       >
                         <span>Check if you can afford a qualifying property</span>
                         <span className="text-tool-accent">→</span>
@@ -1212,7 +1212,7 @@ export default function GoldenVisaCheckerApp(props: NativeAppProps) {
                       <button
                         type="button"
                         onClick={() => openApp("due-diligence")}
-                        className="w-full flex items-center justify-between py-3 px-1 text-sm text-secondary hover:text-tool-accent transition-colors border-t border-app text-left"
+                        className="w-full flex items-center justify-between min-h-[44px] py-3 px-1 text-sm text-secondary hover:text-tool-accent transition-colors border-t border-app text-left"
                       >
                         <span>Run the full due diligence checklist before buying</span>
                         <span className="text-tool-accent">→</span>

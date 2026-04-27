@@ -575,7 +575,7 @@ function MobileSearchableList({
             value={search}
             onChange={(e) => onSearch(e.target.value)}
             placeholder="Search developers, areas, projects"
-            className="w-full h-10 pl-9 pr-3 rounded-xl bg-app-elevated border border-app text-sm text-app placeholder:text-muted outline-none focus:border-tool-accent"
+            className="w-full h-11 pl-9 pr-3 rounded-xl bg-app-elevated border border-app text-base text-app placeholder:text-muted outline-none focus:border-tool-accent"
           />
           <svg
             className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted"
@@ -592,7 +592,7 @@ function MobileSearchableList({
           <select
             value={tagFilter}
             onChange={(e) => onTagFilter(e.target.value)}
-            className="flex-1 h-9 px-3 rounded-lg bg-app-elevated border border-app text-xs text-app outline-none focus:border-tool-accent"
+            className="flex-1 h-11 px-3 rounded-lg bg-app-elevated border border-app text-sm text-app outline-none focus:border-tool-accent"
           >
             {TAG_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>
@@ -603,7 +603,7 @@ function MobileSearchableList({
           <select
             value={sortBy}
             onChange={(e) => onSortBy(e.target.value as SortKey)}
-            className="flex-1 h-9 px-3 rounded-lg bg-app-elevated border border-app text-xs text-app outline-none focus:border-tool-accent"
+            className="flex-1 h-11 px-3 rounded-lg bg-app-elevated border border-app text-sm text-app outline-none focus:border-tool-accent"
           >
             {SORT_OPTIONS.map((o) => (
               <option key={o.value} value={o.value}>

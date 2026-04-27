@@ -347,7 +347,7 @@ export default function RegulationMonitorApp(props: NativeAppProps) {
           {isNarrow && (
             <button
               onClick={() => setMobileFiltersOpen(!mobileFiltersOpen)}
-              className={`flex w-full items-center justify-between rounded-lg border px-3 py-2 text-xs transition-colors ${
+              className={`flex w-full items-center justify-between rounded-lg border px-3 ${isMobile ? "min-h-[44px] text-sm" : "py-2 text-xs"} transition-colors ${
                 mobileFiltersOpen
                   ? "border-tool-accent bg-tool-accent-soft text-tool-accent"
                   : "border-app bg-app text-app hover:border-tool-accent/40"
@@ -402,7 +402,7 @@ export default function RegulationMonitorApp(props: NativeAppProps) {
                 placeholder="Search regulations, agencies, parties…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-lg border border-app bg-app-elevated py-2.5 pl-10 pr-4 text-sm text-app ring-tool-accent transition-all placeholder:text-faint focus:border-tool-accent focus:outline-none focus:ring-2"
+                className={`w-full rounded-lg border border-app bg-app-elevated pl-10 pr-4 ${isMobile ? "min-h-[44px] text-base" : "py-2.5 text-sm"} text-app ring-tool-accent transition-all placeholder:text-faint focus:border-tool-accent focus:outline-none focus:ring-2`}
               />
             </div>
 
@@ -418,7 +418,7 @@ export default function RegulationMonitorApp(props: NativeAppProps) {
                     <button
                       key={cat.value}
                       onClick={() => toggleCategory(cat.value)}
-                      className={`rounded-full border px-2.5 py-1 text-[11px] transition-all ${
+                      className={`rounded-full border px-2.5 ${isMobile ? "min-h-[44px] text-sm" : "py-1 text-[11px]"} transition-all ${
                         active
                           ? "border-tool-accent bg-tool-accent text-white"
                           : "border-app bg-app-elevated text-secondary hover:border-tool-accent/40 hover:text-tool-accent"
@@ -449,7 +449,7 @@ export default function RegulationMonitorApp(props: NativeAppProps) {
                     <button
                       key={val}
                       onClick={() => setImpactFilter(val)}
-                      className={`flex-1 rounded px-2 py-1.5 text-[11px] font-medium transition-all ${
+                      className={`flex-1 rounded px-2 ${isMobile ? "min-h-[44px] text-sm" : "py-1.5 text-[11px]"} font-medium transition-all ${
                         impactFilter === val
                           ? "bg-tool-accent text-white shadow-sm"
                           : "text-secondary hover:text-app"
@@ -472,7 +472,7 @@ export default function RegulationMonitorApp(props: NativeAppProps) {
                     <button
                       key={val}
                       onClick={() => setStatusFilter(val)}
-                      className={`flex-1 rounded px-2 py-1.5 text-[11px] font-medium transition-all ${
+                      className={`flex-1 rounded px-2 ${isMobile ? "min-h-[44px] text-sm" : "py-1.5 text-[11px]"} font-medium transition-all ${
                         statusFilter === val
                           ? "bg-tool-accent text-white shadow-sm"
                           : "text-secondary hover:text-app"
@@ -495,7 +495,7 @@ export default function RegulationMonitorApp(props: NativeAppProps) {
                     <button
                       key={val}
                       onClick={() => setYearFilter(val)}
-                      className={`flex-1 rounded px-2 py-1.5 text-[11px] font-medium transition-all ${
+                      className={`flex-1 rounded px-2 ${isMobile ? "min-h-[44px] text-sm" : "py-1.5 text-[11px]"} font-medium transition-all ${
                         yearFilter === val
                           ? "bg-tool-accent text-white shadow-sm"
                           : "text-secondary hover:text-app"

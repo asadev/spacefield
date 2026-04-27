@@ -426,7 +426,7 @@ export default function CommissionCalculatorApp(props: NativeAppProps) {
                     role="tab"
                     aria-selected={active}
                     onClick={() => setCurrency(c)}
-                    className={`cc-mono rounded-full px-3 py-1 text-[0.7rem] font-semibold transition-colors ${
+                    className={`cc-mono rounded-full px-3 ${isMobile ? "min-h-[44px] text-sm" : "py-1 text-[0.7rem]"} font-semibold transition-colors ${
                       active
                         ? "bg-tool-accent text-white"
                         : "text-secondary hover:text-app"
@@ -501,7 +501,7 @@ export default function CommissionCalculatorApp(props: NativeAppProps) {
                       role="tab"
                       aria-selected={active}
                       onClick={() => setDealType(dt.value)}
-                      className={`rounded-lg border px-3 py-2.5 text-[0.7rem] font-medium uppercase tracking-[0.1em] transition-colors ${
+                      className={`rounded-lg border px-3 ${isMobile ? "min-h-[44px] text-xs" : "py-2.5 text-[0.7rem]"} font-medium uppercase tracking-[0.1em] transition-colors ${
                         active
                           ? "border-tool-accent bg-tool-accent-soft text-app"
                           : "border-app text-secondary hover:text-app hover:bg-surface-hover"
@@ -522,7 +522,7 @@ export default function CommissionCalculatorApp(props: NativeAppProps) {
                     key={preset.label}
                     type="button"
                     onClick={() => applyPreset(preset)}
-                    className="rounded-full border border-app bg-app px-3 py-1.5 text-[0.65rem] font-medium uppercase tracking-[0.1em] text-secondary transition-colors hover:border-tool-accent hover:bg-tool-accent-soft hover:text-app"
+                    className={`rounded-full border border-app bg-app px-3 ${isMobile ? "min-h-[44px] text-xs" : "py-1.5 text-[0.65rem]"} font-medium uppercase tracking-[0.1em] text-secondary transition-colors hover:border-tool-accent hover:bg-tool-accent-soft hover:text-app`}
                   >
                     {preset.label}
                   </button>
@@ -556,7 +556,7 @@ export default function CommissionCalculatorApp(props: NativeAppProps) {
                       transactionValue: e.target.value,
                     }))
                   }
-                  className="cc-input cc-mono w-full rounded-lg px-4 py-3 pl-14 text-sm"
+                  className={`cc-input cc-mono w-full rounded-lg px-4 pl-14 ${isMobile ? "min-h-[44px] text-base" : "py-3 text-sm"}`}
                 />
               </div>
             </Field>
@@ -607,7 +607,7 @@ export default function CommissionCalculatorApp(props: NativeAppProps) {
                         commissionRate: e.target.value,
                       }))
                     }
-                    className="cc-input cc-mono w-full rounded-lg px-4 py-3 pr-10 text-sm disabled:opacity-50"
+                    className={`cc-input cc-mono w-full rounded-lg px-4 pr-10 ${isMobile ? "min-h-[44px] text-base" : "py-3 text-sm"} disabled:opacity-50`}
                   />
                   <span className="cc-mono pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[0.7rem] text-muted">
                     %
@@ -742,7 +742,7 @@ export default function CommissionCalculatorApp(props: NativeAppProps) {
                   onChange={(e) =>
                     setForm((prev) => ({ ...prev, nocFee: e.target.value }))
                   }
-                  className="cc-input cc-mono w-full rounded-lg px-4 py-3 text-sm"
+                  className={`cc-input cc-mono w-full rounded-lg px-4 ${isMobile ? "min-h-[44px] text-base" : "py-3 text-sm"}`}
                 />
               </Field>
             )}
@@ -945,25 +945,25 @@ export default function CommissionCalculatorApp(props: NativeAppProps) {
                   </div>
 
                   {/* Actions */}
-                  <div className="flex flex-wrap gap-2">
+                  <div className={`flex gap-2 ${isMobile ? "flex-col" : "flex-wrap"}`}>
                     <button
                       type="button"
                       onClick={copyBreakdown}
-                      className="rounded-lg border border-app bg-app px-3 py-2 text-[0.7rem] font-medium uppercase tracking-[0.12em] text-secondary transition-colors hover:border-tool-accent hover:bg-tool-accent-soft hover:text-app"
+                      className={`rounded-lg border border-app bg-app px-3 ${isMobile ? "min-h-[44px] w-full text-xs" : "py-2 text-[0.7rem]"} font-medium uppercase tracking-[0.12em] text-secondary transition-colors hover:border-tool-accent hover:bg-tool-accent-soft hover:text-app`}
                     >
                       {copied ? "Copied ✓" : "Copy Stub"}
                     </button>
                     <button
                       type="button"
                       onClick={shareWhatsApp}
-                      className="rounded-lg border border-app bg-app px-3 py-2 text-[0.7rem] font-medium uppercase tracking-[0.12em] text-secondary transition-colors hover:border-tool-accent hover:bg-tool-accent-soft hover:text-app"
+                      className={`rounded-lg border border-app bg-app px-3 ${isMobile ? "min-h-[44px] w-full text-xs" : "py-2 text-[0.7rem]"} font-medium uppercase tracking-[0.12em] text-secondary transition-colors hover:border-tool-accent hover:bg-tool-accent-soft hover:text-app`}
                     >
                       WhatsApp
                     </button>
                     <button
                       type="button"
                       onClick={() => props.openApp("sales-offer-generator")}
-                      className="ml-auto inline-flex items-center gap-2 self-center text-[0.7rem] font-medium uppercase tracking-[0.12em] text-muted transition-colors hover:text-tool-accent"
+                      className={`inline-flex items-center gap-2 ${isMobile ? "min-h-[44px] w-full justify-center text-xs" : "ml-auto self-center text-[0.7rem]"} font-medium uppercase tracking-[0.12em] text-muted transition-colors hover:text-tool-accent`}
                     >
                       Generate Offer →
                     </button>

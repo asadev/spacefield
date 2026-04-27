@@ -867,10 +867,12 @@ export default function InvestmentSimulatorApp(props: NativeAppProps) {
   }, [result.purchasePrice]);
 
   /* ─── Reusable input classes (foundation tokens, no dark: duals) ─── */
-  const inputCls =
-    "w-full rounded-lg border border-app bg-app px-3.5 py-2.5 text-sm text-app outline-none transition-colors focus:border-tool-accent focus:ring-2 focus:ring-tool-accent/20 placeholder:text-muted";
-  const labelCls =
-    "mb-1.5 block text-[0.6rem] uppercase tracking-[0.18em] text-muted font-semibold";
+  const inputCls = isMobile
+    ? "w-full rounded-lg border border-app bg-app px-3.5 min-h-[44px] text-base text-app outline-none transition-colors focus:border-tool-accent focus:ring-2 focus:ring-tool-accent/20 placeholder:text-muted"
+    : "w-full rounded-lg border border-app bg-app px-3.5 py-2.5 text-sm text-app outline-none transition-colors focus:border-tool-accent focus:ring-2 focus:ring-tool-accent/20 placeholder:text-muted";
+  const labelCls = isMobile
+    ? "mb-1.5 block text-xs uppercase tracking-[0.18em] text-muted font-semibold"
+    : "mb-1.5 block text-[0.6rem] uppercase tracking-[0.18em] text-muted font-semibold";
 
   /* Width-driven layout templates */
   const formGridCols = isUltra
@@ -1055,7 +1057,7 @@ export default function InvestmentSimulatorApp(props: NativeAppProps) {
                     key={m}
                     type="button"
                     onClick={() => setMode(m)}
-                    className={`rounded-md px-3 py-2 text-[0.7rem] uppercase tracking-[0.12em] font-semibold transition-all ${
+                    className={`rounded-md px-3 ${isMobile ? "min-h-[44px] text-xs" : "py-2 text-[0.7rem]"} uppercase tracking-[0.12em] font-semibold transition-all ${
                       mode === m
                         ? "bg-tool-accent text-white shadow-sm"
                         : "text-secondary hover:bg-surface-hover hover:text-app"
@@ -1181,14 +1183,14 @@ export default function InvestmentSimulatorApp(props: NativeAppProps) {
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.12, ease }}
-          className="flex items-center gap-1 mb-3 rounded-lg bg-app-elevated border border-app p-1 w-fit"
+          className={`flex items-center gap-1 mb-3 rounded-lg bg-app-elevated border border-app p-1 ${isMobile ? "w-full" : "w-fit"}`}
         >
           {(["chart", "table", "summary"] as const).map((t) => (
             <button
               key={t}
               type="button"
               onClick={() => setView(t)}
-              className={`rounded-md px-4 py-1.5 text-xs uppercase tracking-[0.14em] font-semibold transition-all ${
+              className={`rounded-md px-4 ${isMobile ? "min-h-[44px] flex-1 text-sm" : "py-1.5 text-xs"} uppercase tracking-[0.14em] font-semibold transition-all ${
                 view === t
                   ? "bg-tool-accent text-white shadow-sm"
                   : "text-secondary hover:text-app"

@@ -793,7 +793,7 @@ export default function ServiceChargeComparisonApp({
                 key={t.value}
                 type="button"
                 onClick={() => setActiveTab(t.value)}
-                className={`rounded-lg px-3 py-1.5 text-xs font-medium transition-colors ${
+                className={`rounded-lg px-3 ${isMobile ? "min-h-[44px] text-sm" : "py-1.5 text-xs"} font-medium transition-colors ${
                   activeTab === t.value
                     ? "bg-tool-accent-soft text-tool-accent ring-1 ring-inset ring-tool-accent/40"
                     : "text-secondary hover:text-app"
@@ -833,7 +833,7 @@ export default function ServiceChargeComparisonApp({
                 placeholder="Community, building, or developer…"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-lg border border-app bg-app px-3 py-2 text-sm text-app outline-none transition-all placeholder:text-muted focus:ring-2 focus:ring-tool-accent"
+                className={`w-full rounded-lg border border-app bg-app px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2 text-sm"} text-app outline-none transition-all placeholder:text-muted focus:ring-2 focus:ring-tool-accent`}
               />
             </div>
 
@@ -846,7 +846,7 @@ export default function ServiceChargeComparisonApp({
                 onChange={(e) =>
                   setPropertyFilter(e.target.value as PropertyFilter)
                 }
-                className="w-full rounded-lg border border-app bg-app px-3 py-2 text-sm text-app outline-none transition-all focus:ring-2 focus:ring-tool-accent"
+                className={`w-full rounded-lg border border-app bg-app px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2 text-sm"} text-app outline-none transition-all focus:ring-2 focus:ring-tool-accent`}
               >
                 {PROPERTY_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -865,7 +865,7 @@ export default function ServiceChargeComparisonApp({
                 placeholder="e.g. 900"
                 value={unitSize || ""}
                 onChange={(e) => setUnitSize(Number(e.target.value) || 0)}
-                className="w-full rounded-lg border border-app bg-app px-3 py-2 text-sm text-app outline-none transition-all placeholder:text-muted focus:ring-2 focus:ring-tool-accent"
+                className={`w-full rounded-lg border border-app bg-app px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2 text-sm"} text-app outline-none transition-all placeholder:text-muted focus:ring-2 focus:ring-tool-accent`}
               />
             </div>
 
@@ -873,7 +873,7 @@ export default function ServiceChargeComparisonApp({
               <button
                 type="button"
                 onClick={() => setChillerOnly(!chillerOnly)}
-                className={`relative h-6 w-11 rounded-full transition-colors ${
+                className={`relative ${isMobile ? "h-7 w-12" : "h-6 w-11"} rounded-full transition-colors ${
                   chillerOnly
                     ? "bg-tool-accent"
                     : "bg-app border border-app"
@@ -881,7 +881,7 @@ export default function ServiceChargeComparisonApp({
                 aria-pressed={chillerOnly}
               >
                 <span
-                  className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-app-elevated shadow transition-transform ${
+                  className={`absolute top-0.5 left-0.5 ${isMobile ? "h-6 w-6" : "h-5 w-5"} rounded-full bg-app-elevated shadow transition-transform ${
                     chillerOnly ? "translate-x-5" : "translate-x-0"
                   }`}
                 />
@@ -902,7 +902,7 @@ export default function ServiceChargeComparisonApp({
                 key={o.value}
                 type="button"
                 onClick={() => setSortBy(o.value)}
-                className={`rounded-full border px-3 py-1.5 text-[0.65rem] uppercase tracking-[0.15em] transition-all ${
+                className={`rounded-full border px-3 ${isMobile ? "min-h-[44px] text-xs" : "py-1.5 text-[0.65rem]"} uppercase tracking-[0.15em] transition-all ${
                   sortBy === o.value
                     ? "border-tool-accent bg-tool-accent-soft text-tool-accent"
                     : "border-app bg-app text-secondary hover:border-tool-accent/40 hover:text-app"

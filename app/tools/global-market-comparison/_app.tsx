@@ -888,7 +888,7 @@ export default function GlobalMarketComparisonApp({ width }: NativeAppProps) {
           <button
             type="button"
             onClick={() => setMode("cities")}
-            className={`rounded-full px-3.5 py-1 text-[11px] font-semibold transition ${
+            className={`rounded-full px-3.5 ${isMobile ? "min-h-[44px] text-sm" : "py-1 text-[11px]"} font-semibold transition ${
               mode === "cities"
                 ? "bg-tool-accent text-white shadow-sm"
                 : "text-secondary hover:text-app"
@@ -899,7 +899,7 @@ export default function GlobalMarketComparisonApp({ width }: NativeAppProps) {
           <button
             type="button"
             onClick={() => setMode("countries")}
-            className={`rounded-full px-3.5 py-1 text-[11px] font-semibold transition ${
+            className={`rounded-full px-3.5 ${isMobile ? "min-h-[44px] text-sm" : "py-1 text-[11px]"} font-semibold transition ${
               mode === "countries"
                 ? "bg-tool-accent text-white shadow-sm"
                 : "text-secondary hover:text-app"

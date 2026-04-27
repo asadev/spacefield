@@ -144,6 +144,7 @@ function Field({
   placeholder,
   inputs,
   set,
+  isMobile = false,
 }: {
   label: string;
   suffix?: string;
@@ -151,10 +152,11 @@ function Field({
   placeholder?: string;
   inputs: Inputs;
   set: (key: keyof Inputs, value: string | boolean | number) => void;
+  isMobile?: boolean;
 }) {
   return (
     <div className="flex flex-col gap-1 min-w-0">
-      <label className="block text-[10px] font-medium text-muted uppercase tracking-wider">{label}</label>
+      <label className={`block ${isMobile ? "text-xs" : "text-[10px]"} font-medium text-muted uppercase tracking-wider`}>{label}</label>
       <div className="relative">
         <input
           type="text"
@@ -162,7 +164,7 @@ function Field({
           value={inputs[k] as string}
           onChange={(e) => set(k, e.target.value)}
           placeholder={placeholder}
-          className="w-full bg-app-elevated border border-app rounded-md px-2.5 py-1.5 text-sm font-mono tabular-nums text-app placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-tool-accent focus:border-tool-accent transition-all"
+          className={`w-full bg-app-elevated border border-app rounded-md px-2.5 ${isMobile ? "min-h-[44px] text-base" : "py-1.5 text-sm"} font-mono tabular-nums text-app placeholder:text-faint focus:outline-none focus:ring-2 focus:ring-tool-accent focus:border-tool-accent transition-all`}
         />
         {suffix && (
           <span className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] font-mono text-faint pointer-events-none">{suffix}</span>
@@ -761,13 +763,13 @@ export default function CashFlowModelerApp(props: NativeAppProps) {
                   Free Cash Flow · Year {activeYear}
                 </p>
                 {/* Annual / Monthly toggle */}
-                <div className="inline-flex rounded-full border border-app bg-app-elevated p-0.5 text-[10px] font-mono">
+                <div className={`inline-flex rounded-full border border-app bg-app-elevated p-0.5 ${isMobile ? "text-xs" : "text-[10px]"} font-mono`}>
                   {(["annual", "monthly"] as CadenceMode[]).map((m) => (
                     <button
                       key={m}
                       type="button"
                       onClick={() => setCadence(m)}
-                      className={`px-2 py-0.5 rounded-full transition-colors ${
+                      className={`px-2 ${isMobile ? "min-h-[32px] py-1" : "py-0.5"} rounded-full transition-colors ${
                         cadence === m
                           ? "bg-tool-accent text-white"
                           : "text-muted hover:text-app"
@@ -864,7 +866,7 @@ export default function CashFlowModelerApp(props: NativeAppProps) {
                 key={y}
                 type="button"
                 onClick={() => setActiveYear(y)}
-                className={`shrink-0 rounded-full px-3 py-1 text-[11px] font-mono tabular-nums border transition-colors ${
+                className={`shrink-0 rounded-full px-3 ${isMobile ? "min-h-[44px] text-sm" : "py-1 text-[11px]"} font-mono tabular-nums border transition-colors ${
                   active
                     ? "bg-tool-accent text-white border-tool-accent"
                     : "bg-app-elevated text-muted border-app hover:border-tool-accent hover:text-tool-accent"
@@ -906,13 +908,13 @@ export default function CashFlowModelerApp(props: NativeAppProps) {
               className="grid gap-3"
               style={{ gridTemplateColumns: assumptionsGridCols }}
             >
-              <Field label="Price" suffix="AED" k="purchasePrice" inputs={inputs} set={set} />
-              <Field label="Monthly Rent" suffix="AED" k="monthlyRent" inputs={inputs} set={set} />
-              <Field label="Occupancy" suffix="%" k="occupancyRate" inputs={inputs} set={set} />
-              <Field label="Rent Growth" suffix="%" k="annualRentIncrease" inputs={inputs} set={set} />
-              <Field label="Service Chg" suffix="AED" k="annualServiceCharge" inputs={inputs} set={set} />
-              <Field label="Maintenance" suffix="%" k="annualMaintenance" inputs={inputs} set={set} />
-              <Field label="Appreciation" suffix="%" k="annualAppreciation" inputs={inputs} set={set} />
+              <Field isMobile={isMobile} label="Price" suffix="AED" k="purchasePrice" inputs={inputs} set={set} />
+              <Field isMobile={isMobile} label="Monthly Rent" suffix="AED" k="monthlyRent" inputs={inputs} set={set} />
+              <Field isMobile={isMobile} label="Occupancy" suffix="%" k="occupancyRate" inputs={inputs} set={set} />
+              <Field isMobile={isMobile} label="Rent Growth" suffix="%" k="annualRentIncrease" inputs={inputs} set={set} />
+              <Field isMobile={isMobile} label="Service Chg" suffix="AED" k="annualServiceCharge" inputs={inputs} set={set} />
+              <Field isMobile={isMobile} label="Maintenance" suffix="%" k="annualMaintenance" inputs={inputs} set={set} />
+              <Field isMobile={isMobile} label="Appreciation" suffix="%" k="annualAppreciation" inputs={inputs} set={set} />
             </div>
 
             <div className="flex flex-wrap items-end gap-3">
@@ -920,7 +922,7 @@ export default function CashFlowModelerApp(props: NativeAppProps) {
                 <label className="text-[10px] font-medium text-muted uppercase tracking-wider">Mortgage</label>
                 <button
                   onClick={() => set("mortgageEnabled", !inputs.mortgageEnabled)}
-                  className={`relative h-[30px] px-3 rounded-md border text-xs font-mono transition-all ${
+                  className={`relative ${isMobile ? "min-h-[44px]" : "h-[30px]"} px-3 rounded-md border text-xs font-mono transition-all ${
                     inputs.mortgageEnabled
                       ? "bg-tool-accent text-white border-tool-accent"
                       : "bg-app-elevated border-app text-secondary hover:text-app"
@@ -939,17 +941,17 @@ export default function CashFlowModelerApp(props: NativeAppProps) {
                     transition={{ duration: 0.2 }}
                     className="flex flex-wrap gap-3 overflow-hidden"
                   >
-                    <div className="w-28"><Field label="Loan" suffix="AED" k="loanAmount" inputs={inputs} set={set} /></div>
-                    <div className="w-24"><Field label="Rate" suffix="%" k="interestRate" inputs={inputs} set={set} /></div>
-                    <div className="w-20"><Field label="Term" suffix="yr" k="remainingTerm" inputs={inputs} set={set} /></div>
+                    <div className="w-28"><Field isMobile={isMobile} label="Loan" suffix="AED" k="loanAmount" inputs={inputs} set={set} /></div>
+                    <div className="w-24"><Field isMobile={isMobile} label="Rate" suffix="%" k="interestRate" inputs={inputs} set={set} /></div>
+                    <div className="w-20"><Field isMobile={isMobile} label="Term" suffix="yr" k="remainingTerm" inputs={inputs} set={set} /></div>
                   </motion.div>
                 )}
               </AnimatePresence>
 
-              <div className="w-24"><Field label="Insurance" suffix="AED" k="insurance" inputs={inputs} set={set} /></div>
-              <div className="w-20"><Field label="Mgmt %" suffix="%" k="managementFee" inputs={inputs} set={set} /></div>
-              <div className="w-20"><Field label="SC Infl" suffix="%" k="serviceChargeInflation" inputs={inputs} set={set} /></div>
-              <div className="w-20"><Field label="Exit Cap" suffix="%" k="terminalCapRate" inputs={inputs} set={set} /></div>
+              <div className="w-24"><Field isMobile={isMobile} label="Insurance" suffix="AED" k="insurance" inputs={inputs} set={set} /></div>
+              <div className="w-20"><Field isMobile={isMobile} label="Mgmt %" suffix="%" k="managementFee" inputs={inputs} set={set} /></div>
+              <div className="w-20"><Field isMobile={isMobile} label="SC Infl" suffix="%" k="serviceChargeInflation" inputs={inputs} set={set} /></div>
+              <div className="w-20"><Field isMobile={isMobile} label="Exit Cap" suffix="%" k="terminalCapRate" inputs={inputs} set={set} /></div>
             </div>
           </div>
         </section>
@@ -1237,10 +1239,10 @@ export default function CashFlowModelerApp(props: NativeAppProps) {
         </section>
 
         {/* ═════════ FOOTER ACTIONS ═════════ */}
-        <div className="flex flex-wrap gap-2 pt-2">
+        <div className={`flex gap-2 pt-2 ${isMobile ? "flex-col" : "flex-wrap"}`}>
           <button
             onClick={copyToClipboard}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full border border-app bg-app-elevated text-xs font-mono text-secondary hover:border-tool-accent hover:text-tool-accent transition-colors"
+            className={`inline-flex items-center justify-center gap-2 px-4 ${isMobile ? "min-h-[44px] w-full text-sm" : "py-2 text-xs"} rounded-full border border-app bg-app-elevated font-mono text-secondary hover:border-tool-accent hover:text-tool-accent transition-colors`}
           >
             <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
@@ -1249,7 +1251,7 @@ export default function CashFlowModelerApp(props: NativeAppProps) {
           </button>
           <button
             onClick={shareWhatsApp}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-tool-accent text-white text-xs font-mono font-medium hover:opacity-90 transition-opacity"
+            className={`inline-flex items-center justify-center gap-2 px-4 ${isMobile ? "min-h-[44px] w-full text-sm" : "py-2 text-xs"} rounded-full bg-tool-accent text-white font-mono font-medium hover:opacity-90 transition-opacity`}
           >
             <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 24 24">
               <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.298-.347.446-.52.149-.174.198-.298.298-.497.099-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z" />

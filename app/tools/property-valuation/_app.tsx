@@ -503,7 +503,7 @@ export default function PropertyValuationApp(props: NativeAppProps) {
                   key={t.id}
                   onClick={() => !t.disabled && setActiveTab(t.id)}
                   disabled={t.disabled}
-                  className={`flex-1 px-3 py-2 rounded-lg text-sm font-semibold transition-all ${
+                  className={`flex-1 px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2 text-sm"} rounded-lg font-semibold transition-all ${
                     active
                       ? "bg-tool-accent text-white shadow-sm"
                       : t.disabled
@@ -519,7 +519,7 @@ export default function PropertyValuationApp(props: NativeAppProps) {
         </nav>
 
         {/* Body */}
-        <section className={`pb-8 ${isNarrow ? "px-4 pt-4" : "px-6 pt-5"}`}>
+        <section className={`${isMobile ? "pb-32" : "pb-8"} ${isNarrow ? "px-4 pt-4" : "px-6 pt-5"}`}>
           <AnimatePresence mode="wait">
             {activeTab === "inputs" && (
               <motion.div
@@ -640,7 +640,7 @@ export default function PropertyValuationApp(props: NativeAppProps) {
                           <button
                             key={pf.factor}
                             onClick={() => toggleFactor(pf.factor)}
-                            className={`px-3 py-2 rounded-full text-sm border transition-all font-medium ${
+                            className={`px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2 text-sm"} rounded-full border transition-all font-medium ${
                               active
                                 ? "bg-tool-accent text-white border-tool-accent shadow-sm"
                                 : "bg-app border-app text-secondary hover:border-tool-accent hover:text-app"
@@ -804,7 +804,7 @@ export default function PropertyValuationApp(props: NativeAppProps) {
                 </div>
 
                 {/* Export */}
-                <div className="flex gap-2 flex-wrap">
+                <div className={`flex gap-2 ${isMobile ? "flex-col" : "flex-wrap"}`}>
                   {[
                     { label: "Copy summary", onClick: copyToClipboard },
                     { label: "Share to WhatsApp", onClick: shareWhatsApp },
@@ -812,7 +812,7 @@ export default function PropertyValuationApp(props: NativeAppProps) {
                     <button
                       key={b.label}
                       onClick={b.onClick}
-                      className="px-4 py-2.5 bg-app-elevated border border-app rounded-xl text-sm font-medium text-secondary hover:text-tool-accent hover:border-tool-accent transition-colors"
+                      className={`px-4 ${isMobile ? "min-h-[44px] w-full text-base" : "py-2.5 text-sm"} bg-app-elevated border border-app rounded-xl font-medium text-secondary hover:text-tool-accent hover:border-tool-accent transition-colors`}
                     >
                       {b.label}
                     </button>

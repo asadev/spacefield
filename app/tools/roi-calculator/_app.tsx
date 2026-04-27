@@ -701,7 +701,7 @@ export default function ROICalculatorApp(props: NativeAppProps) {
                         setHorizonYears(y);
                         if (showResults) setShowResults(false);
                       }}
-                      className={`rounded-md px-3 py-1.5 text-[0.7rem] font-medium tabular-nums transition-all duration-200 ${
+                      className={`rounded-md px-3 ${isMobile ? "min-h-[44px] text-sm" : "py-1.5 text-[0.7rem]"} font-medium tabular-nums transition-all duration-200 ${
                         horizonYears === y
                           ? "bg-tool-accent text-white shadow-sm"
                           : "text-secondary hover:text-tool-accent"
@@ -711,19 +711,19 @@ export default function ROICalculatorApp(props: NativeAppProps) {
                     </button>
                   ))}
                 </div>
-                <div className="mt-3 flex gap-2">
+                <div className={`mt-3 flex gap-2 ${isMobile ? "flex-col" : ""}`}>
                   {scenarios.length < 2 && (
                     <button
                       type="button"
                       onClick={addScenario}
-                      className="flex-1 rounded-md border border-dashed border-app bg-app-elevated px-4 py-2.5 text-[0.68rem] font-medium uppercase tracking-[0.14em] text-tool-accent transition-all duration-200 hover:bg-tool-accent-soft"
+                      className={`flex-1 rounded-md border border-dashed border-app bg-app-elevated px-4 ${isMobile ? "min-h-[44px] text-sm" : "py-2.5 text-[0.68rem]"} font-medium uppercase tracking-[0.14em] text-tool-accent transition-all duration-200 hover:bg-tool-accent-soft`}
                     >
                       + Add Scenario
                     </button>
                   )}
                   <button
                     type="submit"
-                    className="flex-1 rounded-md bg-tool-accent px-5 py-2.5 text-[0.7rem] font-semibold uppercase tracking-[0.14em] text-white shadow-sm transition-all duration-200 hover:brightness-110"
+                    className={`flex-1 rounded-md bg-tool-accent px-5 ${isMobile ? "min-h-[44px] text-sm" : "py-2.5 text-[0.7rem]"} font-semibold uppercase tracking-[0.14em] text-white shadow-sm transition-all duration-200 hover:brightness-110`}
                   >
                     Calculate ROI →
                   </button>
@@ -762,7 +762,7 @@ export default function ROICalculatorApp(props: NativeAppProps) {
                             key={ri}
                             type="button"
                             onClick={() => setActiveScenarioId(scenarios[ri].id)}
-                            className={`rounded-md px-3 py-1.5 text-[0.7rem] font-medium uppercase tracking-[0.14em] transition-all duration-200 ${
+                            className={`rounded-md px-3 ${isMobile ? "min-h-[44px] text-sm" : "py-1.5 text-[0.7rem]"} font-medium uppercase tracking-[0.14em] transition-all duration-200 ${
                               activeIndex === ri
                                 ? "bg-tool-accent text-white shadow-sm"
                                 : "text-secondary hover:text-tool-accent"
@@ -1029,7 +1029,7 @@ export default function ROICalculatorApp(props: NativeAppProps) {
                     initial={{ opacity: 0, y: 10 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.3, ease }}
-                    className="grid grid-cols-2 gap-2"
+                    className={`grid gap-2 ${isMobile ? "grid-cols-1" : "grid-cols-2"}`}
                   >
                     <button
                       type="button"
@@ -1039,14 +1039,14 @@ export default function ROICalculatorApp(props: NativeAppProps) {
                           monthlyRent: Number(activeScenario.monthlyRent) || undefined,
                         })
                       }
-                      className="rounded-lg border border-app bg-app-elevated px-4 py-3 text-center text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-tool-accent transition-all duration-200 hover:bg-tool-accent-soft"
+                      className={`rounded-lg border border-app bg-app-elevated px-4 ${isMobile ? "min-h-[44px] text-xs" : "py-3 text-[0.65rem]"} text-center font-semibold uppercase tracking-[0.14em] text-tool-accent transition-all duration-200 hover:bg-tool-accent-soft`}
                     >
                       Score This Deal →
                     </button>
                     <button
                       type="button"
                       onClick={() => props.openApp("yield-heatmap")}
-                      className="rounded-lg border border-app bg-app-elevated px-4 py-3 text-center text-[0.65rem] font-semibold uppercase tracking-[0.14em] text-tool-accent transition-all duration-200 hover:bg-tool-accent-soft"
+                      className={`rounded-lg border border-app bg-app-elevated px-4 ${isMobile ? "min-h-[44px] text-xs" : "py-3 text-[0.65rem]"} text-center font-semibold uppercase tracking-[0.14em] text-tool-accent transition-all duration-200 hover:bg-tool-accent-soft`}
                     >
                       Yield Heatmap →
                     </button>

@@ -340,10 +340,12 @@ function SegmentedPill({
   value,
   onChange,
   options,
+  isMobile = false,
 }: {
   value: string;
   onChange: (v: string) => void;
   options: { key: string; label: string }[];
+  isMobile?: boolean;
 }) {
   return (
     <div className="flex gap-1 p-1 rounded-lg bg-app border border-app">
@@ -353,7 +355,7 @@ function SegmentedPill({
           <button
             key={o.key}
             onClick={() => onChange(o.key)}
-            className={`flex-1 px-3 py-2 rounded-md text-sm font-medium transition-all ${
+            className={`flex-1 px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2 text-sm"} rounded-md font-medium transition-all ${
               active
                 ? "bg-tool-accent text-white shadow-sm"
                 : "text-secondary hover:text-app"
@@ -550,8 +552,9 @@ export default function InvestmentAdvisorApp(props: NativeAppProps) {
       <div className="rounded-xl border border-app bg-app-elevated p-4 sm:p-5 space-y-4">
         <div className="flex items-center justify-between gap-3 flex-wrap">
           <span className="text-sm text-app font-medium">Purchase type</span>
-          <div className="min-w-[200px]">
+          <div className={isMobile ? "w-full" : "min-w-[200px]"}>
             <SegmentedPill
+              isMobile={isMobile}
               value={answers.isMortgage ? "mortgage" : "cash"}
               onChange={(v) => setAnswers((a) => ({ ...a, isMortgage: v === "mortgage" }))}
               options={[
@@ -708,6 +711,7 @@ export default function InvestmentAdvisorApp(props: NativeAppProps) {
           <div>
             <label className="text-sm text-secondary mb-2 block font-medium">Property status</label>
             <SegmentedPill
+              isMobile={isMobile}
               value={answers.propertyStatus}
               onChange={(v) => setAnswers((a) => ({ ...a, propertyStatus: v as PropertyStatus }))}
               options={[
@@ -720,6 +724,7 @@ export default function InvestmentAdvisorApp(props: NativeAppProps) {
           <div>
             <label className="text-sm text-secondary mb-2 block font-medium">Property type</label>
             <SegmentedPill
+              isMobile={isMobile}
               value={answers.propertyType}
               onChange={(v) => setAnswers((a) => ({ ...a, propertyType: v as PropertyType }))}
               options={[
@@ -732,6 +737,7 @@ export default function InvestmentAdvisorApp(props: NativeAppProps) {
           <div>
             <label className="text-sm text-secondary mb-2 block font-medium">Management style</label>
             <SegmentedPill
+              isMobile={isMobile}
               value={answers.management}
               onChange={(v) => setAnswers((a) => ({ ...a, management: v as Management }))}
               options={[
@@ -802,7 +808,7 @@ export default function InvestmentAdvisorApp(props: NativeAppProps) {
           <p className="text-secondary">No matching areas found with your criteria. Try adjusting your budget or risk tolerance.</p>
           <button
             onClick={resetAll}
-            className="mt-5 px-5 py-2.5 rounded-full bg-tool-accent text-white text-sm font-medium"
+            className={`mt-5 ${isMobile ? "min-h-[44px] text-base" : "py-2.5 text-sm"} px-5 rounded-full bg-tool-accent text-white font-medium`}
           >
             Start Over
           </button>
@@ -984,7 +990,7 @@ export default function InvestmentAdvisorApp(props: NativeAppProps) {
         </div>
 
         {/* Cross-tool CTAs — open inside workspace via openApp() */}
-        <div className="rounded-2xl border border-app bg-app-elevated p-6">
+        <div className={`rounded-2xl border border-app bg-app-elevated ${isMobile ? "p-4" : "p-6"}`}>
           <h3 className="text-lg font-semibold text-app mb-4">Explore further</h3>
           <div className={`grid gap-4 ${isNarrow ? "grid-cols-1" : "grid-cols-1 md:grid-cols-2"}`}>
             {results.slice(0, 2).map((area) => (
@@ -993,21 +999,21 @@ export default function InvestmentAdvisorApp(props: NativeAppProps) {
                 <button
                   type="button"
                   onClick={() => openApp("yield-heatmap", { area: area.area })}
-                  className="block text-left text-sm text-tool-accent hover:underline transition-colors"
+                  className={`block text-left ${isMobile ? "min-h-[44px] flex items-center text-base" : "text-sm"} text-tool-accent hover:underline transition-colors`}
                 >
                   Check yield in {area.area} →
                 </button>
                 <button
                   type="button"
                   onClick={() => openApp("deal-scoring", { area: area.area })}
-                  className="block text-left text-sm text-tool-accent hover:underline transition-colors"
+                  className={`block text-left ${isMobile ? "min-h-[44px] flex items-center text-base" : "text-sm"} text-tool-accent hover:underline transition-colors`}
                 >
                   Score a deal in {area.area} →
                 </button>
                 <button
                   type="button"
                   onClick={() => openApp("neighborhood-report", { area: area.area })}
-                  className="block text-left text-sm text-tool-accent hover:underline transition-colors"
+                  className={`block text-left ${isMobile ? "min-h-[44px] flex items-center text-base" : "text-sm"} text-tool-accent hover:underline transition-colors`}
                 >
                   See {area.area} neighborhood report →
                 </button>
@@ -1018,21 +1024,21 @@ export default function InvestmentAdvisorApp(props: NativeAppProps) {
               <button
                 type="button"
                 onClick={() => openApp("mortgage-calculator")}
-                className="block text-left text-sm text-tool-accent hover:underline transition-colors"
+                className={`block text-left ${isMobile ? "min-h-[44px] flex items-center text-base" : "text-sm"} text-tool-accent hover:underline transition-colors`}
               >
                 Calculate your mortgage →
               </button>
               <button
                 type="button"
                 onClick={() => openApp("area-comparison")}
-                className="block text-left text-sm text-tool-accent hover:underline transition-colors"
+                className={`block text-left ${isMobile ? "min-h-[44px] flex items-center text-base" : "text-sm"} text-tool-accent hover:underline transition-colors`}
               >
                 Compare areas side by side →
               </button>
               <button
                 type="button"
                 onClick={() => openApp("golden-visa-checker")}
-                className="block text-left text-sm text-tool-accent hover:underline transition-colors"
+                className={`block text-left ${isMobile ? "min-h-[44px] flex items-center text-base" : "text-sm"} text-tool-accent hover:underline transition-colors`}
               >
                 Check Golden Visa eligibility →
               </button>
@@ -1041,16 +1047,16 @@ export default function InvestmentAdvisorApp(props: NativeAppProps) {
         </div>
 
         {/* Start Over */}
-        <div className="flex items-center justify-center gap-3 pt-2">
+        <div className={`flex items-center justify-center gap-3 pt-2 ${isMobile ? "flex-col" : ""}`}>
           <button
             onClick={() => setShowResults(false)}
-            className="px-5 py-2.5 rounded-full border border-app bg-app-elevated text-secondary hover:text-app hover:border-tool-accent text-sm font-medium transition-all"
+            className={`${isMobile ? "min-h-[44px] w-full text-base" : "px-5 py-2.5 text-sm"} px-5 rounded-full border border-app bg-app-elevated text-secondary hover:text-app hover:border-tool-accent font-medium transition-all`}
           >
             Edit answers
           </button>
           <button
             onClick={resetAll}
-            className="px-5 py-2.5 rounded-full bg-tool-accent text-white text-sm font-medium transition-all hover:opacity-90"
+            className={`${isMobile ? "min-h-[44px] w-full text-base" : "px-5 py-2.5 text-sm"} px-5 rounded-full bg-tool-accent text-white font-medium transition-all hover:opacity-90`}
           >
             Start over
           </button>

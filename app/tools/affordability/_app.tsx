@@ -321,6 +321,7 @@ function Slider({
   step,
   format,
   hint,
+  isMobile = false,
 }: {
   label: string;
   value: string;
@@ -330,13 +331,14 @@ function Slider({
   step: number;
   format: (n: number) => string;
   hint?: string;
+  isMobile?: boolean;
 }) {
   const num = Number(value) || 0;
   const pct = ((num - min) / (max - min)) * 100;
   return (
     <div>
       <div className="flex items-baseline justify-between">
-        <label className="text-[0.65rem] uppercase tracking-[0.18em] text-muted">
+        <label className={`${isMobile ? "text-xs" : "text-[0.65rem]"} uppercase tracking-[0.18em] text-muted`}>
           {label}
         </label>
         <span className="font-mono text-[0.9rem] font-semibold text-tool-accent tabular-nums">
@@ -357,7 +359,7 @@ function Slider({
         type="number"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="mt-2 w-full rounded-lg border border-app bg-app px-3 py-2 text-sm font-mono tabular-nums text-app outline-none transition focus:border-tool-accent focus:ring-2 ring-tool-accent"
+        className={`mt-2 w-full rounded-lg border border-app bg-app px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2 text-sm"} font-mono tabular-nums text-app outline-none transition focus:border-tool-accent focus:ring-2 ring-tool-accent`}
       />
       {hint && <p className="mt-1 text-[0.65rem] text-muted">{hint}</p>}
     </div>
@@ -541,7 +543,7 @@ export default function AffordabilityApp(props: NativeAppProps) {
                 key={v}
                 type="button"
                 onClick={() => setView(v)}
-                className={`rounded-lg px-4 py-1.5 text-xs font-medium capitalize transition-all ${
+                className={`rounded-lg px-4 ${isMobile ? "min-h-[44px] text-sm" : "py-1.5 text-xs"} font-medium capitalize transition-all ${
                   view === v
                     ? "bg-tool-accent text-white shadow-sm"
                     : "text-secondary hover:text-app"
@@ -597,7 +599,7 @@ export default function AffordabilityApp(props: NativeAppProps) {
                       key={r}
                       type="button"
                       onClick={() => setResidencyMode(r)}
-                      className={`rounded-md px-3 py-1.5 text-xs font-medium transition-all ${
+                      className={`rounded-md px-3 ${isMobile ? "min-h-[44px] text-xs" : "py-1.5 text-xs"} font-medium transition-all ${
                         residency === r
                           ? "bg-tool-accent text-white shadow-sm"
                           : "text-secondary hover:text-app"
@@ -611,6 +613,7 @@ export default function AffordabilityApp(props: NativeAppProps) {
 
               <div className="space-y-5">
                 <Slider
+                  isMobile={isMobile}
                   label="Gross Monthly Income"
                   value={inputs.monthlyIncome}
                   onChange={(v) => update("monthlyIncome", v)}
@@ -620,6 +623,7 @@ export default function AffordabilityApp(props: NativeAppProps) {
                   format={(n) => fmtShort(n)}
                 />
                 <Slider
+                  isMobile={isMobile}
                   label="Existing Monthly Debts"
                   value={inputs.monthlyDebts}
                   onChange={(v) => update("monthlyDebts", v)}
@@ -630,6 +634,7 @@ export default function AffordabilityApp(props: NativeAppProps) {
                   hint="Credit cards, personal loans, car finance"
                 />
                 <Slider
+                  isMobile={isMobile}
                   label="Cash Down Payment"
                   value={inputs.downPayment}
                   onChange={(v) => update("downPayment", v)}

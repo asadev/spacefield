@@ -591,8 +591,9 @@ export default function NeighborhoodReportApp({ width, openApp }: NativeAppProps
     }
   }, [tab, compareIds.length, scored]);
 
-  const selectClasses =
-    "rounded-lg border border-app bg-app-elevated px-3 py-1.5 text-sm text-app outline-none transition-colors focus:border-app-focus appearance-none cursor-pointer";
+  const selectClasses = isMobile
+    ? "rounded-lg border border-app bg-app-elevated px-3 min-h-[44px] text-base text-app outline-none transition-colors focus:border-app-focus appearance-none cursor-pointer"
+    : "rounded-lg border border-app bg-app-elevated px-3 py-1.5 text-sm text-app outline-none transition-colors focus:border-app-focus appearance-none cursor-pointer";
 
   if (!featured) return null;
 
@@ -631,7 +632,7 @@ export default function NeighborhoodReportApp({ width, openApp }: NativeAppProps
             {isMobile && (
               <button
                 onClick={() => setTocOpen(true)}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-app bg-app px-2.5 py-1.5 text-xs text-secondary active:bg-surface"
+                className={`inline-flex items-center gap-1.5 rounded-lg border border-app bg-app px-2.5 ${isMobile ? "min-h-[44px] text-sm" : "py-1.5 text-xs"} text-secondary active:bg-surface`}
                 title="Sections"
                 aria-label="Open sections"
               >
@@ -646,13 +647,13 @@ export default function NeighborhoodReportApp({ width, openApp }: NativeAppProps
                 Sections
               </button>
             )}
-            <button onClick={onShare} className="rounded-lg border border-app bg-app px-2.5 py-1.5 text-xs text-secondary hover:text-app hover:border-app-strong transition-colors" title="Share report">
+            <button onClick={onShare} className={`rounded-lg border border-app bg-app px-2.5 ${isMobile ? "min-h-[44px] text-sm" : "py-1.5 text-xs"} text-secondary hover:text-app hover:border-app-strong transition-colors`} title="Share report">
               Share
             </button>
-            <button onClick={onPrint} className="rounded-lg border border-app bg-app px-2.5 py-1.5 text-xs text-secondary hover:text-app hover:border-app-strong transition-colors" title="Print report">
+            <button onClick={onPrint} className={`rounded-lg border border-app bg-app px-2.5 ${isMobile ? "min-h-[44px] text-sm" : "py-1.5 text-xs"} text-secondary hover:text-app hover:border-app-strong transition-colors`} title="Print report">
               Print
             </button>
-            <button onClick={onExport} className="rounded-lg border border-app bg-app px-2.5 py-1.5 text-xs text-secondary hover:text-app hover:border-app-strong transition-colors" title="Download CSV">
+            <button onClick={onExport} className={`rounded-lg border border-app bg-app px-2.5 ${isMobile ? "min-h-[44px] text-sm" : "py-1.5 text-xs"} text-secondary hover:text-app hover:border-app-strong transition-colors`} title="Download CSV">
               Export
             </button>
           </div>
@@ -665,7 +666,7 @@ export default function NeighborhoodReportApp({ width, openApp }: NativeAppProps
               <button
                 key={t.value}
                 onClick={() => setTab(t.value)}
-                className={`whitespace-nowrap px-3 py-1.5 text-xs rounded-lg transition-all ${
+                className={`whitespace-nowrap px-3 ${isMobile ? "min-h-[44px] text-sm" : "py-1.5 text-xs"} rounded-lg transition-all ${
                   tab === t.value
                     ? "bg-tool-accent-soft text-tool-accent font-medium"
                     : "text-secondary hover:text-app"
@@ -1166,7 +1167,7 @@ function DirectoryTab({
             placeholder="Search neighborhood, developer, vibe…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="w-full rounded-lg border border-app bg-app-elevated pl-9 pr-3 py-1.5 text-sm text-app placeholder:text-faint outline-none transition-colors focus:border-app-focus"
+            className="w-full rounded-lg border border-app bg-app-elevated pl-9 pr-3 py-3 text-base text-app placeholder:text-faint outline-none transition-colors focus:border-app-focus"
           />
         </div>
         <select value={budget} onChange={(e) => setBudget(e.target.value)} className={selectClasses}>

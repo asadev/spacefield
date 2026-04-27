@@ -174,12 +174,14 @@ function Segmented<T extends string>({
   options,
   ariaLabel,
   cols,
+  isMobile = false,
 }: {
   value: T;
   onChange: (v: T) => void;
   options: { value: T; label: string }[];
   ariaLabel?: string;
   cols?: number;
+  isMobile?: boolean;
 }) {
   const colClass =
     cols === 2
@@ -202,7 +204,7 @@ function Segmented<T extends string>({
             role="tab"
             aria-selected={active}
             onClick={() => onChange(o.value)}
-            className={`whitespace-nowrap rounded-full px-3 py-1.5 text-[0.72rem] font-medium transition-colors ${
+            className={`whitespace-nowrap rounded-full px-3 ${isMobile ? "min-h-[44px] text-sm" : "py-1.5 text-[0.72rem]"} font-medium transition-colors ${
               active
                 ? "bg-tool-accent text-white shadow-sm"
                 : "text-muted hover:text-app"
@@ -629,6 +631,7 @@ export default function DLDFeeCalculatorApp(props: NativeAppProps) {
                 Property Type
               </label>
               <Segmented
+                isMobile={isMobile}
                 value={propertyType}
                 onChange={setPropertyType}
                 options={PROPERTY_TYPES}
@@ -643,6 +646,7 @@ export default function DLDFeeCalculatorApp(props: NativeAppProps) {
                 Transaction Type
               </label>
               <Segmented
+                isMobile={isMobile}
                 value={transactionType}
                 onChange={setTransactionType}
                 options={TRANSACTION_TYPES}
@@ -657,6 +661,7 @@ export default function DLDFeeCalculatorApp(props: NativeAppProps) {
                 Buyer Residency
               </label>
               <Segmented
+                isMobile={isMobile}
                 value={buyerType}
                 onChange={setBuyerType}
                 options={BUYER_TYPES}
@@ -674,7 +679,7 @@ export default function DLDFeeCalculatorApp(props: NativeAppProps) {
                 <select
                   value={developer}
                   onChange={(e) => setDeveloper(e.target.value)}
-                  className="dld-input w-full px-3 py-2.5 text-sm"
+                  className={`dld-input w-full px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2.5 text-sm"}`}
                 >
                   {DEVELOPERS.map((d) => (
                     <option key={d.label} value={d.label}>
@@ -692,6 +697,7 @@ export default function DLDFeeCalculatorApp(props: NativeAppProps) {
                   Who Pays Transfer Fee
                 </label>
                 <Segmented
+                  isMobile={isMobile}
                   value={transferFeePayer}
                   onChange={setTransferFeePayer}
                   options={PAYER_OPTIONS}
@@ -711,15 +717,15 @@ export default function DLDFeeCalculatorApp(props: NativeAppProps) {
                   type="button"
                   onClick={() => setHasMortgage(!hasMortgage)}
                   aria-pressed={hasMortgage}
-                  className={`relative h-5 w-9 rounded-full transition-colors ${
+                  className={`relative ${isMobile ? "h-7 w-12" : "h-5 w-9"} rounded-full transition-colors ${
                     hasMortgage
                       ? "bg-tool-accent"
                       : "bg-app-elevated border border-app"
                   }`}
                 >
                   <span
-                    className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
-                      hasMortgage ? "left-[18px]" : "left-0.5"
+                    className={`absolute top-0.5 ${isMobile ? "h-6 w-6" : "h-4 w-4"} rounded-full bg-white shadow transition-all ${
+                      hasMortgage ? (isMobile ? "left-[22px]" : "left-[18px]") : "left-0.5"
                     }`}
                   />
                 </button>
@@ -737,7 +743,7 @@ export default function DLDFeeCalculatorApp(props: NativeAppProps) {
                       placeholder="Loan amount (AED)"
                       value={loanAmount}
                       onChange={(e) => setLoanAmount(e.target.value)}
-                      className="dld-input dld-mono w-full px-3 py-2 text-sm tabular-nums placeholder:text-faint"
+                      className={`dld-input dld-mono w-full px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2 text-sm"} tabular-nums placeholder:text-faint`}
                     />
                   </motion.div>
                 )}
@@ -754,15 +760,15 @@ export default function DLDFeeCalculatorApp(props: NativeAppProps) {
                   type="button"
                   onClick={() => setHasAgent(!hasAgent)}
                   aria-pressed={hasAgent}
-                  className={`relative h-5 w-9 rounded-full transition-colors ${
+                  className={`relative ${isMobile ? "h-7 w-12" : "h-5 w-9"} rounded-full transition-colors ${
                     hasAgent
                       ? "bg-tool-accent"
                       : "bg-app-elevated border border-app"
                   }`}
                 >
                   <span
-                    className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow transition-all ${
-                      hasAgent ? "left-[18px]" : "left-0.5"
+                    className={`absolute top-0.5 ${isMobile ? "h-6 w-6" : "h-4 w-4"} rounded-full bg-white shadow transition-all ${
+                      hasAgent ? (isMobile ? "left-[22px]" : "left-[18px]") : "left-0.5"
                     }`}
                   />
                 </button>
@@ -783,7 +789,7 @@ export default function DLDFeeCalculatorApp(props: NativeAppProps) {
                         max="10"
                         value={agentRate}
                         onChange={(e) => setAgentRate(e.target.value)}
-                        className="dld-input dld-mono w-full px-3 py-2 text-sm tabular-nums"
+                        className={`dld-input dld-mono w-full px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2 text-sm"} tabular-nums`}
                       />
                       <span className="dld-mono text-xs text-muted">% rate</span>
                     </div>
@@ -991,22 +997,22 @@ export default function DLDFeeCalculatorApp(props: NativeAppProps) {
                     </div>
 
                     {/* Footer actions */}
-                    <div className="flex flex-wrap items-center gap-2 border-t border-dashed border-app pt-4">
+                    <div className={`flex items-center gap-2 border-t border-dashed border-app pt-4 ${isMobile ? "flex-col" : "flex-wrap"}`}>
                       <button
                         type="button"
                         onClick={copyBreakdown}
-                        className="rounded-full border border-app bg-app-elevated px-4 py-2 text-[0.7rem] font-medium text-app transition-colors hover:border-tool-accent hover:text-tool-accent"
+                        className={`rounded-full border border-app bg-app-elevated px-4 ${isMobile ? "min-h-[44px] w-full text-sm" : "py-2 text-[0.7rem]"} font-medium text-app transition-colors hover:border-tool-accent hover:text-tool-accent`}
                       >
                         {copied ? "Copied" : "Copy Statement"}
                       </button>
                       <button
                         type="button"
                         onClick={shareWhatsApp}
-                        className="rounded-full bg-tool-accent px-4 py-2 text-[0.7rem] font-semibold text-white transition-opacity hover:opacity-90"
+                        className={`rounded-full bg-tool-accent px-4 ${isMobile ? "min-h-[44px] w-full text-sm" : "py-2 text-[0.7rem]"} font-semibold text-white transition-opacity hover:opacity-90`}
                       >
                         Send via WhatsApp
                       </button>
-                      <span className="dld-mono ml-auto self-center text-[0.65rem] text-faint">
+                      <span className={`dld-mono self-center text-[0.65rem] text-faint ${isMobile ? "" : "ml-auto"}`}>
                         {refNumber}
                       </span>
                     </div>

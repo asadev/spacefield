@@ -299,7 +299,7 @@ function DetailPanel({
           </div>
           <button
             onClick={onClose}
-            className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full border border-app text-secondary transition hover:border-tool-accent/40 hover:bg-tool-accent-soft hover:text-tool-accent"
+            className={`flex ${isMobile ? "h-11 w-11" : "h-7 w-7"} flex-shrink-0 items-center justify-center rounded-full border border-app text-secondary transition hover:border-tool-accent/40 hover:bg-tool-accent-soft hover:text-tool-accent`}
             aria-label="Close"
           >
             <svg
@@ -417,7 +417,7 @@ function DetailPanel({
               onClick={() =>
                 onOpenApp("neighborhood-report", { area: area.id })
               }
-              className="group flex w-full items-center justify-between rounded-lg border border-app bg-app-elevated px-3 py-2.5 text-xs font-medium text-app transition hover:border-tool-accent/40 hover:bg-tool-accent-soft hover:text-tool-accent"
+              className={`group flex w-full items-center justify-between rounded-lg border border-app bg-app-elevated px-3 ${isMobile ? "min-h-[44px] text-sm" : "py-2.5 text-xs"} font-medium text-app transition hover:border-tool-accent/40 hover:bg-tool-accent-soft hover:text-tool-accent`}
             >
               <span>Full neighborhood report</span>
               <span className="text-tool-accent transition group-hover:translate-x-0.5">
@@ -427,7 +427,7 @@ function DetailPanel({
             <button
               type="button"
               onClick={() => onOpenApp("area-comparison")}
-              className="group flex w-full items-center justify-between rounded-lg border border-app bg-app-elevated px-3 py-2.5 text-xs font-medium text-app transition hover:border-tool-accent/40 hover:bg-tool-accent-soft hover:text-tool-accent"
+              className={`group flex w-full items-center justify-between rounded-lg border border-app bg-app-elevated px-3 ${isMobile ? "min-h-[44px] text-sm" : "py-2.5 text-xs"} font-medium text-app transition hover:border-tool-accent/40 hover:bg-tool-accent-soft hover:text-tool-accent`}
             >
               <span>Compare with other areas</span>
               <span className="text-tool-accent transition group-hover:translate-x-0.5">
@@ -758,7 +758,7 @@ export default function YieldHeatmapApp({
             <button
               key={f.key}
               onClick={() => setZone(f.key)}
-              className={`rounded-lg px-2.5 py-1 text-[11px] font-medium transition ${
+              className={`rounded-lg px-2.5 ${isMobile ? "min-h-[44px] text-sm" : "py-1 text-[11px]"} font-medium transition ${
                 zone === f.key
                   ? "bg-tool-accent text-black shadow-sm"
                   : "bg-app-elevated text-app hover:bg-tool-accent-soft hover:text-tool-accent"
@@ -894,7 +894,7 @@ export default function YieldHeatmapApp({
                   setSortAsc(false);
                 }
               }}
-              className={`rounded-lg border px-2.5 py-1 text-[11px] font-medium transition ${
+              className={`rounded-lg border px-2.5 ${isMobile ? "min-h-[44px] text-sm" : "py-1 text-[11px]"} font-medium transition ${
                 sortKey === opt.key
                   ? "border-tool-accent/50 bg-tool-accent-soft text-tool-accent"
                   : "border-app bg-app-elevated text-secondary hover:border-tool-accent/30 hover:bg-tool-accent-soft/50 hover:text-tool-accent"

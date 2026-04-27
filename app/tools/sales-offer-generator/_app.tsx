@@ -449,11 +449,13 @@ export default function SalesOfferGeneratorApp(props: NativeAppProps) {
 
   const handlePrint = () => window.print();
 
-  const inputCls =
-    "w-full rounded-md border border-app bg-app px-3 py-2 text-sm text-app outline-none transition-all placeholder:text-muted focus:ring-2 ring-tool-accent focus:border-tool-accent";
+  const inputCls = isMobile
+    ? "w-full rounded-md border border-app bg-app px-3 min-h-[44px] text-base text-app outline-none transition-all placeholder:text-muted focus:ring-2 ring-tool-accent focus:border-tool-accent"
+    : "w-full rounded-md border border-app bg-app px-3 py-2 text-sm text-app outline-none transition-all placeholder:text-muted focus:ring-2 ring-tool-accent focus:border-tool-accent";
 
-  const labelCls =
-    "mb-1 block text-[0.65rem] font-medium uppercase tracking-[0.1em] text-secondary";
+  const labelCls = isMobile
+    ? "mb-1 block text-xs font-medium uppercase tracking-[0.1em] text-secondary"
+    : "mb-1 block text-[0.65rem] font-medium uppercase tracking-[0.1em] text-secondary";
 
   const propertyImg = images.find((i) => i.key === "propertyPhoto")?.data;
   const floorPlanImg = images.find((i) => i.key === "floorPlan")?.data;
@@ -534,25 +536,25 @@ export default function SalesOfferGeneratorApp(props: NativeAppProps) {
             />
             {generated ? "Offer ready" : "Filling out draft"}
           </div>
-          <div className="flex items-center gap-2">
+          <div className={`flex items-center gap-2 ${isMobile ? "w-full" : ""}`}>
             <button
               onClick={copyText}
               disabled={!generated}
-              className="rounded-lg border border-app bg-app px-3 py-1.5 text-[0.65rem] font-medium text-secondary transition hover:bg-tool-accent-soft hover:text-tool-accent disabled:opacity-40 disabled:cursor-not-allowed"
+              className={`rounded-lg border border-app bg-app px-3 ${isMobile ? "min-h-[44px] flex-1 text-sm" : "py-1.5 text-[0.65rem]"} font-medium text-secondary transition hover:bg-tool-accent-soft hover:text-tool-accent disabled:opacity-40 disabled:cursor-not-allowed`}
             >
               {copied ? "Copied" : "Copy"}
             </button>
             <button
               onClick={shareEmail}
               disabled={!generated}
-              className="rounded-lg bg-tool-accent px-3 py-1.5 text-[0.65rem] font-medium text-white transition hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
+              className={`rounded-lg bg-tool-accent px-3 ${isMobile ? "min-h-[44px] flex-1 text-sm" : "py-1.5 text-[0.65rem]"} font-medium text-white transition hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed`}
             >
               Email
             </button>
             <button
               onClick={handlePrint}
               disabled={!generated}
-              className="rounded-lg bg-tool-accent px-3 py-1.5 text-[0.65rem] font-semibold text-white transition hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed"
+              className={`rounded-lg bg-tool-accent px-3 ${isMobile ? "min-h-[44px] flex-1 text-sm" : "py-1.5 text-[0.65rem]"} font-semibold text-white transition hover:brightness-110 disabled:opacity-40 disabled:cursor-not-allowed`}
             >
               Print / PDF
             </button>
@@ -572,7 +574,7 @@ export default function SalesOfferGeneratorApp(props: NativeAppProps) {
                 type="button"
                 onClick={() => setTemplate(t.id)}
                 title={t.hint}
-                className={`rounded-full px-3.5 py-1.5 text-[0.65rem] font-medium transition ${
+                className={`rounded-full px-3.5 ${isMobile ? "min-h-[44px] text-sm" : "py-1.5 text-[0.65rem]"} font-medium transition ${
                   active
                     ? "bg-tool-accent text-white shadow-sm"
                     : "border border-app bg-app-elevated text-secondary hover:bg-tool-accent-soft hover:text-tool-accent"

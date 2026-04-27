@@ -624,14 +624,14 @@ function FormField({ label, children }: { label: string; children: React.ReactNo
 function TextInput({ value, onChange, placeholder, type = "text" }: { value: string; onChange: (v: string) => void; placeholder?: string; type?: string }) {
   return (
     <input type={type} value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder}
-      className="w-full rounded-lg border border-app bg-app-elevated px-3 py-2 text-[0.8rem] text-app outline-none transition-all focus:border-tool-accent focus:ring-1 focus:ring-tool-accent placeholder:text-faint" />
+      className="w-full rounded-lg border border-app bg-app-elevated px-3 py-2.5 text-base sm:text-[0.8rem] sm:py-2 text-app outline-none transition-all focus:border-tool-accent focus:ring-1 focus:ring-tool-accent placeholder:text-faint" />
   );
 }
 
 function SelectInput({ value, onChange, options }: { value: string; onChange: (v: string) => void; options: string[] }) {
   return (
     <select value={value} onChange={(e) => onChange(e.target.value)}
-      className="w-full rounded-lg border border-app bg-app-elevated px-3 py-2 text-[0.8rem] text-app outline-none transition-all focus:border-tool-accent focus:ring-1 focus:ring-tool-accent">
+      className="w-full rounded-lg border border-app bg-app-elevated px-3 py-2.5 text-base sm:text-[0.8rem] sm:py-2 text-app outline-none transition-all focus:border-tool-accent focus:ring-1 focus:ring-tool-accent">
       {options.map((opt) => <option key={opt} value={opt} className="bg-app-elevated text-app">{opt}</option>)}
     </select>
   );
@@ -639,11 +639,11 @@ function SelectInput({ value, onChange, options }: { value: string; onChange: (v
 
 function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
   return (
-    <label className="flex cursor-pointer items-center gap-2.5">
-      <div className={`relative h-4 w-7 rounded-full transition-colors ${checked ? "bg-tool-accent" : "bg-app-elevated border border-app"}`} onClick={() => onChange(!checked)}>
-        <div className={`absolute top-0.5 h-3 w-3 rounded-full transition-all bg-white shadow ${checked ? "left-[14px]" : "left-0.5"}`} />
+    <label className="flex cursor-pointer items-center gap-2.5 min-h-[44px] sm:min-h-0">
+      <div className={`relative h-6 w-10 sm:h-4 sm:w-7 rounded-full transition-colors ${checked ? "bg-tool-accent" : "bg-app-elevated border border-app"}`} onClick={() => onChange(!checked)}>
+        <div className={`absolute top-0.5 h-5 w-5 sm:h-3 sm:w-3 rounded-full transition-all bg-white shadow ${checked ? "left-[18px] sm:left-[14px]" : "left-0.5"}`} />
       </div>
-      <span className="text-[0.75rem] text-secondary">{label}</span>
+      <span className="text-sm sm:text-[0.75rem] text-secondary">{label}</span>
     </label>
   );
 }
@@ -771,7 +771,7 @@ function PosterMobileFlow({
               key={t.id}
               type="button"
               onClick={() => setTab(t.id)}
-              className={`relative flex-1 rounded-lg px-2 py-2 text-[11px] font-medium transition-colors ${
+              className={`relative flex-1 rounded-lg px-2 min-h-[44px] text-sm font-medium transition-colors ${
                 active
                   ? "bg-tool-accent-soft text-tool-accent"
                   : "text-secondary active:bg-app"

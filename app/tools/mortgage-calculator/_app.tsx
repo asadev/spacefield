@@ -452,17 +452,19 @@ function Segmented<T extends string>({
   onChange,
   options,
   ariaLabel,
+  isMobile = false,
 }: {
   value: T;
   onChange: (v: T) => void;
   options: { value: T; label: string }[];
   ariaLabel?: string;
+  isMobile?: boolean;
 }) {
   return (
     <div
       role="tablist"
       aria-label={ariaLabel}
-      className="inline-flex w-full rounded-full border border-app bg-app-elevated p-0.5 text-xs"
+      className={`inline-flex w-full rounded-full border border-app bg-app-elevated p-0.5 ${isMobile ? "text-sm" : "text-xs"}`}
     >
       {options.map((o) => {
         const active = o.value === value;
@@ -472,7 +474,7 @@ function Segmented<T extends string>({
             role="tab"
             aria-selected={active}
             onClick={() => onChange(o.value)}
-            className={`relative flex-1 whitespace-nowrap rounded-full px-3 py-1.5 font-medium transition-colors ${
+            className={`relative flex-1 whitespace-nowrap rounded-full px-3 ${isMobile ? "min-h-[44px]" : "py-1.5"} font-medium transition-colors ${
               active
                 ? "bg-tool-accent text-white shadow-sm"
                 : "text-muted hover:text-app"
@@ -884,6 +886,7 @@ export default function MortgageCalculatorApp(props: NativeAppProps) {
                   Residency Status
                 </label>
                 <Segmented
+                  isMobile={isMobile}
                   value={residency}
                   onChange={setResidency}
                   options={residencyOptions}
@@ -896,6 +899,7 @@ export default function MortgageCalculatorApp(props: NativeAppProps) {
                   Property Purpose
                 </label>
                 <Segmented
+                  isMobile={isMobile}
                   value={purpose}
                   onChange={setPurpose}
                   options={purposeOptions}
@@ -908,6 +912,7 @@ export default function MortgageCalculatorApp(props: NativeAppProps) {
                   Loan Term
                 </label>
                 <Segmented
+                  isMobile={isMobile}
                   value={String(termYears) as "15" | "20" | "25" | "30"}
                   onChange={(v) => setTermYears(Number(v))}
                   options={termOptions.map((t) => ({
@@ -925,7 +930,7 @@ export default function MortgageCalculatorApp(props: NativeAppProps) {
                 <select
                   value={selectedBank}
                   onChange={(e) => setSelectedBank(e.target.value)}
-                  className="w-full rounded-xl border border-app bg-app px-3 py-2.5 text-sm text-app transition-colors focus:border-tool-accent focus:outline-none focus:ring-2 focus:ring-tool-accent/30"
+                  className={`w-full rounded-xl border border-app bg-app px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2.5 text-sm"} text-app transition-colors focus:border-tool-accent focus:outline-none focus:ring-2 focus:ring-tool-accent/30`}
                 >
                   <option value="">Manual Rate</option>
                   {BANKS.map((b) => (
@@ -943,6 +948,7 @@ export default function MortgageCalculatorApp(props: NativeAppProps) {
                     Rate Structure
                   </label>
                   <Segmented
+                    isMobile={isMobile}
                     value={rateType}
                     onChange={setRateType}
                     options={rateTypeOptions}
@@ -1136,7 +1142,7 @@ export default function MortgageCalculatorApp(props: NativeAppProps) {
                           role="tab"
                           aria-selected={active}
                           onClick={() => setResultsView(o.value)}
-                          className={`rounded-full px-3 py-1.5 font-medium transition-colors ${
+                          className={`rounded-full px-3 ${isMobile ? "min-h-[44px] text-sm" : "py-1.5"} font-medium transition-colors ${
                             isWide ? "" : "flex-1"
                           } ${
                             active
@@ -1531,17 +1537,17 @@ export default function MortgageCalculatorApp(props: NativeAppProps) {
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.45, delay: 0.25, ease }}
-                className="flex flex-wrap gap-3"
+                className={`flex gap-3 ${isMobile ? "flex-col" : "flex-wrap"}`}
               >
                 <button
                   onClick={handleCopy}
-                  className="rounded-full border border-app bg-app-elevated px-5 py-2 font-mono text-[0.7rem] uppercase tracking-[0.15em] text-secondary transition-colors hover:border-tool-accent hover:text-tool-accent"
+                  className={`rounded-full border border-app bg-app-elevated px-5 ${isMobile ? "min-h-[44px] w-full text-xs" : "py-2 text-[0.7rem]"} font-mono uppercase tracking-[0.15em] text-secondary transition-colors hover:border-tool-accent hover:text-tool-accent`}
                 >
                   {copied ? "Copied ✓" : "Copy Summary"}
                 </button>
                 <button
                   onClick={handleWhatsApp}
-                  className="rounded-full bg-tool-accent px-5 py-2 font-mono text-[0.7rem] font-medium uppercase tracking-[0.15em] text-white transition-opacity hover:opacity-90"
+                  className={`rounded-full bg-tool-accent px-5 ${isMobile ? "min-h-[44px] w-full text-xs" : "py-2 text-[0.7rem]"} font-mono font-medium uppercase tracking-[0.15em] text-white transition-opacity hover:opacity-90`}
                 >
                   Share via WhatsApp
                 </button>

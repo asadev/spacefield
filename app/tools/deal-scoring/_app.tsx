@@ -463,7 +463,7 @@ function AreaPresetDropdown({
                   setQuery(area.name);
                   setOpen(false);
                 }}
-                className="flex w-full items-center justify-between px-4 py-2.5 text-left text-sm transition-colors hover:bg-tool-accent-soft"
+                className="flex w-full items-center justify-between px-4 py-3 min-h-[44px] text-left text-base transition-colors hover:bg-tool-accent-soft"
               >
                 <span className="text-app">{area.name}</span>
                 <span className="text-xs text-muted">
@@ -684,6 +684,7 @@ export default function DealScoringApp(props: NativeAppProps) {
               </div>
               <div className="space-y-4">
                 <SegmentGroup
+                  isMobile={isMobile}
                   label="Property Status"
                   options={[
                     { value: "ready", label: "Ready" },
@@ -693,6 +694,7 @@ export default function DealScoringApp(props: NativeAppProps) {
                   onChange={(v) => update("status", v as Status)}
                 />
                 <SegmentGroup
+                  isMobile={isMobile}
                   label="Developer Tier"
                   options={[
                     { value: "tier1", label: "Tier 1" },
@@ -703,6 +705,7 @@ export default function DealScoringApp(props: NativeAppProps) {
                   onChange={(v) => update("developer", v as Tier)}
                 />
                 <SegmentGroup
+                  isMobile={isMobile}
                   label="Location Tier"
                   options={[
                     { value: "prime", label: "Prime" },
@@ -890,18 +893,18 @@ export default function DealScoringApp(props: NativeAppProps) {
                   </motion.div>
 
                   {/* Share */}
-                  <div className="flex flex-wrap gap-3">
+                  <div className={`flex gap-3 ${isMobile ? "flex-col" : "flex-wrap"}`}>
                     <button
                       type="button"
                       onClick={copyResults}
-                      className="rounded-lg border border-app bg-app-elevated px-4 py-2.5 text-[0.6rem] uppercase tracking-[0.15em] text-secondary transition-all hover:border-tool-accent hover:text-tool-accent"
+                      className={`rounded-lg border border-app bg-app-elevated px-4 ${isMobile ? "min-h-[44px] w-full text-xs" : "py-2.5 text-[0.6rem]"} uppercase tracking-[0.15em] text-secondary transition-all hover:border-tool-accent hover:text-tool-accent`}
                     >
                       {copied ? "Copied!" : "Copy Report"}
                     </button>
                     <button
                       type="button"
                       onClick={shareWhatsApp}
-                      className="rounded-lg border border-tool-accent/30 bg-tool-accent-soft px-4 py-2.5 text-[0.6rem] uppercase tracking-[0.15em] text-tool-accent transition-all hover:bg-tool-accent hover:text-white"
+                      className={`rounded-lg border border-tool-accent/30 bg-tool-accent-soft px-4 ${isMobile ? "min-h-[44px] w-full text-xs" : "py-2.5 text-[0.6rem]"} uppercase tracking-[0.15em] text-tool-accent transition-all hover:bg-tool-accent hover:text-white`}
                     >
                       Share via WhatsApp
                     </button>
@@ -1000,15 +1003,17 @@ function SegmentGroup<T extends string>({
   options,
   value,
   onChange,
+  isMobile = false,
 }: {
   label: string;
   options: { value: T; label: string }[];
   value: T;
   onChange: (v: T) => void;
+  isMobile?: boolean;
 }) {
   return (
     <div>
-      <label className="mb-2 block text-[0.6rem] uppercase tracking-[0.2em] text-muted">
+      <label className={`mb-2 block ${isMobile ? "text-xs" : "text-[0.6rem]"} uppercase tracking-[0.2em] text-muted`}>
         {label}
       </label>
       <div
@@ -1020,7 +1025,7 @@ function SegmentGroup<T extends string>({
             key={o.value}
             type="button"
             onClick={() => onChange(o.value)}
-            className={`min-w-0 rounded-lg border px-2 py-2.5 text-[0.65rem] uppercase tracking-[0.12em] truncate transition-all ${
+            className={`min-w-0 rounded-lg border px-2 ${isMobile ? "min-h-[44px] text-xs" : "py-2.5 text-[0.65rem]"} uppercase tracking-[0.12em] truncate transition-all ${
               value === o.value
                 ? "border-tool-accent bg-tool-accent-soft text-tool-accent"
                 : "border-app bg-app text-secondary hover:border-tool-accent/40 hover:text-app"

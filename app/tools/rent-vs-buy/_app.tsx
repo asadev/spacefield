@@ -94,6 +94,7 @@ function Field({
   placeholder,
   suffix,
   note,
+  isMobile = false,
 }: {
   label: string;
   value: string;
@@ -101,10 +102,11 @@ function Field({
   placeholder?: string;
   suffix?: string;
   note?: string;
+  isMobile?: boolean;
 }) {
   return (
     <div>
-      <label className="mb-1.5 block text-[0.62rem] font-medium uppercase tracking-[0.2em] text-muted">
+      <label className={`mb-1.5 block ${isMobile ? "text-xs" : "text-[0.62rem]"} font-medium uppercase tracking-[0.2em] text-muted`}>
         {label}
       </label>
       <div className="relative">
@@ -114,7 +116,7 @@ function Field({
           value={value}
           onChange={(e) => onChange(e.target.value.replace(/[^0-9.]/g, ""))}
           placeholder={placeholder}
-          className="rvb-input w-full px-3 py-2.5 font-mono text-sm tabular-nums"
+          className={`rvb-input w-full px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2.5 text-sm"} font-mono tabular-nums`}
         />
         {suffix && (
           <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 font-mono text-[0.65rem] uppercase tracking-[0.15em] text-muted">
@@ -818,6 +820,7 @@ export default function RentVsBuyApp(props: NativeAppProps) {
               </div>
             </div>
             <Field
+              isMobile={isMobile}
               label="Alternative Investment Return"
               value={altReturn}
               onChange={setAltReturn}
@@ -845,12 +848,14 @@ export default function RentVsBuyApp(props: NativeAppProps) {
             </div>
             <div className="space-y-4">
               <Field
+              isMobile={isMobile}
                 label="Monthly Rent (AED)"
                 value={monthlyRent}
                 onChange={setMonthlyRent}
                 placeholder="8000"
               />
               <Field
+              isMobile={isMobile}
                 label="Annual Rent Increase"
                 value={annualRentIncrease}
                 onChange={setAnnualRentIncrease}
@@ -859,6 +864,7 @@ export default function RentVsBuyApp(props: NativeAppProps) {
                 note="RERA caps increases via the Rental Index"
               />
               <Field
+              isMobile={isMobile}
                 label="Renter's Insurance (AED/yr)"
                 value={renterInsurance}
                 onChange={setRenterInsurance}
@@ -883,6 +889,7 @@ export default function RentVsBuyApp(props: NativeAppProps) {
 
             <div className="space-y-4">
               <Field
+              isMobile={isMobile}
                 label="Purchase Price (AED)"
                 value={purchasePrice}
                 onChange={setPurchasePrice}
@@ -895,7 +902,7 @@ export default function RentVsBuyApp(props: NativeAppProps) {
                 </label>
                 <div
                   role="tablist"
-                  className="inline-flex w-full rounded-full border border-app bg-tool-surface p-0.5 text-xs"
+                  className={`inline-flex w-full rounded-full border border-app bg-tool-surface p-0.5 ${isMobile ? "text-sm" : "text-xs"}`}
                 >
                   {([
                     { key: "uae-national" as Residency, label: "National" },
@@ -910,7 +917,7 @@ export default function RentVsBuyApp(props: NativeAppProps) {
                         aria-selected={active}
                         type="button"
                         onClick={() => setResidency(opt.key)}
-                        className={`relative flex-1 whitespace-nowrap rounded-full px-3 py-1.5 font-medium transition-colors ${
+                        className={`relative flex-1 whitespace-nowrap rounded-full px-3 ${isMobile ? "min-h-[44px]" : "py-1.5"} font-medium transition-colors ${
                           active
                             ? "bg-tool-accent text-white shadow-sm"
                             : "text-muted hover:text-primary"
@@ -925,6 +932,7 @@ export default function RentVsBuyApp(props: NativeAppProps) {
 
               <div className="grid grid-cols-2 gap-3 border-t border-app pt-4">
                 <Field
+              isMobile={isMobile}
                   label="Down Payment"
                   value={downPaymentPct}
                   onChange={setDownPaymentPct}
@@ -932,6 +940,7 @@ export default function RentVsBuyApp(props: NativeAppProps) {
                   note={fmtAED(downPaymentAmt)}
                 />
                 <Field
+              isMobile={isMobile}
                   label="Mortgage Rate"
                   value={mortgageRate}
                   onChange={setMortgageRate}
@@ -939,12 +948,14 @@ export default function RentVsBuyApp(props: NativeAppProps) {
                   placeholder="4.5"
                 />
                 <Field
+              isMobile={isMobile}
                   label="Term (years)"
                   value={mortgageTerm}
                   onChange={setMortgageTerm}
                   placeholder="25"
                 />
                 <Field
+              isMobile={isMobile}
                   label="Appreciation"
                   value={appreciation}
                   onChange={setAppreciation}
@@ -952,12 +963,14 @@ export default function RentVsBuyApp(props: NativeAppProps) {
                   placeholder="5"
                 />
                 <Field
+              isMobile={isMobile}
                   label="Service Charge/yr"
                   value={serviceCharge}
                   onChange={setServiceCharge}
                   placeholder="15000"
                 />
                 <Field
+              isMobile={isMobile}
                   label="Maintenance/yr"
                   value={annualMaintenance}
                   onChange={setAnnualMaintenance}
@@ -1174,19 +1187,19 @@ export default function RentVsBuyApp(props: NativeAppProps) {
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.45, delay: 0.15, ease }}
-                className="flex flex-wrap gap-3"
+                className={`flex gap-3 ${isMobile ? "flex-col" : "flex-wrap"}`}
               >
                 <button
                   type="button"
                   onClick={copyResult}
-                  className="rounded-full border border-app bg-tool-surface px-5 py-2 font-mono text-[0.7rem] uppercase tracking-[0.15em] text-muted transition-colors hover:border-tool-accent hover:text-tool-accent"
+                  className={`rounded-full border border-app bg-tool-surface px-5 ${isMobile ? "min-h-[44px] w-full text-xs" : "py-2 text-[0.7rem]"} font-mono uppercase tracking-[0.15em] text-muted transition-colors hover:border-tool-accent hover:text-tool-accent`}
                 >
                   {copied ? "Copied" : "Copy summary"}
                 </button>
                 <button
                   type="button"
                   onClick={shareWhatsApp}
-                  className="rounded-full bg-tool-accent px-5 py-2 font-mono text-[0.7rem] font-medium uppercase tracking-[0.15em] text-white transition-opacity hover:opacity-90"
+                  className={`rounded-full bg-tool-accent px-5 ${isMobile ? "min-h-[44px] w-full text-xs" : "py-2 text-[0.7rem]"} font-mono font-medium uppercase tracking-[0.15em] text-white transition-opacity hover:opacity-90`}
                 >
                   Share via WhatsApp
                 </button>

@@ -668,7 +668,7 @@ export default function AreaComparisonApp({
                 <button
                   key={v.id}
                   onClick={() => setView(v.id)}
-                  className={`px-4 py-2 rounded-lg text-xs font-medium uppercase tracking-[0.18em] transition-all ${
+                  className={`px-4 ${isMobile ? "min-h-[44px] text-sm" : "py-2 text-xs"} rounded-lg font-medium uppercase tracking-[0.18em] transition-all ${
                     active
                       ? "bg-tool-accent text-white shadow-sm"
                       : "text-muted hover:text-app"
@@ -739,7 +739,7 @@ export default function AreaComparisonApp({
                   <select
                     value={selections[i] || ""}
                     onChange={(e) => handleSelect(i, e.target.value)}
-                    className="w-full bg-app-elevated border border-app rounded-lg px-3 py-2 text-sm text-app focus:outline-none focus:border-app-focus transition-colors cursor-pointer"
+                    className={`w-full bg-app-elevated border border-app rounded-lg px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2 text-sm"} text-app focus:outline-none focus:border-app-focus transition-colors cursor-pointer`}
                   >
                     <option value="">Select area…</option>
                     {sorted.map((community) => (
@@ -760,29 +760,29 @@ export default function AreaComparisonApp({
             })}
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
+          <div className={`flex items-center gap-3 ${isMobile ? "flex-col" : "flex-wrap"}`}>
             {!showThird ? (
               <button
                 onClick={addThird}
-                className="px-4 py-2 rounded-lg bg-tool-accent-soft border border-app text-xs font-medium text-tool-accent hover:bg-tool-accent hover:text-white transition-all"
+                className={`px-4 ${isMobile ? "min-h-[44px] w-full text-sm" : "py-2 text-xs"} rounded-lg bg-tool-accent-soft border border-app font-medium text-tool-accent hover:bg-tool-accent hover:text-white transition-all`}
               >
                 + Add Third Area
               </button>
             ) : (
               <button
                 onClick={removeThird}
-                className="px-4 py-2 rounded-lg border border-app text-xs font-medium text-muted hover:text-app transition-colors"
+                className={`px-4 ${isMobile ? "min-h-[44px] w-full text-sm" : "py-2 text-xs"} rounded-lg border border-app font-medium text-muted hover:text-app transition-colors`}
               >
                 Remove Third
               </button>
             )}
 
-            <div className="flex-1" />
+            {!isMobile && <div className="flex-1" />}
 
             <button
               onClick={handleCompare}
               disabled={!canCompare}
-              className={`px-5 py-2.5 rounded-lg text-xs font-semibold uppercase tracking-[0.2em] transition-all ${
+              className={`px-5 ${isMobile ? "min-h-[44px] w-full text-xs" : "py-2.5 text-xs"} rounded-lg font-semibold uppercase tracking-[0.2em] transition-all ${
                 canCompare
                   ? "bg-tool-accent text-white hover:brightness-110"
                   : "bg-app-elevated border border-app text-muted cursor-not-allowed"

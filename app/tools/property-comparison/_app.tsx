@@ -1141,12 +1141,12 @@ export default function PropertyComparisonApp({ width }: NativeAppProps) {
                 </div>
               </div>
 
-              <div className="flex flex-wrap items-center gap-1.5">
+              <div className={`flex items-center gap-1.5 ${isMobile ? "flex-col w-full" : "flex-wrap"}`}>
                 <button
                   type="button"
                   onClick={addProperty}
                   disabled={properties.length >= 4}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-tool-accent/30 bg-tool-accent-soft px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-tool-accent transition hover:bg-tool-accent hover:text-white disabled:cursor-not-allowed disabled:opacity-40"
+                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg border border-tool-accent/30 bg-tool-accent-soft px-3 ${isMobile ? "min-h-[44px] w-full text-xs" : "py-1.5 text-[11px]"} font-semibold uppercase tracking-[0.14em] text-tool-accent transition hover:bg-tool-accent hover:text-white disabled:cursor-not-allowed disabled:opacity-40`}
                 >
                   <span className="text-base leading-none">+</span> Add Property
                 </button>
@@ -1156,7 +1156,7 @@ export default function PropertyComparisonApp({ width }: NativeAppProps) {
                     setProperties([createEmptyProperty(""), createEmptyProperty("")]);
                     setShowComparison(false);
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-app bg-app-elevated px-3 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-secondary transition hover:border-tool-accent/40 hover:text-tool-accent"
+                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg border border-app bg-app-elevated px-3 ${isMobile ? "min-h-[44px] w-full text-xs" : "py-1.5 text-[11px]"} font-semibold uppercase tracking-[0.14em] text-secondary transition hover:border-tool-accent/40 hover:text-tool-accent`}
                 >
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <polyline points="1 4 1 10 7 10" />
@@ -1168,7 +1168,7 @@ export default function PropertyComparisonApp({ width }: NativeAppProps) {
                   type="button"
                   onClick={handleCompare}
                   disabled={filledCount < 2}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-tool-accent px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                  className={`inline-flex items-center justify-center gap-1.5 rounded-lg bg-tool-accent px-4 ${isMobile ? "min-h-[44px] w-full text-xs" : "py-1.5 text-[11px]"} font-semibold uppercase tracking-[0.14em] text-white shadow-sm transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40`}
                 >
                   Compare
                   <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

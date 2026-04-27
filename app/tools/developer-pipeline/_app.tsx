@@ -810,7 +810,7 @@ export default function DeveloperPipelineApp({
                     setActiveTab(tab.key);
                     if (tab.key !== "projects") setDevFilter(null);
                   }}
-                  className={`rounded-lg px-3 py-1 text-[11px] font-medium transition ${
+                  className={`rounded-lg px-3 ${isMobile ? "min-h-[44px] text-sm" : "py-1 text-[11px]"} font-medium transition ${
                     activeTab === tab.key
                       ? "bg-tool-accent text-black shadow-sm"
                       : "bg-app-elevated text-app hover:bg-tool-accent-soft hover:text-tool-accent"
@@ -821,16 +821,16 @@ export default function DeveloperPipelineApp({
               ))}
             </div>
 
-            <div className="ml-auto flex items-center gap-2">
+            <div className={`flex items-center gap-2 ${isMobile ? "w-full" : "ml-auto"}`}>
               <button
                 onClick={copyScorecard}
-                className="rounded-lg border border-app bg-app-elevated px-2.5 py-1 text-[11px] text-secondary transition hover:border-tool-accent/40 hover:text-tool-accent"
+                className={`rounded-lg border border-app bg-app-elevated px-2.5 ${isMobile ? "min-h-[44px] flex-1 text-sm" : "py-1 text-[11px]"} text-secondary transition hover:border-tool-accent/40 hover:text-tool-accent`}
               >
                 Copy Scorecard
               </button>
               <button
                 onClick={shareWhatsApp}
-                className="rounded-lg border border-app bg-app-elevated px-2.5 py-1 text-[11px] text-secondary transition hover:border-tool-accent/40 hover:text-tool-accent"
+                className={`rounded-lg border border-app bg-app-elevated px-2.5 ${isMobile ? "min-h-[44px] flex-1 text-sm" : "py-1 text-[11px]"} text-secondary transition hover:border-tool-accent/40 hover:text-tool-accent`}
               >
                 WhatsApp
               </button>
@@ -873,14 +873,14 @@ export default function DeveloperPipelineApp({
                       placeholder="Search projects, developers, areas..."
                       value={search}
                       onChange={(e) => setSearch(e.target.value)}
-                      className="min-w-[220px] flex-1 rounded-lg border border-app bg-app-elevated px-3 py-2 text-sm text-app outline-none transition placeholder:text-faint focus:border-app-focus focus:ring-2 focus:ring-tool-accent/40"
+                      className={`min-w-[220px] flex-1 rounded-lg border border-app bg-app-elevated px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2 text-sm"} text-app outline-none transition placeholder:text-faint focus:border-app-focus focus:ring-2 focus:ring-tool-accent/40`}
                     />
 
                     {/* Developer multi-select */}
                     <div className="relative">
                       <button
                         onClick={() => setShowDevDropdown(!showDevDropdown)}
-                        className="min-w-[150px] rounded-lg border border-app bg-app-elevated px-3 py-2 text-left text-sm text-secondary transition hover:border-tool-accent/40 hover:text-tool-accent"
+                        className={`min-w-[150px] rounded-lg border border-app bg-app-elevated px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2 text-sm"} text-left text-secondary transition hover:border-tool-accent/40 hover:text-tool-accent`}
                       >
                         {selectedDevelopers.length > 0
                           ? `${selectedDevelopers.length} developer${
@@ -917,7 +917,7 @@ export default function DeveloperPipelineApp({
                     <select
                       value={selectedStatus}
                       onChange={(e) => setSelectedStatus(e.target.value)}
-                      className="rounded-lg border border-app bg-app-elevated px-3 py-2 text-sm text-secondary outline-none transition focus:ring-2 focus:ring-tool-accent/40"
+                      className={`rounded-lg border border-app bg-app-elevated px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2 text-sm"} text-secondary outline-none transition focus:ring-2 focus:ring-tool-accent/40`}
                     >
                       <option value="">All Statuses</option>
                       {statuses.map((s) => (
@@ -929,7 +929,7 @@ export default function DeveloperPipelineApp({
                     <select
                       value={selectedArea}
                       onChange={(e) => setSelectedArea(e.target.value)}
-                      className="rounded-lg border border-app bg-app-elevated px-3 py-2 text-sm text-secondary outline-none transition focus:ring-2 focus:ring-tool-accent/40"
+                      className={`rounded-lg border border-app bg-app-elevated px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2 text-sm"} text-secondary outline-none transition focus:ring-2 focus:ring-tool-accent/40`}
                     >
                       <option value="">All Areas</option>
                       {areas.map((a) => (
@@ -941,7 +941,7 @@ export default function DeveloperPipelineApp({
                     <select
                       value={sortBy}
                       onChange={(e) => setSortBy(e.target.value as SortKey)}
-                      className="rounded-lg border border-app bg-app-elevated px-3 py-2 text-sm text-secondary outline-none transition focus:ring-2 focus:ring-tool-accent/40"
+                      className={`rounded-lg border border-app bg-app-elevated px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2 text-sm"} text-secondary outline-none transition focus:ring-2 focus:ring-tool-accent/40`}
                     >
                       <option value="percentComplete">Sort: % Complete</option>
                       <option value="name">Sort: Name</option>

@@ -510,22 +510,22 @@ export default function PortfolioTrackerApp(props: NativeAppProps) {
               </p>
             </div>
 
-            <div className="flex flex-wrap gap-2 items-center">
+            <div className={`flex gap-2 items-center ${isMobile ? "w-full" : "flex-wrap"}`}>
               <button
                 onClick={handleImport}
-                className="rounded-lg border border-app bg-app-elevated px-3 py-1.5 text-xs font-medium text-secondary transition hover:border-tool-accent hover:text-app"
+                className={`rounded-lg border border-app bg-app-elevated px-3 ${isMobile ? "min-h-[44px] flex-1 text-sm" : "py-1.5 text-xs"} font-medium text-secondary transition hover:border-tool-accent hover:text-app`}
               >
                 Import
               </button>
               <button
                 onClick={handleExport}
-                className="rounded-lg border border-app bg-app-elevated px-3 py-1.5 text-xs font-medium text-secondary transition hover:border-tool-accent hover:text-app"
+                className={`rounded-lg border border-app bg-app-elevated px-3 ${isMobile ? "min-h-[44px] flex-1 text-sm" : "py-1.5 text-xs"} font-medium text-secondary transition hover:border-tool-accent hover:text-app`}
               >
                 Export
               </button>
               <button
                 onClick={openForm}
-                className="inline-flex items-center gap-1.5 rounded-lg bg-tool-accent px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:opacity-90"
+                className={`inline-flex items-center justify-center gap-1.5 rounded-lg bg-tool-accent px-3.5 ${isMobile ? "min-h-[44px] flex-1 text-sm" : "py-1.5 text-xs"} font-semibold text-white shadow-sm transition hover:opacity-90`}
               >
                 <span className="text-base leading-none">+</span>
                 Add Property
@@ -862,9 +862,9 @@ export default function PortfolioTrackerApp(props: NativeAppProps) {
                             <td className={`px-3 py-2.5 font-mono tabular-nums whitespace-nowrap font-medium ${netCF >= 0 ? "text-tool-accent" : "text-red-500"}`}>{formatAED(Math.round(netCF))}</td>
                             <td className="px-3 py-2.5 font-mono tabular-nums text-secondary">{formatPercent(yieldPct)}</td>
                             <td className="px-3 py-2.5 whitespace-nowrap">
-                              <div className="flex gap-2 opacity-0 transition group-hover:opacity-100">
-                                <button onClick={() => handleEdit(p)} className="text-xs text-tool-accent hover:underline">Edit</button>
-                                <button onClick={() => handleDelete(p.id)} className="text-xs text-red-500 hover:underline">Delete</button>
+                              <div className={`flex gap-2 transition ${isMobile ? "opacity-100" : "opacity-0 group-hover:opacity-100"}`}>
+                                <button onClick={() => handleEdit(p)} className={`${isMobile ? "min-h-[44px] min-w-[44px] flex items-center justify-center text-sm" : "text-xs"} text-tool-accent hover:underline`}>Edit</button>
+                                <button onClick={() => handleDelete(p.id)} className={`${isMobile ? "min-h-[44px] min-w-[44px] flex items-center justify-center text-sm" : "text-xs"} text-red-500 hover:underline`}>Delete</button>
                               </div>
                             </td>
                           </tr>
@@ -950,7 +950,7 @@ export default function PortfolioTrackerApp(props: NativeAppProps) {
                 </div>
                 <button
                   onClick={closeForm}
-                  className="rounded-md p-1.5 text-muted hover:bg-app hover:text-app transition"
+                  className={`rounded-md ${isMobile ? "min-h-[44px] min-w-[44px] flex items-center justify-center" : "p-1.5"} text-muted hover:bg-app hover:text-app transition`}
                   aria-label="Close"
                 >
                   <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -970,16 +970,16 @@ export default function PortfolioTrackerApp(props: NativeAppProps) {
                       value={form.name}
                       onChange={(e) => setForm({ ...form, name: e.target.value })}
                       placeholder="e.g. Marina Apt 1502"
-                      className="w-full rounded-lg border border-app bg-app px-3 py-2 text-sm text-app outline-none transition focus:border-tool-accent focus:ring-1 focus:ring-tool-accent"
+                      className={`w-full rounded-lg border border-app bg-app px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2 text-sm"} text-app outline-none transition focus:border-tool-accent focus:ring-1 focus:ring-tool-accent`}
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className={`grid gap-3 ${isMobile ? "grid-cols-1" : "grid-cols-2"}`}>
                     <div>
                       <label className="block text-[11px] font-medium uppercase tracking-wider text-secondary mb-1.5">Area</label>
                       <select
                         value={form.area}
                         onChange={(e) => setForm({ ...form, area: e.target.value })}
-                        className="w-full rounded-lg border border-app bg-app px-3 py-2 text-sm text-app outline-none transition focus:border-tool-accent focus:ring-1 focus:ring-tool-accent"
+                        className={`w-full rounded-lg border border-app bg-app px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2 text-sm"} text-app outline-none transition focus:border-tool-accent focus:ring-1 focus:ring-tool-accent`}
                       >
                         {DUBAI_AREAS.map((a) => <option key={a} value={a}>{a}</option>)}
                       </select>
@@ -989,7 +989,7 @@ export default function PortfolioTrackerApp(props: NativeAppProps) {
                       <select
                         value={form.type}
                         onChange={(e) => setForm({ ...form, type: e.target.value })}
-                        className="w-full rounded-lg border border-app bg-app px-3 py-2 text-sm text-app outline-none transition focus:border-tool-accent focus:ring-1 focus:ring-tool-accent"
+                        className={`w-full rounded-lg border border-app bg-app px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2 text-sm"} text-app outline-none transition focus:border-tool-accent focus:ring-1 focus:ring-tool-accent`}
                       >
                         {PROPERTY_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
                       </select>
@@ -1000,7 +1000,7 @@ export default function PortfolioTrackerApp(props: NativeAppProps) {
                 {/* Valuation */}
                 <fieldset className="space-y-3">
                   <legend className="text-[10px] uppercase tracking-[0.2em] text-muted font-mono mb-1">Valuation</legend>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className={`grid gap-3 ${isMobile ? "grid-cols-1" : "grid-cols-2"}`}>
                     <div>
                       <label className="block text-[11px] font-medium uppercase tracking-wider text-secondary mb-1.5">Purchase Price</label>
                       <input
@@ -1016,7 +1016,7 @@ export default function PortfolioTrackerApp(props: NativeAppProps) {
                         type="month"
                         value={form.purchaseDate}
                         onChange={(e) => setForm({ ...form, purchaseDate: e.target.value })}
-                        className="w-full rounded-lg border border-app bg-app px-3 py-2 text-sm text-app outline-none transition focus:border-tool-accent focus:ring-1 focus:ring-tool-accent"
+                        className={`w-full rounded-lg border border-app bg-app px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2 text-sm"} text-app outline-none transition focus:border-tool-accent focus:ring-1 focus:ring-tool-accent`}
                       />
                     </div>
                   </div>
@@ -1043,7 +1043,7 @@ export default function PortfolioTrackerApp(props: NativeAppProps) {
                       className="w-full rounded-lg border border-app bg-app px-3 py-2 text-sm text-app font-mono tabular-nums outline-none transition focus:border-tool-accent focus:ring-1 focus:ring-tool-accent"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-3">
+                  <div className={`grid gap-3 ${isMobile ? "grid-cols-1" : "grid-cols-2"}`}>
                     <div>
                       <label className="block text-[11px] font-medium uppercase tracking-wider text-secondary mb-1.5">Annual Service Charge</label>
                       <input
@@ -1073,7 +1073,7 @@ export default function PortfolioTrackerApp(props: NativeAppProps) {
                     <select
                       value={form.status}
                       onChange={(e) => setForm({ ...form, status: e.target.value })}
-                      className="w-full rounded-lg border border-app bg-app px-3 py-2 text-sm text-app outline-none transition focus:border-tool-accent focus:ring-1 focus:ring-tool-accent"
+                      className={`w-full rounded-lg border border-app bg-app px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2 text-sm"} text-app outline-none transition focus:border-tool-accent focus:ring-1 focus:ring-tool-accent`}
                     >
                       {STATUS_OPTIONS.map((s) => <option key={s} value={s}>{s}</option>)}
                     </select>
@@ -1112,17 +1112,17 @@ export default function PortfolioTrackerApp(props: NativeAppProps) {
                 </fieldset>
               </div>
 
-              <div className="sticky bottom-0 flex items-center gap-2 border-t border-app bg-app-elevated/95 backdrop-blur px-5 py-3">
+              <div className="sticky bottom-0 flex items-center gap-2 border-t border-app bg-app-elevated/95 backdrop-blur px-5 py-3" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 12px)" }}>
                 <button
                   onClick={closeForm}
-                  className="rounded-lg border border-app bg-app px-4 py-2 text-sm text-secondary hover:text-app transition"
+                  className={`rounded-lg border border-app bg-app px-4 ${isMobile ? "min-h-[44px] flex-1 text-base" : "py-2 text-sm"} text-secondary hover:text-app transition`}
                 >
                   Cancel
                 </button>
                 <button
                   onClick={handleSubmit}
                   disabled={!form.name || form.purchasePrice <= 0}
-                  className="ml-auto rounded-lg bg-tool-accent px-5 py-2 text-sm font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed"
+                  className={`rounded-lg bg-tool-accent px-5 ${isMobile ? "min-h-[44px] flex-1 text-base" : "ml-auto py-2 text-sm"} font-semibold text-white shadow-sm transition hover:opacity-90 disabled:opacity-40 disabled:cursor-not-allowed`}
                 >
                   {editingId ? "Update" : "Add"} Property
                 </button>

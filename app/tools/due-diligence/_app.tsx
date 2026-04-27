@@ -276,11 +276,11 @@ export default function DueDiligenceApp(props: NativeAppProps) {
         </motion.div>
 
         {/* ───── ACTION BAR ───── */}
-        <div className="mt-5 flex flex-wrap items-center gap-3">
+        <div className={`mt-5 flex items-center gap-3 ${isMobile ? "flex-col" : "flex-wrap"}`}>
           <button
             type="button"
             onClick={resetAll}
-            className="inline-flex items-center gap-1.5 rounded-lg border border-app bg-app-elevated px-3.5 py-2 text-[0.6rem] uppercase tracking-[0.2em] text-secondary transition-all hover:border-tool-accent/40 hover:text-app"
+            className={`inline-flex items-center justify-center gap-1.5 rounded-lg border border-app bg-app-elevated px-3.5 ${isMobile ? "min-h-[44px] w-full text-xs" : "py-2 text-[0.6rem]"} uppercase tracking-[0.2em] text-secondary transition-all hover:border-tool-accent/40 hover:text-app`}
           >
             <svg
               className="h-3 w-3"
@@ -299,7 +299,7 @@ export default function DueDiligenceApp(props: NativeAppProps) {
           <button
             type="button"
             onClick={() => window.print()}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-tool-accent px-3.5 py-2 text-[0.6rem] uppercase tracking-[0.2em] text-white shadow-sm transition-all hover:opacity-95"
+            className={`inline-flex items-center justify-center gap-1.5 rounded-lg bg-tool-accent px-3.5 ${isMobile ? "min-h-[44px] w-full text-xs" : "py-2 text-[0.6rem]"} uppercase tracking-[0.2em] text-white shadow-sm transition-all hover:opacity-95`}
           >
             <svg
               className="h-3 w-3"

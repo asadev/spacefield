@@ -553,7 +553,7 @@ export default function TenantScreeningApp({
                 <select
                   value={selectedArea}
                   onChange={(e) => setSelectedArea(e.target.value)}
-                  className="w-full rounded-lg border border-app bg-app px-3 py-2.5 text-sm text-app transition-colors focus:border-tool-accent focus:outline-none focus:ring-2 focus:ring-tool-accent/20"
+                  className={`w-full rounded-lg border border-app bg-app px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2.5 text-sm"} text-app transition-colors focus:border-tool-accent focus:outline-none focus:ring-2 focus:ring-tool-accent/20`}
                 >
                   <option value="">Select an area</option>
                   {AREA_RENTAL_DATA.map((a) => (
@@ -574,7 +574,7 @@ export default function TenantScreeningApp({
                         key={t}
                         type="button"
                         onClick={() => setPropertyType(t)}
-                        className={`flex-1 rounded-md px-2 py-1.5 text-xs font-medium transition-colors ${
+                        className={`flex-1 rounded-md px-2 ${isMobile ? "min-h-[44px] text-sm" : "py-1.5 text-xs"} font-medium transition-colors ${
                           propertyType === t
                             ? "bg-tool-accent text-white shadow-sm"
                             : "text-secondary hover:text-app"
@@ -597,7 +597,7 @@ export default function TenantScreeningApp({
                     setCurrentRent(e.target.value.replace(/[^0-9,]/g, ""))
                   }
                   placeholder="e.g. 85,000"
-                  className="w-full rounded-lg border border-app bg-app px-3 py-2.5 text-sm text-app placeholder:text-muted transition-colors focus:border-tool-accent focus:outline-none focus:ring-2 focus:ring-tool-accent/20"
+                  className={`w-full rounded-lg border border-app bg-app px-3 ${isMobile ? "min-h-[44px] text-base" : "py-2.5 text-sm"} text-app placeholder:text-muted transition-colors focus:border-tool-accent focus:outline-none focus:ring-2 focus:ring-tool-accent/20`}
                 />
               </div>
             </div>
@@ -1142,7 +1142,7 @@ export default function TenantScreeningApp({
                       </button>
                       <button
                         type="button"
-                        className="rounded-lg border border-app bg-app-elevated px-4 py-2 text-xs font-semibold uppercase tracking-[0.15em] text-app transition-colors hover:bg-app"
+                        className={`rounded-lg border border-app bg-app-elevated px-4 ${isMobile ? "min-h-[44px] w-full text-xs" : "py-2 text-xs"} font-semibold uppercase tracking-[0.15em] text-app transition-colors hover:bg-app`}
                       >
                         Reject
                       </button>
@@ -1150,14 +1150,14 @@ export default function TenantScreeningApp({
                       <button
                         type="button"
                         onClick={copyReport}
-                        className="rounded-lg border border-app bg-app-elevated px-4 py-2 text-xs font-semibold uppercase tracking-[0.15em] text-app transition-colors hover:bg-app"
+                        className={`rounded-lg border border-app bg-app-elevated px-4 ${isMobile ? "min-h-[44px] w-full text-xs" : "py-2 text-xs"} font-semibold uppercase tracking-[0.15em] text-app transition-colors hover:bg-app`}
                       >
                         {copied ? "Copied" : "Copy Report"}
                       </button>
                       <button
                         type="button"
                         onClick={shareWhatsApp}
-                        className="rounded-lg border border-app bg-app-elevated px-4 py-2 text-xs font-semibold uppercase tracking-[0.15em] text-app transition-colors hover:bg-app"
+                        className={`rounded-lg border border-app bg-app-elevated px-4 ${isMobile ? "min-h-[44px] w-full text-xs" : "py-2 text-xs"} font-semibold uppercase tracking-[0.15em] text-app transition-colors hover:bg-app`}
                       >
                         Share via WhatsApp
                       </button>

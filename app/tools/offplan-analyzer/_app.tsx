@@ -1072,7 +1072,7 @@ export default function OffplanAnalyzerApp(props: NativeAppProps) {
                 <button
                   key={t.id}
                   onClick={() => setActiveResultTab(t.id)}
-                  className={`flex-1 min-w-[110px] px-4 py-2 rounded-lg text-[12px] font-medium uppercase tracking-[0.08em] transition-colors ${
+                  className={`flex-1 min-w-[110px] px-4 ${isMobile ? "min-h-[44px] text-sm" : "py-2 text-[12px]"} rounded-lg font-medium uppercase tracking-[0.08em] transition-colors ${
                     active
                       ? "bg-tool-accent text-white"
                       : "text-secondary hover:text-app hover:bg-surface"
@@ -1136,7 +1136,7 @@ export default function OffplanAnalyzerApp(props: NativeAppProps) {
                             key={tmpl.key}
                             type="button"
                             onClick={() => setTemplate(plan.id, tmpl.key, Number(plan.constructionMonths) || 36)}
-                            className={`px-2.5 py-2 rounded-lg text-[10px] uppercase tracking-[0.08em] font-medium transition-all ${
+                            className={`px-2.5 ${isMobile ? "min-h-[44px] text-xs" : "py-2 text-[10px]"} rounded-lg uppercase tracking-[0.08em] font-medium transition-all ${
                               active
                                 ? "bg-tool-accent text-white"
                                 : "bg-app border border-app text-secondary hover:border-tool-accent/40 hover:text-app"
@@ -1161,7 +1161,7 @@ export default function OffplanAnalyzerApp(props: NativeAppProps) {
                         placeholder="e.g. 2000000"
                         value={plan.propertyPrice}
                         onChange={(e) => updatePlan(plan.id, "propertyPrice", e.target.value)}
-                        className="w-full rounded-lg bg-app border border-app focus:border-tool-accent focus:ring-2 focus:ring-tool-accent/20 px-3.5 py-2.5 text-sm font-mono tabular-nums text-app outline-none transition-colors placeholder:text-muted"
+                        className={`w-full rounded-lg bg-app border border-app focus:border-tool-accent focus:ring-2 focus:ring-tool-accent/20 ${isMobile ? "px-3 min-h-[44px] text-base" : "px-3.5 py-2.5 text-sm"} font-mono tabular-nums text-app outline-none transition-colors placeholder:text-muted`}
                       />
                     </div>
                     <div>
@@ -1182,7 +1182,7 @@ export default function OffplanAnalyzerApp(props: NativeAppProps) {
                             }
                           }
                         }}
-                        className="w-full rounded-lg bg-app border border-app focus:border-tool-accent focus:ring-2 focus:ring-tool-accent/20 px-3.5 py-2.5 text-sm font-mono tabular-nums text-app outline-none transition-colors placeholder:text-muted"
+                        className={`w-full rounded-lg bg-app border border-app focus:border-tool-accent focus:ring-2 focus:ring-tool-accent/20 ${isMobile ? "px-3 min-h-[44px] text-base" : "px-3.5 py-2.5 text-sm"} font-mono tabular-nums text-app outline-none transition-colors placeholder:text-muted`}
                       />
                     </div>
                     <div>
@@ -1193,7 +1193,7 @@ export default function OffplanAnalyzerApp(props: NativeAppProps) {
                         type="month"
                         value={plan.handoverDate}
                         onChange={(e) => updatePlan(plan.id, "handoverDate", e.target.value)}
-                        className="w-full rounded-lg bg-app border border-app focus:border-tool-accent focus:ring-2 focus:ring-tool-accent/20 px-3.5 py-2.5 text-sm font-mono tabular-nums text-app outline-none transition-colors placeholder:text-muted"
+                        className={`w-full rounded-lg bg-app border border-app focus:border-tool-accent focus:ring-2 focus:ring-tool-accent/20 ${isMobile ? "px-3 min-h-[44px] text-base" : "px-3.5 py-2.5 text-sm"} font-mono tabular-nums text-app outline-none transition-colors placeholder:text-muted`}
                       />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
@@ -1207,7 +1207,7 @@ export default function OffplanAnalyzerApp(props: NativeAppProps) {
                           placeholder="8"
                           value={plan.appreciation}
                           onChange={(e) => updatePlan(plan.id, "appreciation", e.target.value)}
-                          className="w-full rounded-lg bg-app border border-app focus:border-tool-accent focus:ring-2 focus:ring-tool-accent/20 px-3.5 py-2.5 text-sm font-mono tabular-nums text-app outline-none transition-colors placeholder:text-muted"
+                          className={`w-full rounded-lg bg-app border border-app focus:border-tool-accent focus:ring-2 focus:ring-tool-accent/20 ${isMobile ? "px-3 min-h-[44px] text-base" : "px-3.5 py-2.5 text-sm"} font-mono tabular-nums text-app outline-none transition-colors placeholder:text-muted`}
                         />
                       </div>
                       <div>
@@ -1220,7 +1220,7 @@ export default function OffplanAnalyzerApp(props: NativeAppProps) {
                           placeholder="5"
                           value={plan.altReturn}
                           onChange={(e) => updatePlan(plan.id, "altReturn", e.target.value)}
-                          className="w-full rounded-lg bg-app border border-app focus:border-tool-accent focus:ring-2 focus:ring-tool-accent/20 px-3.5 py-2.5 text-sm font-mono tabular-nums text-app outline-none transition-colors placeholder:text-muted"
+                          className={`w-full rounded-lg bg-app border border-app focus:border-tool-accent focus:ring-2 focus:ring-tool-accent/20 ${isMobile ? "px-3 min-h-[44px] text-base" : "px-3.5 py-2.5 text-sm"} font-mono tabular-nums text-app outline-none transition-colors placeholder:text-muted`}
                         />
                       </div>
                     </div>
@@ -1301,19 +1301,19 @@ export default function OffplanAnalyzerApp(props: NativeAppProps) {
           </div>
 
           {/* Action buttons */}
-          <div className="mt-5 flex flex-wrap items-center gap-3">
+          <div className={`mt-5 flex items-center gap-3 ${isMobile ? "flex-col" : "flex-wrap"}`}>
             {plans.length < 3 && (
               <button
                 type="button"
                 onClick={addPlan}
-                className="rounded-full border border-dashed border-app text-secondary hover:border-tool-accent hover:text-tool-accent px-5 py-2.5 text-[11px] uppercase tracking-[0.15em] font-medium transition-colors"
+                className={`rounded-full border border-dashed border-app text-secondary hover:border-tool-accent hover:text-tool-accent px-5 ${isMobile ? "min-h-[44px] w-full text-xs" : "py-2.5 text-[11px]"} uppercase tracking-[0.15em] font-medium transition-colors`}
               >
                 + Compare another plan
               </button>
             )}
             <button
               type="submit"
-              className="flex-1 min-w-[200px] rounded-full bg-tool-accent text-white px-7 py-3 text-[12px] uppercase tracking-[0.15em] font-semibold hover:opacity-90 transition-opacity shadow-card"
+              className={`${isMobile ? "min-h-[44px] w-full text-xs" : "flex-1 min-w-[200px] py-3 text-[12px]"} rounded-full bg-tool-accent text-white px-7 uppercase tracking-[0.15em] font-semibold hover:opacity-90 transition-opacity shadow-card`}
             >
               Analyze Payment Plan{plans.length > 1 ? "s" : ""} →
             </button>
@@ -1518,19 +1518,19 @@ export default function OffplanAnalyzerApp(props: NativeAppProps) {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: 0.4 }}
-              className="mt-5 flex flex-wrap gap-3"
+              className={`mt-5 flex gap-3 ${isMobile ? "flex-col" : "flex-wrap"}`}
             >
               <button
                 type="button"
                 onClick={copyBreakdown}
-                className="rounded-full border border-app bg-app-elevated text-secondary hover:text-app hover:border-tool-accent px-4 py-2 text-[11px] uppercase tracking-[0.15em] font-medium transition-colors"
+                className={`rounded-full border border-app bg-app-elevated text-secondary hover:text-app hover:border-tool-accent px-4 ${isMobile ? "min-h-[44px] w-full text-xs" : "py-2 text-[11px]"} uppercase tracking-[0.15em] font-medium transition-colors`}
               >
                 {copied ? "Copied!" : "Copy to Clipboard"}
               </button>
               <button
                 type="button"
                 onClick={shareWhatsApp}
-                className="rounded-full border border-tool-accent/30 bg-tool-accent-soft text-tool-accent hover:bg-tool-accent hover:text-white px-4 py-2 text-[11px] uppercase tracking-[0.15em] font-medium transition-colors"
+                className={`rounded-full border border-tool-accent/30 bg-tool-accent-soft text-tool-accent hover:bg-tool-accent hover:text-white px-4 ${isMobile ? "min-h-[44px] w-full text-xs" : "py-2 text-[11px]"} uppercase tracking-[0.15em] font-medium transition-colors`}
               >
                 Share via WhatsApp
               </button>

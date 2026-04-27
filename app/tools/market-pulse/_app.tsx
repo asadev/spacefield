@@ -238,12 +238,14 @@ function ToolHeader({
   section,
   setSection,
   isNarrow,
+  isMobile,
 }: {
   period: PeriodKey;
   setPeriod: (p: PeriodKey) => void;
   section: SectionKey;
   setSection: (s: SectionKey) => void;
   isNarrow: boolean;
+  isMobile: boolean;
 }) {
   const [clock, setClock] = useState("");
   useEffect(() => {
@@ -295,12 +297,12 @@ function ToolHeader({
         </div>
 
         {/* Time-period segmented pill */}
-        <div className="inline-flex items-center p-0.5 rounded-full bg-app-elevated border border-app self-start">
+        <div className={`inline-flex items-center p-0.5 rounded-full bg-app-elevated border border-app ${isMobile ? "self-stretch" : "self-start"}`}>
           {(["1M", "3M", "6M", "1Y"] as PeriodKey[]).map((p) => (
             <button
               key={p}
               onClick={() => setPeriod(p)}
-              className={`px-3.5 py-1.5 text-xs font-mono rounded-full transition-colors ${
+              className={`px-3.5 ${isMobile ? "min-h-[44px] flex-1 text-sm" : "py-1.5 text-xs"} font-mono rounded-full transition-colors ${
                 period === p
                   ? "bg-tool-accent text-white shadow"
                   : "text-secondary hover:text-app"
@@ -313,12 +315,12 @@ function ToolHeader({
       </div>
 
       {/* Section nav button group */}
-      <div className="inline-flex flex-wrap items-center gap-1 p-1 rounded-xl bg-app-elevated border border-app self-start">
+      <div className={`inline-flex items-center gap-1 p-1 rounded-xl bg-app-elevated border border-app ${isMobile ? "self-stretch" : "flex-wrap self-start"}`}>
         {sections.map((s) => (
           <button
             key={s.key}
             onClick={() => setSection(s.key)}
-            className={`px-3.5 py-1.5 text-xs font-medium rounded-lg transition-colors ${
+            className={`px-3.5 ${isMobile ? "min-h-[44px] flex-1 text-sm" : "py-1.5 text-xs"} font-medium rounded-lg transition-colors ${
               section === s.key
                 ? "bg-tool-accent-soft text-tool-accent border border-tool-accent/30"
                 : "text-secondary hover:text-app border border-transparent"
@@ -615,7 +617,7 @@ function TransactionVolumeChart() {
         <button
           key={key}
           onClick={() => setMode(key)}
-          className={`px-2.5 py-1 text-[10px] font-mono rounded transition-colors ${
+          className={`px-2.5 min-h-[32px] sm:min-h-0 py-1 text-[11px] sm:text-[10px] font-mono rounded transition-colors ${
             mode === key
               ? "bg-tool-accent-soft text-tool-accent"
               : "text-muted hover:text-app"
@@ -1292,6 +1294,7 @@ export default function MarketPulseApp(props: NativeAppProps) {
             section={section}
             setSection={setSection}
             isNarrow={isNarrow}
+            isMobile={isMobile}
           />
         </div>
       </div>
