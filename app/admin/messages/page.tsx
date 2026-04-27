@@ -27,19 +27,17 @@ export default async function AdminMessagesPage({
   if (resolved === "yes") q = q.not("resolved_at", "is", null);
   if (resolved === "no") q = q.is("resolved_at", null);
 
-  const { data: msgs } = await q;
-  const messages = (msgs ?? []) as MessageRowType[];
-
-  // Distinct topics for the filter dropdown
-  const allTopicsRes = await admin
-    .from("contact_messages")
-    .select("topic")
-    .limit(1000);
-  const topicSet = new Set<string>();
-  for (const r of (allTopicsRes.data ?? []) as Array<{ topic: string }>) {
-    if (r.topic) topicSet.add(r.topic);
-  }
-  const topics = Array.from(topicSet).sort();
+  // Run the message list and the topics dropdown in parallel. Topics
+  // used to read up to 1000 contact_messages rows just to derive
+  // distinct values; now it's a SQL DISTINCT via RPC.
+  const [msgsRes, topicsRes] = await Promise.all([
+    q,
+    admin.rpc("admin_contact_message_topics"),
+  ]);
+  const messages = (msgsRes.data ?? []) as MessageRowType[];
+  const topics = ((topicsRes.data ?? []) as Array<{ topic: string }>)
+    .map((r) => r.topic)
+    .filter(Boolean);
 
   const openCount = messages.filter((m) => !m.resolved_at).length;
 

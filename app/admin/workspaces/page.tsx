@@ -10,7 +10,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const PER_PAGE = 200;
+const PER_PAGE = 50;
 
 type Workspace = {
   id: string;
@@ -38,20 +38,24 @@ export default async function AdminWorkspacesPage() {
   const wsIds = workspaces.map((w) => w.id);
   const ownerIds = Array.from(new Set(workspaces.map((w) => w.user_id)));
 
-  const [memberCountsRes, fileBytesRes, profilesRes, authMap] = await Promise.all([
+  // Per-workspace member counts and storage totals are SQL aggregates
+  // via two RPCs. Used to be two unbounded scans of workspace_members
+  // and workspace_files (could be millions of rows).
+  const [memberCountsRes, storageStatsRes, profilesRes, authMap] = await Promise.all([
     wsIds.length
-      ? admin
-          .from("workspace_members")
-          .select("workspace_id")
-          .in("workspace_id", wsIds)
-      : Promise.resolve({ data: [] as Array<{ workspace_id: string }>, error: null }),
-    wsIds.length
-      ? admin
-          .from("workspace_files")
-          .select("workspace_id, size_bytes")
-          .in("workspace_id", wsIds)
+      ? admin.rpc("admin_workspace_member_counts", { p_workspace_ids: wsIds })
       : Promise.resolve({
-          data: [] as Array<{ workspace_id: string; size_bytes: number }>,
+          data: [] as Array<{ workspace_id: string; members: number }>,
+          error: null,
+        }),
+    wsIds.length
+      ? admin.rpc("admin_workspace_storage_stats", { p_workspace_ids: wsIds })
+      : Promise.resolve({
+          data: [] as Array<{
+            workspace_id: string;
+            files_count: number;
+            total_bytes: number;
+          }>,
           error: null,
         }),
     ownerIds.length
@@ -64,19 +68,19 @@ export default async function AdminWorkspacesPage() {
   ]);
 
   const memberCounts = new Map<string, number>();
-  for (const r of (memberCountsRes.data ?? []) as Array<{ workspace_id: string }>) {
-    memberCounts.set(r.workspace_id, (memberCounts.get(r.workspace_id) ?? 0) + 1);
+  for (const r of (memberCountsRes.data ?? []) as Array<{
+    workspace_id: string;
+    members: number;
+  }>) {
+    memberCounts.set(r.workspace_id, Number(r.members));
   }
 
   const storageBytes = new Map<string, number>();
-  for (const r of (fileBytesRes.data ?? []) as Array<{
+  for (const r of (storageStatsRes.data ?? []) as Array<{
     workspace_id: string;
-    size_bytes: number;
+    total_bytes: number;
   }>) {
-    storageBytes.set(
-      r.workspace_id,
-      (storageBytes.get(r.workspace_id) ?? 0) + Number(r.size_bytes ?? 0)
-    );
+    storageBytes.set(r.workspace_id, Number(r.total_bytes));
   }
 
   const profiles = new Map(

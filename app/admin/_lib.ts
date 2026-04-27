@@ -102,18 +102,25 @@ export async function listAuthUsers(opts: {
   const page = Math.max(1, opts.page ?? 1);
 
   if (opts.emailLike) {
-    // Filtered: scan up to 5 pages of 200 to find matches. Good enough
-    // for the search-as-you-type admin flow without paginating the
-    // filtered set itself.
+    // Filtered: pull 5 pages of 200 in parallel and substring-match
+    // client-side. The auth admin API has no email filter, so this is
+    // the smallest acceptable scan; doing it concurrently drops the
+    // search round-trip from ~5×latency to ~1×latency.
     const needle = opts.emailLike.toLowerCase();
+    const PAGES = 5;
+    const PAGE_SIZE = 200;
+    const pages = await Promise.all(
+      Array.from({ length: PAGES }, (_, i) =>
+        admin.auth.admin
+          .listUsers({ page: i + 1, perPage: PAGE_SIZE })
+          .then((r) => r)
+          .catch(() => null)
+      )
+    );
     const all: AuthUserLite[] = [];
-    for (let p = 1; p <= 5; p++) {
-      const { data, error } = await admin.auth.admin.listUsers({
-        page: p,
-        perPage: 200,
-      });
-      if (error || !data?.users || data.users.length === 0) break;
-      for (const u of data.users) {
+    for (const r of pages) {
+      if (!r || r.error || !r.data?.users) continue;
+      for (const u of r.data.users) {
         if ((u.email ?? "").toLowerCase().includes(needle)) {
           all.push({
             id: u.id,
@@ -122,7 +129,6 @@ export async function listAuthUsers(opts: {
           });
         }
       }
-      if (data.users.length < 200) break;
     }
     const start = (page - 1) * perPage;
     return {

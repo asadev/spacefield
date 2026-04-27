@@ -11,7 +11,7 @@ import {
 
 export const dynamic = "force-dynamic";
 
-const PER_PAGE = 100;
+const PER_PAGE = 50;
 const STATUS_OPTIONS = ["", "active", "trialing", "past_due", "canceled"];
 
 type SubRow = {
@@ -179,6 +179,8 @@ export default async function AdminSubscriptionsPage({
       <p className="text-xs text-faint">
         Showing up to {PER_PAGE} most recent subscriptions.
       </p>
+      {/* PER_PAGE intentionally small: each row triggers an
+        auth.admin.getUserById round-trip for the email column. */}
     </div>
   );
 }

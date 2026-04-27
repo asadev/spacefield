@@ -65,10 +65,23 @@ export default async function AdminUserDetailPage({
   const { id } = await params;
   const admin = createAdminClient();
 
-  const [profileRes, subRes, tiersRes, ownedRes, joinedMembershipRes] =
+  // Run all five Postgres queries plus the auth.users email lookup in
+  // parallel — the only serial dependency is "joined workspaces", which
+  // needs the membership rows to know which workspace ids to pull.
+  const [profileRes, subRes, tiersRes, ownedRes, joinedMembershipRes, authMap] =
     await Promise.all([
-      admin.from("profiles").select("*").eq("user_id", id).maybeSingle(),
-      admin.from("subscriptions").select("*").eq("user_id", id).maybeSingle(),
+      admin
+        .from("profiles")
+        .select(
+          "user_id, username, full_name, designation, bio, avatar_url, is_admin, created_at"
+        )
+        .eq("user_id", id)
+        .maybeSingle(),
+      admin
+        .from("subscriptions")
+        .select("user_id, tier_id, status, started_at, expires_at")
+        .eq("user_id", id)
+        .maybeSingle(),
       admin
         .from("subscription_tiers")
         .select("tier_id, name")
@@ -82,6 +95,7 @@ export default async function AdminUserDetailPage({
         .from("workspace_members")
         .select("workspace_id, user_id, role, joined_at")
         .eq("user_id", id),
+      fetchAuthUsersByIds([id]),
     ]);
 
   const profile = profileRes.data as Profile | null;
@@ -90,8 +104,6 @@ export default async function AdminUserDetailPage({
   const owned = (ownedRes.data ?? []) as WorkspaceRow[];
   const memberships = (joinedMembershipRes.data ?? []) as WorkspaceMember[];
 
-  // auth.users entry for email + created_at
-  const authMap = await fetchAuthUsersByIds([id]);
   const authUser = authMap.get(id);
   if (!profile && !authUser?.id) {
     notFound();
@@ -109,19 +121,18 @@ export default async function AdminUserDetailPage({
     : { data: [] as WorkspaceRow[], error: null };
   const joined = (joinedRes.data ?? []) as WorkspaceRow[];
 
-  // Member counts for owned workspaces
+  // Member counts for owned workspaces — one SQL aggregate, not a full scan.
   const ownedIds = owned.map((w) => w.id);
   const memberCountByWs = new Map<string, number>();
   if (ownedIds.length) {
-    const { data } = await admin
-      .from("workspace_members")
-      .select("workspace_id")
-      .in("workspace_id", ownedIds);
-    for (const r of (data ?? []) as Array<{ workspace_id: string }>) {
-      memberCountByWs.set(
-        r.workspace_id,
-        (memberCountByWs.get(r.workspace_id) ?? 0) + 1
-      );
+    const { data } = await admin.rpc("admin_workspace_member_counts", {
+      p_workspace_ids: ownedIds,
+    });
+    for (const r of (data ?? []) as Array<{
+      workspace_id: string;
+      members: number;
+    }>) {
+      memberCountByWs.set(r.workspace_id, Number(r.members));
     }
   }
 
@@ -306,26 +317,33 @@ export default async function AdminUserDetailPage({
         <p className="mt-1 text-xs text-muted">
           Aggregate file size across all workspaces this user owns.
         </p>
-        <UserStorageStat ownedIds={ownedIds} />
+        <UserStorageStat ownedIds={ownedIds} userId={id} />
       </section>
     </div>
   );
 }
 
-async function UserStorageStat({ ownedIds }: { ownedIds: string[] }) {
+async function UserStorageStat({
+  ownedIds,
+  userId,
+}: {
+  ownedIds: string[];
+  userId: string;
+}) {
   if (ownedIds.length === 0) {
     return <div className="mt-3 text-sm text-faint">No workspaces.</div>;
   }
   const admin = createAdminClient();
-  const { data } = await admin
-    .from("workspace_files")
-    .select("size_bytes, workspace_id")
-    .in("workspace_id", ownedIds);
-  const total = ((data ?? []) as Array<{ size_bytes: number }>).reduce(
-    (sum, r) => sum + Number(r.size_bytes ?? 0),
-    0
-  );
-  const count = (data ?? []).length;
+  // SQL aggregate via RPC — used to read every workspace_files row just to
+  // sum size_bytes. The RPC scopes to workspaces this user owns.
+  const { data } = await admin.rpc("admin_user_storage_stats", {
+    p_user_id: userId,
+  });
+  const row = (Array.isArray(data) ? data[0] : data) as
+    | { files_count: number; files_total_bytes: number }
+    | undefined;
+  const total = Number(row?.files_total_bytes ?? 0);
+  const count = Number(row?.files_count ?? 0);
   return (
     <div className="mt-3 flex items-baseline gap-3 font-mono tabular-nums">
       <div className="text-2xl text-app">{formatBytes(total)}</div>

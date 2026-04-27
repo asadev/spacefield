@@ -73,7 +73,9 @@ export default async function AdminWorkspaceDetailPage({
     new Set([...members.map((m) => m.user_id), ...files.map((f) => f.user_id)])
   );
 
-  const [authMap, profilesRes, totalFilesRes] = await Promise.all([
+  // Total bytes is a SQL aggregate via RPC — used to read every
+  // workspace_files row in this workspace just to sum size_bytes.
+  const [authMap, profilesRes, storageRes] = await Promise.all([
     fetchAuthUsersByIds(allUserIds),
     allUserIds.length
       ? admin
@@ -89,19 +91,18 @@ export default async function AdminWorkspaceDetailPage({
           }>,
           error: null,
         }),
-    admin
-      .from("workspace_files")
-      .select("size_bytes")
-      .eq("workspace_id", id),
+    admin.rpc("admin_single_workspace_storage", { p_workspace_id: id }),
   ]);
 
   const profiles = new Map(
     (profilesRes.data ?? []).map((p) => [p.user_id, p])
   );
 
-  const totalBytes = (
-    (totalFilesRes.data ?? []) as Array<{ size_bytes: number }>
-  ).reduce((sum, r) => sum + Number(r.size_bytes ?? 0), 0);
+  const storageRow = (Array.isArray(storageRes.data) ? storageRes.data[0] : storageRes.data) as
+    | { files_count: number; total_bytes: number }
+    | undefined;
+  const totalBytes = Number(storageRow?.total_bytes ?? 0);
+  const totalFilesCount = Number(storageRow?.files_count ?? 0);
 
   const ownerId = workspace.user_id;
 
@@ -199,7 +200,7 @@ export default async function AdminWorkspaceDetailPage({
       <section className="rounded-xl border border-app bg-app-elevated p-5">
         <div className="flex items-center justify-between">
           <h2 className="text-sm font-semibold text-app">
-            Files (top 50 of {files.length === 50 ? "many" : files.length})
+            Files (top 50 of {totalFilesCount.toLocaleString()})
           </h2>
           <span className="font-mono text-xs tabular-nums text-muted">
             {formatBytes(totalBytes)} total
