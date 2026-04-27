@@ -10,6 +10,7 @@ import DesktopBackground from "./DesktopBackground";
 import Dock from "./Dock";
 import Launchpad from "./Launchpad";
 import MissionControl from "./MissionControl";
+import MobileShell from "./MobileShell";
 import NotificationCenter from "./NotificationCenter";
 import Onboarding from "./Onboarding";
 import SnapPreview from "./SnapPreview";
@@ -23,6 +24,7 @@ import Widgets from "./Widgets";
 import WidgetGallery from "./WidgetGallery";
 import WallpaperPicker from "./WallpaperPicker";
 import Window from "./Window";
+import { useIsMobile } from "./useIsMobile";
 import { useWindowManager } from "./useWindowManager";
 import { useDesktopSounds } from "./useDesktopSounds";
 import { useWorkspaceKey, useWorkspaces, WorkspaceProvider } from "./useWorkspaces";
@@ -48,6 +50,7 @@ export default function Desktop() {
 
 function DesktopGate() {
   const { activeId, hydrated, workspaces } = useWorkspaces();
+  const isMobile = useIsMobile();
   if (!hydrated) {
     // Avoid mounting hooks against an empty workspace id during the brief
     // window before WorkspaceProvider hydrates from localStorage.
@@ -59,6 +62,12 @@ function DesktopGate() {
   // an empty namespace.
   if (workspaces.length === 0 || !activeId) {
     return <NoWorkspacesScreen />;
+  }
+  // Mobile shell — iOS-style chrome on <md viewports. Same workspace key,
+  // same window manager, same installed-tools storage. Keyed on activeId
+  // so the shell remounts on workspace switch (matches DesktopApp).
+  if (isMobile) {
+    return <MobileShell key={`mobile-${activeId}`} />;
   }
   return <DesktopApp key={activeId} />;
 }

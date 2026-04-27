@@ -179,20 +179,20 @@ function Hero({ onSignIn }: { onSignIn: () => void }) {
           when you're ready. Local first. Yours always.
         </p>
 
-        <div className="mt-8 flex flex-wrap items-center gap-3">
+        <div className="mt-8 flex w-full flex-col gap-3 sm:w-auto sm:flex-row sm:flex-wrap sm:items-center">
           <button
             type="button"
             onClick={onSignIn}
-            className="rounded-lg bg-tool-accent px-5 py-2.5 text-sm font-medium text-white shadow-lg shadow-[color:var(--accent-bg)] transition-opacity hover:opacity-90"
+            className="rounded-xl bg-tool-accent px-5 py-3 text-sm font-medium text-white shadow-lg shadow-[color:var(--accent-bg)] transition-opacity hover:opacity-90 active:opacity-80 sm:rounded-lg sm:py-2.5"
           >
-            Get started — free
+            Get started
           </button>
           <button
             type="button"
             onClick={() => {
               /* demo placeholder */
             }}
-            className="rounded-lg border border-app bg-app-elevated px-5 py-2.5 text-sm font-medium text-app transition-colors hover:bg-app"
+            className="rounded-xl border border-app bg-app-elevated px-5 py-3 text-sm font-medium text-app transition-colors hover:bg-app active:bg-surface sm:rounded-lg sm:py-2.5"
           >
             Watch demo
           </button>

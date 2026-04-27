@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useAuth } from "./useAuth";
+import { useIsMobile } from "./useIsMobile";
 
 /* Sign-in dialog. Email magic-link flow.
  *
@@ -24,6 +25,7 @@ interface Props {
 
 export default function SignInDialog({ open, onClose }: Props) {
   const { signInWithEmail, signInWithGoogle, enabled } = useAuth();
+  const isMobile = useIsMobile();
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error" | "google">(
     "idle"
@@ -103,15 +105,44 @@ export default function SignInDialog({ open, onClose }: Props) {
             onClick={onClose}
             aria-hidden="true"
           />
-          <div className="relative flex h-full w-full items-center justify-center p-4">
+          <div
+            className={
+              isMobile
+                ? "relative flex h-full w-full items-end justify-center"
+                : "relative flex h-full w-full items-center justify-center p-4"
+            }
+          >
             <motion.form
-              initial={{ scale: 0.96, opacity: 0, y: 8 }}
-              animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.96, opacity: 0, y: 8 }}
-              transition={{ type: "spring", stiffness: 320, damping: 28 }}
+              initial={
+                isMobile
+                  ? { y: "100%", opacity: 1 }
+                  : { scale: 0.96, opacity: 0, y: 8 }
+              }
+              animate={
+                isMobile ? { y: 0, opacity: 1 } : { scale: 1, opacity: 1, y: 0 }
+              }
+              exit={
+                isMobile
+                  ? { y: "100%", opacity: 1 }
+                  : { scale: 0.96, opacity: 0, y: 8 }
+              }
+              transition={
+                isMobile
+                  ? { type: "tween", ease: [0.25, 0.46, 0.45, 0.94], duration: 0.32 }
+                  : { type: "spring", stiffness: 320, damping: 28 }
+              }
               onSubmit={submit}
-              className="w-full max-w-md rounded-2xl border border-app bg-app-elevated p-6 shadow-2xl"
+              className={
+                isMobile
+                  ? "w-full rounded-t-[24px] border-t border-app bg-app-elevated px-5 pb-[calc(1.5rem+env(safe-area-inset-bottom,0px))] pt-5 shadow-2xl"
+                  : "w-full max-w-md rounded-2xl border border-app bg-app-elevated p-6 shadow-2xl"
+              }
             >
+              {isMobile && (
+                <div className="mb-3 flex justify-center">
+                  <div className="h-1 w-10 rounded-full bg-app/30" aria-hidden="true" />
+                </div>
+              )}
               <h2
                 id="sign-in-title"
                 className="text-lg font-semibold text-app"
