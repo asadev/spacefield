@@ -141,6 +141,53 @@ function isPreviewable(kind: FileKind): boolean {
   );
 }
 
+/**
+ * Decide whether a file should open in a dedicated editor app instead of
+ * the inline preview pane. Returns the slug to dispatch to via
+ * `openApp(slug, { fileId })`, or null if no editor matches (the file
+ * keeps its existing inline-preview behavior).
+ *
+ * Extension match is the primary signal — most uploads carry a sensible
+ * filename. Content-type sniffing is a fallback for the messy cases
+ * (e.g. iOS sometimes labels markdown as `application/octet-stream`).
+ */
+function editorSlugFor(
+  name: string,
+  contentType: string | null
+): "documents" | "sheets" | null {
+  const n = name.toLowerCase();
+  const ct = (contentType ?? "").toLowerCase();
+
+  // Document-style extensions
+  if (/\.(md|markdown|txt|html|htm|docx|doc|rtf)$/.test(n)) return "documents";
+  // Sheet-style extensions
+  if (/\.(xlsx|xls|csv|ods)$/.test(n)) return "sheets";
+
+  // Content-type fallback (used when the filename has no useful extension)
+  if (
+    ct === "text/markdown" ||
+    ct === "text/plain" ||
+    ct === "text/html" ||
+    ct === "application/rtf" ||
+    ct === "application/msword" ||
+    ct ===
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+  ) {
+    return "documents";
+  }
+  if (
+    ct === "text/csv" ||
+    ct === "application/vnd.ms-excel" ||
+    ct ===
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" ||
+    ct === "application/vnd.oasis.opendocument.spreadsheet"
+  ) {
+    return "sheets";
+  }
+
+  return null;
+}
+
 function debounce<T extends (...args: never[]) => void>(fn: T, wait: number) {
   let t: ReturnType<typeof setTimeout> | null = null;
   return (...args: Parameters<T>) => {
@@ -500,6 +547,7 @@ function PreviewPanel({
 export default function FilesManagerApp({
   width,
   initialParamsKey,
+  openApp,
 }: NativeAppProps) {
   const supabase = useMemo(() => getSupabase(), []);
 
@@ -1252,13 +1300,29 @@ export default function FilesManagerApp({
                     : "Connecting to your workspace…"}
                 </div>
               </div>
-              <button
-                onClick={handlePickFiles}
-                disabled={!ensured}
-                className="rounded-lg bg-tool-accent px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                Choose files
-              </button>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  onClick={() => openApp("documents", {})}
+                  disabled={!ensured}
+                  className="rounded-lg bg-tool-accent px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  + New document
+                </button>
+                <button
+                  onClick={() => openApp("sheets", {})}
+                  disabled={!ensured}
+                  className="rounded-lg bg-tool-accent px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  + New sheet
+                </button>
+                <button
+                  onClick={handlePickFiles}
+                  disabled={!ensured}
+                  className="rounded-lg bg-tool-accent px-3 py-1.5 text-xs font-semibold text-white transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  Choose files
+                </button>
+              </div>
             </div>
 
             {/* Job list */}
@@ -1421,16 +1485,25 @@ export default function FilesManagerApp({
                 gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
               }}
             >
-              {visible.map((file) => (
-                <FileCard
-                  key={file.id}
-                  file={file}
-                  onPreview={() => setPreviewId(file.id)}
-                  onDownload={() => handleDownload(file.id, file.name)}
-                  onAskDelete={() => setConfirmDeleteId(file.id)}
-                  active={previewId === file.id}
-                />
-              ))}
+              {visible.map((file) => {
+                const editorSlug = editorSlugFor(file.name, file.content_type);
+                return (
+                  <FileCard
+                    key={file.id}
+                    file={file}
+                    editorSlug={editorSlug}
+                    onPreview={() => setPreviewId(file.id)}
+                    onOpenInEditor={
+                      editorSlug
+                        ? () => openApp(editorSlug, { fileId: file.id })
+                        : undefined
+                    }
+                    onDownload={() => handleDownload(file.id, file.name)}
+                    onAskDelete={() => setConfirmDeleteId(file.id)}
+                    active={previewId === file.id}
+                  />
+                );
+              })}
             </div>
           )}
         </section>
@@ -1493,19 +1566,34 @@ export default function FilesManagerApp({
 
 function FileCard({
   file,
+  editorSlug,
   onPreview,
+  onOpenInEditor,
   onDownload,
   onAskDelete,
   active,
 }: {
   file: WorkspaceFile;
+  editorSlug: "documents" | "sheets" | null;
   onPreview: () => void;
+  onOpenInEditor?: () => void;
   onDownload: () => void;
   onAskDelete: () => void;
   active: boolean;
 }) {
   const kind = classifyFile(file.content_type, file.name);
   const previewable = isPreviewable(kind);
+
+  // Primary body-click behavior:
+  //   - editor file → open in editor app
+  //   - previewable → open inline preview
+  //   - else → download
+  const onBodyClick =
+    editorSlug && onOpenInEditor
+      ? onOpenInEditor
+      : previewable
+      ? onPreview
+      : onDownload;
 
   return (
     <div
@@ -1527,7 +1615,7 @@ function FileCard({
       {/* Body */}
       <button
         type="button"
-        onClick={previewable ? onPreview : onDownload}
+        onClick={onBodyClick}
         className="min-w-0 flex-1 text-left"
       >
         <div className="truncate text-sm font-semibold text-app group-hover:text-tool-accent">
@@ -1543,28 +1631,93 @@ function FileCard({
 
       {/* Actions */}
       <div className="flex flex-col items-end gap-1 opacity-0 transition group-hover:opacity-100 focus-within:opacity-100">
-        {previewable && (
+        {editorSlug && onOpenInEditor && (
+          <button
+            onClick={onOpenInEditor}
+            title={
+              editorSlug === "sheets"
+                ? "Open in spreadsheet editor"
+                : "Open in document editor"
+            }
+            aria-label="Open in editor"
+            className="flex h-7 w-7 items-center justify-center rounded-md border border-app bg-app text-secondary hover:border-tool-accent/40 hover:text-tool-accent"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              className="h-3.5 w-3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M14 4h6v6" />
+              <path d="M20 4l-8 8" />
+              <path d="M10 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-4" />
+            </svg>
+          </button>
+        )}
+        {previewable && !editorSlug && (
           <button
             onClick={onPreview}
             title="Open preview"
-            className="rounded-md border border-app bg-app px-2 py-1 text-[10px] font-semibold text-secondary hover:border-tool-accent/40 hover:text-tool-accent"
+            aria-label="Open preview"
+            className="flex h-7 w-7 items-center justify-center rounded-md border border-app bg-app text-secondary hover:border-tool-accent/40 hover:text-tool-accent"
           >
-            Open
+            <svg
+              viewBox="0 0 24 24"
+              className="h-3.5 w-3.5"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7S2 12 2 12z" />
+              <circle cx="12" cy="12" r="3" />
+            </svg>
           </button>
         )}
         <button
           onClick={onDownload}
           title="Download"
-          className="rounded-md border border-app bg-app px-2 py-1 text-[10px] font-semibold text-secondary hover:border-tool-accent/40 hover:text-tool-accent"
+          aria-label="Download"
+          className="flex h-7 w-7 items-center justify-center rounded-md border border-app bg-app text-secondary hover:border-tool-accent/40 hover:text-tool-accent"
         >
-          Download
+          <svg
+            viewBox="0 0 24 24"
+            className="h-3.5 w-3.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M12 4v12" />
+            <path d="M6 14l6 6 6-6" />
+            <path d="M4 22h16" />
+          </svg>
         </button>
         <button
           onClick={onAskDelete}
           title="Delete"
-          className="rounded-md border border-app bg-app px-2 py-1 text-[10px] font-semibold text-secondary hover:border-rose-500 hover:text-rose-500"
+          aria-label="Delete"
+          className="flex h-7 w-7 items-center justify-center rounded-md border border-app bg-app text-secondary hover:border-rose-500 hover:text-rose-500"
         >
-          Delete
+          <svg
+            viewBox="0 0 24 24"
+            className="h-3.5 w-3.5"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
+            <path d="M3 6h18" />
+            <path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+            <path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6" />
+            <path d="M10 11v6M14 11v6" />
+          </svg>
         </button>
       </div>
     </div>
