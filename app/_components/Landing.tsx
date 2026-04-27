@@ -852,6 +852,7 @@ function Footer() {
             links={[
               { label: "Privacy", href: "/privacy" },
               { label: "Terms", href: "/terms" },
+              { label: "Refunds", href: "/refund" },
             ]}
           />
           <FooterColumn

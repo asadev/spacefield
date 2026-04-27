@@ -54,6 +54,19 @@ export default function TermsPage() {
         give plenty of notice.
       </p>
 
+      <h2>Paid plans, cancellations, and refunds</h2>
+      <p>
+        Pro, Team, and Enterprise plans plus storage add-ons are
+        recurring subscriptions. You can cancel any subscription at any
+        time from <strong>Settings → Workspaces</strong>; cancellation
+        takes effect at the end of the current billing period and we
+        don&apos;t pro-rate unused days. Customers in the EU and UK have
+        a 14-day right to withdraw on the initial purchase. Other refund
+        scenarios (platform outages, duplicate charges, accidental
+        renewals) are covered in our full{" "}
+        <a href="/refund">refund policy</a>.
+      </p>
+
       <h2>Termination</h2>
       <p>
         You can delete your account at any time. We can suspend accounts
