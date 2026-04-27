@@ -762,7 +762,7 @@ function MortgageCalculatorInner() {
             width: 24px;
             height: 24px;
             border-radius: 999px;
-            background: var(--bg-app-elevated, #ffffff);
+            background: var(--bg-elevated, #ffffff);
             border: 2px solid var(--tool-accent);
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
             margin-top: -9px;
@@ -776,7 +776,7 @@ function MortgageCalculatorInner() {
             width: 24px;
             height: 24px;
             border-radius: 999px;
-            background: var(--bg-app-elevated, #ffffff);
+            background: var(--bg-elevated, #ffffff);
             border: 2px solid var(--tool-accent);
             box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
             cursor: pointer;

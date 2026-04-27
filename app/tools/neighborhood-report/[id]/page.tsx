@@ -328,7 +328,7 @@ function TableOfContents({ activeId }: { activeId: string }) {
     <>
       {/* Desktop: sticky sidebar */}
       <nav className="no-print hidden lg:block fixed left-6 top-1/2 -translate-y-1/2 z-40">
-        <div className="flex flex-col gap-1 rounded-xl border border-white/[0.08] bg-[#0a0a0a]/90 backdrop-blur-md p-3">
+        <div className="flex flex-col gap-1 rounded-xl border border-app bg-app-elevated/90 backdrop-blur-md p-3">
           {TOC_ITEMS.map((item) => (
             <a
               key={item.id}
@@ -350,7 +350,7 @@ function TableOfContents({ activeId }: { activeId: string }) {
       </nav>
 
       {/* Mobile: horizontal scroll bar */}
-      <div className="no-print lg:hidden sticky top-0 z-40 -mx-6 px-6 py-3 bg-[#000000]/90 backdrop-blur-md border-b border-white/[0.06]">
+      <div className="no-print lg:hidden sticky top-0 z-40 -mx-6 px-6 py-3 bg-app/90 backdrop-blur-md border-b border-app">
         <div className="flex gap-2 overflow-x-auto scrollbar-none pb-1">
           {TOC_ITEMS.map((item) => (
             <a

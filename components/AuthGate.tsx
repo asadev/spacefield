@@ -67,17 +67,17 @@ export default function AuthGate({ children }: AuthGateProps) {
         {children}
       </div>
       <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60">
-        <div className="border border-white/[0.10] bg-[#0a0a0a] p-6 sm:p-10 text-center max-w-sm sm:max-w-lg mx-3 sm:mx-4">
-          <h3 className="text-lg font-semibold tracking-tight text-white">
+        <div className="border border-app bg-app-elevated p-6 sm:p-10 text-center max-w-sm sm:max-w-lg mx-3 sm:mx-4">
+          <h3 className="text-lg font-semibold tracking-tight text-app">
             Sign in to access all tools
           </h3>
-          <p className="mt-4 text-sm leading-relaxed text-gray-400">
+          <p className="mt-4 text-sm leading-relaxed text-muted">
             Create a free account to access every tool, track your progress,
             and join the community.
           </p>
           <Link
             href={signInHref}
-            className="mt-6 inline-block w-full sm:w-auto border border-white/20 bg-white/[0.08] px-8 py-4 text-[0.75rem] uppercase tracking-[0.15em] text-gray-200 transition-colors hover:bg-white/[0.14]"
+            className="mt-6 inline-block w-full sm:w-auto border border-app bg-surface px-8 py-4 text-[0.75rem] uppercase tracking-[0.15em] text-secondary transition-colors hover:bg-surface-hover hover:text-app"
           >
             Sign In
           </Link>

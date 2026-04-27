@@ -80,7 +80,7 @@ export default function NotificationBell() {
         type="button"
         aria-label="Notifications"
         onClick={() => setOpen((v) => !v)}
-        className="relative inline-flex h-8 w-8 items-center justify-center border border-white/[0.10] bg-white/[0.02] text-gray-300 hover:border-white/[0.20] hover:text-white"
+        className="relative inline-flex h-8 w-8 items-center justify-center border border-app bg-surface text-secondary hover:border-app-hover hover:text-app"
       >
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
           <path d="M18 16v-5a6 6 0 1 0-12 0v5l-2 2v1h16v-1l-2-2z" />
@@ -94,16 +94,16 @@ export default function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-[110%] z-50 w-80 border border-white/[0.10] bg-[#0a0a0a] shadow-xl">
-          <div className="flex items-center justify-between border-b border-white/[0.08] px-3 py-2">
-            <span className="text-[0.6rem] uppercase tracking-[0.2em] text-gray-400">
+        <div className="absolute right-0 top-[110%] z-50 w-80 border border-app bg-app-elevated shadow-xl">
+          <div className="flex items-center justify-between border-b border-app px-3 py-2">
+            <span className="text-[0.6rem] uppercase tracking-[0.2em] text-muted">
               Notifications
             </span>
             {unread > 0 && (
               <button
                 type="button"
                 onClick={markAllRead}
-                className="text-[0.6rem] uppercase tracking-[0.15em] text-teal-400 hover:text-teal-300"
+                className="text-[0.6rem] uppercase tracking-[0.15em] text-teal-500 hover:text-teal-400"
               >
                 Mark all read
               </button>
@@ -111,7 +111,7 @@ export default function NotificationBell() {
           </div>
           <div className="max-h-96 overflow-y-auto">
             {items.length === 0 ? (
-              <div className="px-3 py-6 text-center text-[0.7rem] text-gray-500">
+              <div className="px-3 py-6 text-center text-[0.7rem] text-muted">
                 Nothing yet. You are caught up.
               </div>
             ) : (
@@ -124,10 +124,10 @@ export default function NotificationBell() {
               ))
             )}
           </div>
-          <div className="border-t border-white/[0.08] px-3 py-2 text-right">
+          <div className="border-t border-app px-3 py-2 text-right">
             <Link
               href="/dashboard/alerts"
-              className="text-[0.6rem] uppercase tracking-[0.15em] text-gray-400 hover:text-white"
+              className="text-[0.6rem] uppercase tracking-[0.15em] text-muted hover:text-app"
             >
               Manage alerts
             </Link>
@@ -148,22 +148,22 @@ function NotificationRow({
   const inner = (
     <div
       onClick={onClick}
-      className={`cursor-pointer border-b border-white/[0.04] px-3 py-2 last:border-b-0 hover:bg-white/[0.03] ${
+      className={`cursor-pointer border-b border-app px-3 py-2 last:border-b-0 hover:bg-surface ${
         item.read ? "opacity-60" : ""
       }`}
     >
       <div className="flex items-start gap-2">
         {!item.read && (
-          <span className="mt-1.5 inline-block h-1.5 w-1.5 flex-shrink-0 bg-teal-400" />
+          <span className="mt-1.5 inline-block h-1.5 w-1.5 flex-shrink-0 bg-teal-500" />
         )}
         <div className="min-w-0 flex-1">
-          <div className="truncate text-xs font-medium text-white">{item.title}</div>
+          <div className="truncate text-xs font-medium text-app">{item.title}</div>
           {item.body && (
-            <div className="mt-0.5 line-clamp-2 text-[0.65rem] text-gray-400">
+            <div className="mt-0.5 line-clamp-2 text-[0.65rem] text-muted">
               {item.body}
             </div>
           )}
-          <div className="mt-1 text-[0.55rem] uppercase tracking-[0.15em] text-gray-600">
+          <div className="mt-1 text-[0.55rem] uppercase tracking-[0.15em] text-faint">
             {relativeTime(item.created_at)}
           </div>
         </div>

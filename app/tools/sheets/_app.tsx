@@ -751,7 +751,7 @@ function ChartOverlay({
               key={i}
               d={path}
               fill={CHART_COLORS[i % CHART_COLORS.length]}
-              stroke="var(--bg-app-elevated)"
+              stroke="var(--bg-elevated)"
               strokeWidth={1}
             />
           );

@@ -1519,7 +1519,7 @@ export default function DocumentsApp({
           min-height: 300px;
           font-size: 15px;
           line-height: 1.65;
-          color: var(--text-app, inherit);
+          color: var(--text, inherit);
         }
         :global([data-tool="documents"]) .prose-doc p {
           margin: 0 0 0.85em;
@@ -1575,10 +1575,10 @@ export default function DocumentsApp({
           font-size: 0.92em;
           padding: 0.1em 0.35em;
           border-radius: 4px;
-          background: var(--bg-app-elevated, rgba(127,127,127,0.12));
+          background: var(--surface-strong, rgba(127,127,127,0.12));
         }
         :global([data-tool="documents"]) .prose-doc pre {
-          background: var(--bg-app-elevated, rgba(127,127,127,0.12));
+          background: var(--surface-strong, rgba(127,127,127,0.12));
           padding: 0.7em 0.9em;
           border-radius: 8px;
           overflow-x: auto;
@@ -1604,13 +1604,13 @@ export default function DocumentsApp({
         }
         :global([data-tool="documents"]) .prose-doc th,
         :global([data-tool="documents"]) .prose-doc td {
-          border: 1px solid var(--border-app, rgba(127,127,127,0.3));
+          border: 1px solid var(--border, rgba(127,127,127,0.3));
           padding: 0.4em 0.6em;
           vertical-align: top;
           min-width: 60px;
         }
         :global([data-tool="documents"]) .prose-doc th {
-          background: var(--bg-app-elevated, rgba(127,127,127,0.08));
+          background: var(--surface, rgba(127,127,127,0.08));
           font-weight: 600;
           text-align: left;
         }
@@ -1646,7 +1646,7 @@ export default function DocumentsApp({
         }
         :global([data-tool="documents"]) .prose-doc hr {
           border: none;
-          border-top: 1px solid var(--border-app, rgba(127,127,127,0.3));
+          border-top: 1px solid var(--border, rgba(127,127,127,0.3));
           margin: 1.4em 0;
         }
         @media print {

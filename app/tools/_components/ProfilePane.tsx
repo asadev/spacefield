@@ -552,7 +552,13 @@ export default function ProfilePane() {
               onCropComplete={onCropComplete}
             />
           </div>
-          <div className="border-t border-white/10 bg-[#0a0a0a] p-4">
+          <div
+            className="border-t p-4"
+            style={{
+              background: "#0a0a0a",
+              borderColor: "rgba(255,255,255,0.10)",
+            }}
+          >
             <div className="mx-auto flex max-w-[400px] items-center gap-3">
               <span
                 className="text-xs"
