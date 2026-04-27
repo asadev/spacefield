@@ -23,6 +23,7 @@ import {
   isValidAddonGb,
 } from "@/app/_data/storage-addons";
 import { useAuth } from "../useAuth";
+import { ensurePaddle } from "../useBillingClient";
 import {
   PILL,
   PRIMARY,
@@ -132,7 +133,7 @@ export default function StorageSection({
         return;
       }
 
-      // Purchase (or change) → Polar checkout. Webhook flips the row
+      // Purchase (or change) → checkout. Webhook flips the row
       // to payment_status='active' once payment succeeds.
       const res = await fetch("/api/billing/checkout", {
         method: "POST",
@@ -144,14 +145,57 @@ export default function StorageSection({
         }),
       });
       const body = (await res.json().catch(() => ({}))) as {
+        provider?: "paddle" | "polar";
         url?: string;
+        paddle?: {
+          price_id: string;
+          customer_email: string;
+          custom_data: Record<string, string>;
+        };
         error?: string;
       };
-      if (!res.ok || !body.url) {
+      if (!res.ok) {
         throw new Error(body.error || `Checkout failed (${res.status})`);
       }
-      // Redirect the browser to Polar's hosted checkout. The success
-      // page will land us back on /billing/success.
+      if (body.provider === "paddle" && body.paddle) {
+        // Pull the client token + env from /api/me. Cheap call; we
+        // don't keep it on the component because StorageSection is
+        // already mounted by the time the user clicks Buy.
+        const meRes = await fetch("/api/me", { cache: "no-store" });
+        const me = (await meRes.json().catch(() => ({}))) as {
+          paddle_client_token?: string | null;
+          paddle_environment?: "production" | "sandbox";
+        };
+        if (!me.paddle_client_token) {
+          throw new Error(
+            "Paddle is not fully configured yet. Try again shortly."
+          );
+        }
+        const Paddle = await ensurePaddle({
+          token: me.paddle_client_token,
+          environment: me.paddle_environment ?? "production",
+          onCheckoutCompleted: () => {
+            window.location.href = "/billing/success?provider=paddle";
+          },
+        });
+        Paddle.Checkout.open({
+          items: [{ priceId: body.paddle.price_id, quantity: 1 }],
+          customer: { email: body.paddle.customer_email },
+          customData: body.paddle.custom_data,
+          settings: {
+            displayMode: "overlay",
+            successUrl: `${window.location.origin}/billing/success?provider=paddle`,
+            allowLogout: false,
+          },
+        });
+        // Overlay's open — leave busy state for clarity until the
+        // overlay closes/redirects.
+        return;
+      }
+      if (!body.url) {
+        throw new Error(`Checkout failed (${res.status})`);
+      }
+      // Polar branch: hand off to hosted checkout.
       window.location.href = body.url;
     } catch (err) {
       onError(err instanceof Error ? err.message : "Update failed");

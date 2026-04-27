@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { ACTIVE_PROVIDER } from "@/lib/billing";
 
 /* GET /api/me
  *
@@ -37,11 +38,13 @@ export async function GET() {
 
   // Pull the calling user's subscription row so the client can display
   // a "Manage subscription" link / billing status. We expose only the
-  // fields the UI cares about — never the raw Polar customer id (it's
-  // not sensitive but it's noise).
+  // fields the UI cares about — never the raw provider customer id
+  // (not sensitive but noise).
   const { data: subRow } = await supabase
     .from("subscriptions")
-    .select("tier_id, status, polar_status, current_period_end")
+    .select(
+      "tier_id, status, polar_status, paddle_status, current_period_end"
+    )
     .eq("user_id", user.id)
     .maybeSingle();
 
@@ -68,13 +71,15 @@ export async function GET() {
     payment_status: string;
     polar_status: string | null;
     polar_subscription_id: string | null;
+    paddle_status: string | null;
+    paddle_subscription_id: string | null;
     current_period_end: string | null;
   }> = [];
   if (ownedIds.length > 0) {
     const { data: addonRows } = await supabase
       .from("workspace_storage_addons")
       .select(
-        "workspace_id, addon_gb, payment_status, polar_status, polar_subscription_id, current_period_end"
+        "workspace_id, addon_gb, payment_status, polar_status, polar_subscription_id, paddle_status, paddle_subscription_id, current_period_end"
       )
       .in("workspace_id", ownedIds);
     addons = (addonRows ?? []) as typeof addons;
@@ -93,5 +98,9 @@ export async function GET() {
     can_create_workspace: ownedCount < cap,
     workspaces: owned,
     storage_addons: addons,
+    billing_provider: ACTIVE_PROVIDER,
+    paddle_client_token: process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN ?? null,
+    paddle_environment:
+      process.env.PADDLE_ENVIRONMENT === "sandbox" ? "sandbox" : "production",
   });
 }

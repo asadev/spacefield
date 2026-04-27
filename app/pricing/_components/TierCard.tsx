@@ -29,6 +29,7 @@ import {
   formatStorageMb,
   effectiveCapBytes,
 } from "@/app/_data/storage-addons";
+import { ensurePaddle } from "@/app/tools/_components/useBillingClient";
 
 export interface TierCardProps {
   tierId: string;
@@ -49,6 +50,21 @@ interface MeResponse {
   workspaces?: Array<{ id: string; name: string }>;
   storage_addons?: Array<{ workspace_id: string; addon_gb: number }>;
   tier_config?: { name?: string | null } | null;
+  billing_provider?: "paddle" | "polar";
+  paddle_client_token?: string | null;
+  paddle_environment?: "production" | "sandbox";
+}
+
+interface CheckoutResponse {
+  provider?: "paddle" | "polar";
+  url?: string;
+  session_id?: string;
+  paddle?: {
+    price_id: string;
+    customer_email: string;
+    custom_data: Record<string, string>;
+  };
+  error?: string;
 }
 
 export default function TierCard({
@@ -154,14 +170,41 @@ export default function TierCard({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
       });
-      const data = (await res.json().catch(() => ({}))) as {
-        url?: string;
-        error?: string;
-      };
-      if (!res.ok || !data.url) {
+      const data = (await res.json().catch(() => ({}))) as CheckoutResponse;
+      if (!res.ok) {
         throw new Error(data.error || `Checkout failed (${res.status})`);
       }
-      // Hand off to Polar.
+      if (data.provider === "paddle" && data.paddle) {
+        const token = me?.paddle_client_token ?? "";
+        if (!token) {
+          throw new Error(
+            "Paddle is not fully configured yet. Try again shortly."
+          );
+        }
+        const Paddle = await ensurePaddle({
+          token,
+          environment: me?.paddle_environment ?? "production",
+          onCheckoutCompleted: () => {
+            window.location.href = "/billing/success?provider=paddle";
+          },
+        });
+        Paddle.Checkout.open({
+          items: [{ priceId: data.paddle.price_id, quantity: 1 }],
+          customer: { email: data.paddle.customer_email },
+          customData: data.paddle.custom_data,
+          settings: {
+            displayMode: "overlay",
+            successUrl: `${window.location.origin}/billing/success?provider=paddle`,
+            allowLogout: false,
+          },
+        });
+        // Overlay opens — leave the button in "Opening…" state until
+        // the user finishes or closes the modal.
+        return;
+      }
+      if (!data.url) {
+        throw new Error(`Checkout failed (${res.status})`);
+      }
       window.location.href = data.url;
     } catch (err) {
       setMsg({

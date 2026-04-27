@@ -1,10 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { createPolarCheckout } from "@/lib/polar";
-import {
-  POLAR_TIER_PRODUCTS,
-  POLAR_ADDON_PRODUCTS,
-} from "@/app/_data/polar-products";
+import { createCheckout, type CheckoutInput } from "@/lib/billing";
 import { isValidAddonGb } from "@/app/_data/storage-addons";
 
 /* /api/billing/checkout
@@ -12,23 +8,28 @@ import { isValidAddonGb } from "@/app/_data/storage-addons";
  * POST { kind: 'tier' | 'addon', tier?: 'pro'|'team',
  *        addon_gb?: 500|2048|10240, workspaceId: string }
  *
- *   Spins up a Polar checkout session for either a tier upgrade or a
- *   per-workspace storage add-on. Returns the hosted checkout URL —
- *   the client redirects the browser there.
+ *   Spins up a checkout session for either a tier upgrade or a
+ *   per-workspace storage add-on. Provider is selected by
+ *   BILLING_PROVIDER env var (default: paddle). The shape of the
+ *   response varies by provider:
  *
- *   Metadata we attach to the Polar checkout is the contract with
- *   the webhook handler:
+ *     - Polar: { provider: "polar", url, session_id }
+ *               → client redirects window.location.href = url
+ *     - Paddle: { provider: "paddle", paddle: { price_id, customer_email,
+ *                  custom_data } }
+ *               → client opens Paddle.Checkout.open(...)
+ *
+ *   custom_data / metadata is the contract with the webhook handler:
  *     - user_id      → which Supabase user this maps to
  *     - workspace_id → which workspace the add-on (if any) attaches to
  *     - kind         → 'tier' | 'addon'
  *     - tier         → 'pro' | 'team' (only for kind=tier)
  *     - addon_gb     → 500/2048/10240 (only for kind=addon)
  *
- * For add-on checkouts we also pre-create a `workspace_storage_addons`
- * row with payment_status='pending'. The cap RPC ignores pending rows
- * so the user doesn't get the bigger cap until the webhook flips it
- * to 'active'. This avoids the "abandoned checkout still gives free
- * storage" hole.
+ *   For add-on checkouts we pre-create a `workspace_storage_addons`
+ *   row with payment_status='pending'. The cap RPC ignores pending
+ *   rows so the user doesn't get the bigger cap until the webhook
+ *   flips it to 'active'.
  */
 
 interface CheckoutBody {
@@ -41,7 +42,6 @@ interface CheckoutBody {
 function originFromRequest(req: NextRequest): string {
   const fromEnv = process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/$/, "");
   if (fromEnv) return fromEnv;
-  // Fallback to the request origin (works in preview deploys).
   const url = new URL(req.url);
   return `${url.protocol}//${url.host}`;
 }
@@ -70,8 +70,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "workspaceId is required" }, { status: 400 });
   }
 
-  // Verify the user owns this workspace — we don't want a member
-  // upgrading a workspace they don't own.
+  // Verify the user owns this workspace.
   const { data: ws } = await supabase
     .from("workspaces")
     .select("id, user_id, name")
@@ -84,11 +83,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  let productId: string;
-  const metadata: Record<string, string | number> = {
-    user_id: user.id,
-    workspace_id: workspaceId,
+  // Build the typed input for the abstraction.
+  const checkoutInput: CheckoutInput = {
     kind,
+    workspaceId,
+    userId: user.id,
+    userEmail: user.email ?? "",
+    origin: originFromRequest(req),
   };
 
   if (kind === "tier") {
@@ -98,8 +99,7 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    productId = POLAR_TIER_PRODUCTS[tier].product_id;
-    metadata.tier = tier;
+    checkoutInput.tier = tier;
   } else {
     const gb = Number(addon_gb);
     if (!isValidAddonGb(gb) || gb === 0) {
@@ -108,13 +108,9 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    const addon = POLAR_ADDON_PRODUCTS[gb as 500 | 2048 | 10240];
-    productId = addon.product_id;
-    metadata.addon_gb = gb;
+    checkoutInput.addon_gb = gb as 500 | 2048 | 10240;
 
-    // Pre-stage a pending row. Webhook will flip to 'active' on
-    // subscription.created. Done via user-scoped client so RLS
-    // ("owners write addon") still gates this.
+    // Pre-stage a pending row. Webhook flips to 'active' on success.
     const { error: stageErr } = await supabase
       .from("workspace_storage_addons")
       .upsert(
@@ -132,17 +128,9 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const origin = originFromRequest(req);
-  const successUrl = `${origin}/billing/success?checkout_id={CHECKOUT_ID}`;
-
   try {
-    const checkout = await createPolarCheckout({
-      productId,
-      successUrl,
-      customerEmail: user.email ?? undefined,
-      metadata,
-    });
-    return NextResponse.json({ url: checkout.url, id: checkout.id });
+    const result = await createCheckout(checkoutInput);
+    return NextResponse.json(result);
   } catch (err) {
     const message = err instanceof Error ? err.message : "checkout creation failed";
     return NextResponse.json({ error: message }, { status: 502 });
