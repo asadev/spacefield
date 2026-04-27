@@ -5,6 +5,7 @@ import { createPortal } from "react-dom";
 import Link from "next/link";
 import type { WindowState } from "./useWindowManager";
 import { useWorkspaces } from "./useWorkspaces";
+import { usePendingInvites } from "./usePendingInvites";
 
 /* Auth in spacefield is opt-in / not yet wired. Minimal user shape so
  * the avatar / email row can render if a user does sign in later,
@@ -86,6 +87,8 @@ export default function TopBar({
   const barRef = useRef<HTMLDivElement>(null);
   const { workspaces, activeId: activeWorkspaceId, switchWorkspace: onSwitchWorkspace } =
     useWorkspaces();
+  // Pending workspace invites — drives the red dot on the notification bell.
+  const { count: pendingInviteCount } = usePendingInvites();
 
   useEffect(() => {
     setNow(new Date());
@@ -484,14 +487,23 @@ export default function TopBar({
       </span>
 
       {/* Notifications bell — panel itself is rendered by the parent
-       * (NotificationCenter) so it can live above other overlays. */}
+       * (NotificationCenter) so it can live above other overlays.
+       * A red dot appears when the user has pending workspace invites. */}
       <button
         type="button"
         onClick={onOpenNotifications}
-        aria-label="Notifications"
+        aria-label={
+          pendingInviteCount > 0
+            ? `Notifications (${pendingInviteCount} pending invite${pendingInviteCount === 1 ? "" : "s"})`
+            : "Notifications"
+        }
         aria-expanded={notificationsOpen}
-        title="Notifications"
-        className={`flex h-6 w-6 items-center justify-center rounded transition-colors ${
+        title={
+          pendingInviteCount > 0
+            ? `Notifications — ${pendingInviteCount} pending invite${pendingInviteCount === 1 ? "" : "s"}`
+            : "Notifications"
+        }
+        className={`relative flex h-6 w-6 items-center justify-center rounded transition-colors ${
           notificationsOpen ? "bg-surface-strong text-app" : "text-app hover:bg-surface"
         }`}
       >
@@ -499,6 +511,12 @@ export default function TopBar({
           <path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9" />
           <path d="M10.3 21a1.94 1.94 0 003.4 0" />
         </svg>
+        {pendingInviteCount > 0 && (
+          <span
+            aria-hidden="true"
+            className="pointer-events-none absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-[color:var(--bg)]"
+          />
+        )}
       </button>
 
       {/* Profile menu */}

@@ -19,6 +19,7 @@ import { useState, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { developers, type Developer, DATA_UPDATED } from "@/lib/developer-data";
 import type { NativeAppProps } from "../_data/tools-list";
+import MobileSheet from "../_components/MobileSheet";
 
 const ease: [number, number, number, number] = [0.25, 0.46, 0.45, 0.94];
 
@@ -539,6 +540,258 @@ function ToolAppHeader({
 }
 
 /* ------------------------------------------------------------------ */
+/*  Mobile searchable card list                                       */
+/* ------------------------------------------------------------------ */
+
+function MobileSearchableList({
+  search,
+  onSearch,
+  tagFilter,
+  onTagFilter,
+  sortBy,
+  onSortBy,
+  ranked,
+  onTap,
+}: {
+  search: string;
+  onSearch: (v: string) => void;
+  tagFilter: string;
+  onTagFilter: (v: string) => void;
+  sortBy: SortKey;
+  onSortBy: (v: SortKey) => void;
+  ranked: { dev: Developer; rank: number }[];
+  onTap: (id: string) => void;
+}) {
+  return (
+    <main className="px-4 pb-12">
+      {/* Sticky search row */}
+      <div
+        className="sticky z-10 -mx-4 mb-3 border-b border-app bg-app/95 px-4 py-2 backdrop-blur"
+        style={{ top: 0 }}
+      >
+        <div className="relative">
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => onSearch(e.target.value)}
+            placeholder="Search developers, areas, projects"
+            className="w-full h-10 pl-9 pr-3 rounded-xl bg-app-elevated border border-app text-sm text-app placeholder:text-muted outline-none focus:border-tool-accent"
+          />
+          <svg
+            className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted"
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth={2}
+          >
+            <circle cx={11} cy={11} r={8} />
+            <path d="m21 21-4.3-4.3" />
+          </svg>
+        </div>
+        <div className="mt-2 flex items-center gap-2">
+          <select
+            value={tagFilter}
+            onChange={(e) => onTagFilter(e.target.value)}
+            className="flex-1 h-9 px-3 rounded-lg bg-app-elevated border border-app text-xs text-app outline-none focus:border-tool-accent"
+          >
+            {TAG_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                {o.label}
+              </option>
+            ))}
+          </select>
+          <select
+            value={sortBy}
+            onChange={(e) => onSortBy(e.target.value as SortKey)}
+            className="flex-1 h-9 px-3 rounded-lg bg-app-elevated border border-app text-xs text-app outline-none focus:border-tool-accent"
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>
+                Sort: {o.label}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+
+      {/* Card list */}
+      <div className="flex flex-col gap-2">
+        {ranked.map(({ dev, rank }) => (
+          <MobileDevCard
+            key={dev.id}
+            dev={dev}
+            rank={rank}
+            onTap={() => onTap(dev.id)}
+          />
+        ))}
+        {ranked.length === 0 && (
+          <div className="rounded-2xl border border-dashed border-app bg-app-elevated py-12 text-center text-sm text-secondary">
+            No developers match your search.
+          </div>
+        )}
+      </div>
+    </main>
+  );
+}
+
+function MobileDevCard({
+  dev,
+  rank,
+  onTap,
+}: {
+  dev: Developer;
+  rank: number;
+  onTap: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onTap}
+      className="flex w-full items-center gap-3 rounded-xl border border-app bg-app-elevated p-3 text-left transition-colors active:bg-tool-accent-soft"
+    >
+      <div
+        className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-sm font-bold tabular-nums ${
+          rank === 1
+            ? "bg-tool-accent text-white"
+            : rank <= 3
+            ? "bg-tool-accent-soft text-tool-accent"
+            : "bg-app text-secondary ring-1 ring-app"
+        }`}
+      >
+        {rank}
+      </div>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <h3 className="truncate text-sm font-semibold text-app">{dev.name}</h3>
+        </div>
+        <div className="mt-0.5 flex items-center gap-2">
+          <StarRating score={dev.overallScore} />
+          <span className="text-[10px] text-muted tabular-nums">
+            est. {dev.established}
+          </span>
+        </div>
+        <p className="mt-1 truncate text-[11px] text-secondary">
+          {dev.completedProjects} delivered · {dev.ongoingProjects} ongoing · {dev.priceRange}
+        </p>
+      </div>
+      <div className="flex shrink-0 flex-col items-end pl-2">
+        <span className={`text-xl font-bold leading-none tabular-nums ${scoreTone(dev.overallScore)}`}>
+          {dev.overallScore.toFixed(1)}
+        </span>
+        <span className="mt-0.5 text-[9px] uppercase tracking-widest text-muted">Trust</span>
+      </div>
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="shrink-0 text-faint"
+        aria-hidden
+      >
+        <path d="M9 6l6 6-6 6" />
+      </svg>
+    </button>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Developer detail content (used inside mobile sheet)               */
+/* ------------------------------------------------------------------ */
+
+function DeveloperDetailContent({
+  dev,
+  onOpenPipeline,
+}: {
+  dev: Developer;
+  onOpenPipeline: () => void;
+}) {
+  return (
+    <div className="px-5 pb-8">
+      <div className="flex items-center gap-2">
+        <StarRating score={dev.overallScore} />
+        <span className={`text-2xl font-bold tabular-nums ${scoreTone(dev.overallScore)}`}>
+          {dev.overallScore.toFixed(1)}
+        </span>
+        <span className="ml-1 text-[10px] uppercase tracking-widest text-muted">
+          Trust score
+        </span>
+      </div>
+      <p className="mt-1 text-xs text-secondary">
+        Established {dev.established} · {dev.completedProjects} delivered · {dev.ongoingProjects} ongoing
+      </p>
+
+      <div className="mt-4 space-y-2 rounded-2xl border border-app bg-app p-3">
+        <ScoreBar label="Delivery" score={dev.deliveryScore} />
+        <ScoreBar label="Quality" score={dev.qualityScore} />
+        <ScoreBar label="Apprec." score={dev.valueAppreciation} />
+      </div>
+
+      <div className="mt-4">
+        <CompletionRate
+          delivered={dev.completedProjects}
+          ongoing={dev.ongoingProjects}
+        />
+      </div>
+
+      {dev.notableProjects.length > 0 && (
+        <section className="mt-5">
+          <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
+            Notable projects
+          </h4>
+          <div className="flex flex-wrap gap-1.5">
+            {dev.notableProjects.map((p) => (
+              <span
+                key={p}
+                className="rounded-md border border-app bg-app-elevated px-2 py-1 text-[11px] text-secondary"
+              >
+                {p}
+              </span>
+            ))}
+          </div>
+        </section>
+      )}
+
+      {dev.areasPresent.length > 0 && (
+        <section className="mt-5">
+          <h4 className="mb-2 text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
+            Areas
+          </h4>
+          <div className="flex flex-wrap gap-1.5">
+            {dev.areasPresent.map((a) => (
+              <span
+                key={a}
+                className="rounded-md bg-tool-accent-soft px-2 py-1 text-[11px] text-tool-accent"
+              >
+                {a}
+              </span>
+            ))}
+          </div>
+        </section>
+      )}
+
+      <section className="mt-5 rounded-2xl border border-app bg-app-elevated p-4">
+        <h4 className="text-[10px] font-semibold uppercase tracking-[0.2em] text-muted">
+          Price range
+        </h4>
+        <p className="mt-1 text-sm font-semibold text-app">{dev.priceRange}</p>
+      </section>
+
+      <button
+        type="button"
+        onClick={onOpenPipeline}
+        className="mt-6 w-full rounded-xl bg-tool-accent py-3 text-sm font-semibold text-white transition-opacity active:opacity-80"
+      >
+        Open in Developer Pipeline
+      </button>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /*  Native app entry                                                  */
 /* ------------------------------------------------------------------ */
 
@@ -550,6 +803,7 @@ export default function DeveloperTrackRecordApp({
   const [tagFilter, setTagFilter] = useState("all");
   const [sortBy, setSortBy] = useState<SortKey>("overall");
   const [view, setView] = useState<SubView>("leaderboard");
+  const [mobileDetailId, setMobileDetailId] = useState<string | null>(null);
 
   const isMobile = width < 700;
   const stackHeader = width < HEADER_STACK_BREAKPOINT || isMobile;
@@ -621,13 +875,67 @@ export default function DeveloperTrackRecordApp({
   // workspace shell.
   const handleOpenDeveloper = useCallback(
     (id: string) => {
-      // No dedicated developer-detail app exists yet — surface the developer
-      // context to the developer-pipeline tool so the user lands somewhere
-      // useful inside the workspace.
+      // On mobile, surface the developer detail in a slide-up sheet so
+      // the user doesn't have to leave the leaderboard. On desktop the
+      // legacy behaviour stands — push them into the developer-pipeline
+      // workspace where there's room to compare side-by-side.
+      if (isMobile) {
+        setMobileDetailId(id);
+        return;
+      }
       openApp("developer-pipeline", { developer: id });
     },
-    [openApp]
+    [openApp, isMobile]
   );
+
+  const mobileDetailDev = mobileDetailId
+    ? developers.find((d) => d.id === mobileDetailId) ?? null
+    : null;
+
+  if (isMobile) {
+    return (
+      <div
+        data-tool-theme="research"
+        data-tool="developer-track-record"
+        className="tool-shell relative h-full w-full overflow-y-auto bg-app text-app"
+      >
+        <ToolAppHeader
+          total={headlineStats.total}
+          avgDelivery={headlineStats.avgDelivery}
+          topName={headlineStats.topName}
+          topScore={headlineStats.topScore}
+          stack={stackHeader}
+        />
+
+        <MobileSearchableList
+          search={search}
+          onSearch={setSearch}
+          tagFilter={tagFilter}
+          onTagFilter={setTagFilter}
+          sortBy={sortBy}
+          onSortBy={setSortBy}
+          ranked={ranked}
+          onTap={(id) => setMobileDetailId(id)}
+        />
+
+        <MobileSheet
+          open={mobileDetailDev !== null}
+          onClose={() => setMobileDetailId(null)}
+          title={mobileDetailDev?.name ?? "Developer"}
+        >
+          {mobileDetailDev && (
+            <DeveloperDetailContent
+              dev={mobileDetailDev}
+              onOpenPipeline={() => {
+                setMobileDetailId(null);
+                openApp("developer-pipeline", { developer: mobileDetailDev.id });
+              }}
+            />
+          )}
+        </MobileSheet>
+      </div>
+    );
+  }
 
   return (
     <div

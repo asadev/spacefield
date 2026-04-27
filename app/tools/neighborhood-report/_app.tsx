@@ -19,6 +19,7 @@
 
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import type { NativeAppProps } from "../_data/tools-list";
+import MobileSheet from "../_components/MobileSheet";
 import { communities, type Community, DATA_UPDATED } from "@/lib/neighborhood-data";
 import {
   computeAllScores,
@@ -477,6 +478,51 @@ export default function NeighborhoodReportApp({ width, openApp }: NativeAppProps
   // Mobile: collapsible sections + bottom-sheet TOC trigger.
   const [tocOpen, setTocOpen] = useState(false);
 
+  // Sections used by the mobile TOC button. Each entry maps either to
+  // a full top-level tab (so tap → switch tab) or to an anchor inside
+  // the active Overview tab (so tap → smooth scroll). The ones with an
+  // `anchor` only fire when the active tab is "overview".
+  const SECTIONS: Array<{
+    id: string;
+    label: string;
+    tab: SubTab;
+    anchor?: string;
+  }> = useMemo(
+    () => [
+      { id: "overview", label: "Overview", tab: "overview" },
+      { id: "metrics", label: "Headline Metrics", tab: "overview", anchor: "metrics" },
+      { id: "transit", label: "Transit", tab: "overview", anchor: "transit" },
+      { id: "schools", label: "Schools & Family", tab: "overview", anchor: "schools" },
+      { id: "walk", label: "Walk Score", tab: "overview", anchor: "walk" },
+      { id: "trend", label: "5-Year Trend", tab: "overview", anchor: "trend" },
+      { id: "amenities", label: "Amenities", tab: "overview", anchor: "amenities" },
+      { id: "demo", label: "Demographic Mix", tab: "overview", anchor: "demo" },
+      { id: "scores", label: "Scores", tab: "scores" },
+      { id: "directory", label: "Directory", tab: "directory" },
+      { id: "compare", label: "Compare", tab: "compare" },
+      { id: "spotlight", label: "Spotlight", tab: "spotlight" },
+    ],
+    []
+  );
+
+  const handleTocTap = useCallback(
+    (section: typeof SECTIONS[number]) => {
+      setTab(section.tab);
+      setTocOpen(false);
+      if (section.anchor) {
+        // Defer until React has committed the tab switch so the anchor
+        // node exists in the tree.
+        setTimeout(() => {
+          const node = document.querySelector<HTMLElement>(
+            `[data-section="${section.anchor}"]`
+          );
+          node?.scrollIntoView({ behavior: "smooth", block: "start" });
+        }, 80);
+      }
+    },
+    [SECTIONS]
+  );
+
   // ─── compare helpers ─────────────────────────────────────────────────
   const compareItems = useMemo(
     () => compareIds.map((id) => scored.find((c) => c.id === id)).filter(Boolean) as ScoredCommunity[],
@@ -582,6 +628,24 @@ export default function NeighborhoodReportApp({ width, openApp }: NativeAppProps
           </div>
 
           <div className="ml-auto flex items-center gap-1.5">
+            {isMobile && (
+              <button
+                onClick={() => setTocOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-app bg-app px-2.5 py-1.5 text-xs text-secondary active:bg-surface"
+                title="Sections"
+                aria-label="Open sections"
+              >
+                <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <line x1="8" y1="6" x2="21" y2="6" />
+                  <line x1="8" y1="12" x2="21" y2="12" />
+                  <line x1="8" y1="18" x2="21" y2="18" />
+                  <circle cx="4" cy="6" r="1" />
+                  <circle cx="4" cy="12" r="1" />
+                  <circle cx="4" cy="18" r="1" />
+                </svg>
+                Sections
+              </button>
+            )}
             <button onClick={onShare} className="rounded-lg border border-app bg-app px-2.5 py-1.5 text-xs text-secondary hover:text-app hover:border-app-strong transition-colors" title="Share report">
               Share
             </button>
@@ -657,6 +721,54 @@ export default function NeighborhoodReportApp({ width, openApp }: NativeAppProps
           Data as of {DATA_UPDATED}
         </p>
       </div>
+
+      {/* Mobile-only sections bottom-sheet */}
+      <MobileSheet
+        open={isMobile && tocOpen}
+        onClose={() => setTocOpen(false)}
+        title="Sections"
+      >
+        <ul className="px-4 pb-6">
+          {SECTIONS.map((s) => {
+            const isActiveTab = tab === s.tab;
+            const isAnchor = !!s.anchor;
+            return (
+              <li key={s.id}>
+                <button
+                  type="button"
+                  onClick={() => handleTocTap(s)}
+                  className={`flex w-full items-center justify-between gap-3 rounded-xl px-3 py-3 text-left text-sm transition-colors active:bg-surface ${
+                    isActiveTab && !isAnchor
+                      ? "bg-tool-accent-soft text-tool-accent"
+                      : "text-app"
+                  }`}
+                >
+                  <span className={`flex items-center gap-2 ${isAnchor ? "pl-3 text-secondary" : "font-medium"}`}>
+                    {isAnchor && (
+                      <span aria-hidden className="h-1 w-1 rounded-full bg-tool-accent/60" />
+                    )}
+                    {s.label}
+                  </span>
+                  <svg
+                    width="14"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    className="text-faint"
+                    aria-hidden
+                  >
+                    <path d="M9 6l6 6-6 6" />
+                  </svg>
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      </MobileSheet>
     </div>
   );
 }
@@ -716,7 +828,7 @@ function OverviewTab({
 
       {/* KPI ROW — radial dials for the headline metrics. Width-driven columns
        * so they never crowd each other and the row never overflows. */}
-      <div className="rounded-2xl border border-app bg-app-elevated p-5 shadow-card">
+      <div data-section="metrics" className="rounded-2xl border border-app bg-app-elevated p-5 shadow-card">
         <div className="mb-3 flex items-baseline justify-between">
           <h2 className="text-[10px] uppercase tracking-[0.24em] text-tool-accent font-semibold">Headline Metrics</h2>
           <span className="text-[10px] uppercase tracking-[0.16em] text-muted">vs Dubai-wide averages</span>
@@ -744,7 +856,7 @@ function OverviewTab({
       {/* PANELS — transit / school / walk */}
       <div className={`grid ${gridClass} gap-3`}>
         {/* Transit panel */}
-        <div className="rounded-2xl border border-app bg-app-elevated p-5">
+        <div data-section="transit" className="rounded-2xl border border-app bg-app-elevated p-5">
           <div className="flex items-center gap-2 mb-3">
             <div className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-tool-accent-soft text-tool-accent">
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -778,7 +890,7 @@ function OverviewTab({
         </div>
 
         {/* Schools panel */}
-        <div className="rounded-2xl border border-app bg-app-elevated p-5">
+        <div data-section="schools" className="rounded-2xl border border-app bg-app-elevated p-5">
           <div className="flex items-center gap-2 mb-3">
             <div className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-tool-accent-soft text-tool-accent">
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -813,7 +925,7 @@ function OverviewTab({
         </div>
 
         {/* Walk score panel */}
-        <div className="rounded-2xl border border-app bg-app-elevated p-5">
+        <div data-section="walk" className="rounded-2xl border border-app bg-app-elevated p-5">
           <div className="flex items-center gap-2 mb-3">
             <div className="inline-flex h-7 w-7 items-center justify-center rounded-lg bg-tool-accent-soft text-tool-accent">
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -853,7 +965,7 @@ function OverviewTab({
       {/* PRICE TREND + AMENITIES + DEMOGRAPHICS */}
       <div className={`grid ${gridClass} gap-3`}>
         {/* 5-year trend */}
-        <div className="rounded-2xl border border-app bg-app-elevated p-5">
+        <div data-section="trend" className="rounded-2xl border border-app bg-app-elevated p-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold tracking-tight">5-Year Price Trend</h3>
             <span className="text-[10px] uppercase tracking-[0.16em] text-muted">AED / sqft</span>
@@ -867,7 +979,7 @@ function OverviewTab({
         </div>
 
         {/* Amenities counts */}
-        <div className="rounded-2xl border border-app bg-app-elevated p-5">
+        <div data-section="amenities" className="rounded-2xl border border-app bg-app-elevated p-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold tracking-tight">Nearby Amenities</h3>
             <span className="text-[10px] uppercase tracking-[0.16em] text-muted">within walking</span>
@@ -883,7 +995,7 @@ function OverviewTab({
         </div>
 
         {/* Demographics */}
-        <div className="rounded-2xl border border-app bg-app-elevated p-5">
+        <div data-section="demo" className="rounded-2xl border border-app bg-app-elevated p-5">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold tracking-tight">Demographic Mix</h3>
             <span className="text-[10px] uppercase tracking-[0.16em] text-muted">est. resident profile</span>

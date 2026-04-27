@@ -42,9 +42,16 @@ import {
 import { useTheme } from "@/components/ThemeProvider";
 import { TOOL_ICONS, TOOLS, toolBySlug, type NativeAppProps } from "../_data/tools-list";
 import DesktopBackground from "./DesktopBackground";
+import MobileSheet, { SheetList, SheetRow } from "./MobileSheet";
+// Re-exports — MobileShell consumers used to import these primitives from
+// here. They now live in MobileSheet so RE apps can share them. We keep
+// the old names alive so nothing else has to move.
+const BottomSheet = MobileSheet;
+export { BottomSheet, SheetList, SheetRow };
 import { useAuth } from "./useAuth";
 import { useDockOrder } from "./useDockOrder";
 import { useInstalledTools } from "./useInstalledTools";
+import { usePendingInvites } from "./usePendingInvites";
 import { useWindowManager, type WindowState } from "./useWindowManager";
 import { useWorkspaces } from "./useWorkspaces";
 import { useWorkspaceRole } from "./useWorkspaceRole";
@@ -67,6 +74,9 @@ export default function MobileShell() {
   const { workspaces, activeId, switchWorkspace } = useWorkspaces();
   const { canAdmin } = useWorkspaceRole();
   const { resolved } = useTheme();
+  // Pending workspace invites — drives the red dot on the status-bar bell.
+  const { count: pendingInviteCount, refresh: refreshPendingInvites } =
+    usePendingInvites();
   const {
     windows,
     hydrated: windowsHydrated,
@@ -227,7 +237,14 @@ export default function MobileShell() {
           workspaceName={activeWorkspace?.name ?? "Personal"}
           onWorkspaceTap={() => setWorkspaceMenuOpen(true)}
           onAvatarTap={() => setUserMenuOpen(true)}
-          onNotificationsTap={() => setNotificationsOpen(true)}
+          onNotificationsTap={() => {
+            // Refresh pending-invite count when the user opens the panel
+            // — they're about to act on it; sync immediately so the badge
+            // disappears as soon as they accept/decline.
+            refreshPendingInvites();
+            setNotificationsOpen(true);
+          }}
+          pendingInviteCount={pendingInviteCount}
           user={user}
         />
 
@@ -376,12 +393,14 @@ function MobileStatusBar({
   onWorkspaceTap,
   onAvatarTap,
   onNotificationsTap,
+  pendingInviteCount,
   user,
 }: {
   workspaceName: string;
   onWorkspaceTap: () => void;
   onAvatarTap: () => void;
   onNotificationsTap: () => void;
+  pendingInviteCount: number;
   user: ReturnType<typeof useAuth>["user"];
 }) {
   const [time, setTime] = useState<string>(() => formatTime(new Date()));
@@ -421,8 +440,12 @@ function MobileStatusBar({
         <button
           type="button"
           onClick={onNotificationsTap}
-          aria-label="Notifications"
-          className="flex h-7 w-7 items-center justify-center rounded-full text-app transition-colors active:bg-surface"
+          aria-label={
+            pendingInviteCount > 0
+              ? `Notifications (${pendingInviteCount} pending invite${pendingInviteCount === 1 ? "" : "s"})`
+              : "Notifications"
+          }
+          className="relative flex h-7 w-7 items-center justify-center rounded-full text-app transition-colors active:bg-surface"
         >
           <svg
             width="14"
@@ -438,6 +461,12 @@ function MobileStatusBar({
             <path d="M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9" />
             <path d="M10.3 21a1.94 1.94 0 003.4 0" />
           </svg>
+          {pendingInviteCount > 0 && (
+            <span
+              aria-hidden="true"
+              className="pointer-events-none absolute right-0.5 top-0.5 h-2 w-2 rounded-full bg-rose-500 ring-2 ring-[color:var(--bg)]"
+            />
+          )}
         </button>
         <button
           type="button"
@@ -1350,134 +1379,8 @@ function WorkspaceSheet({
   );
 }
 
-/* ──────────── Bottom-sheet primitive ──────────── */
-
-export function BottomSheet({
-  open,
-  onClose,
-  title,
-  children,
-}: {
-  open: boolean;
-  onClose: () => void;
-  title?: string;
-  children: React.ReactNode;
-}) {
-  // Lock body scroll while open.
-  useEffect(() => {
-    if (!open || typeof document === "undefined") return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    return () => {
-      document.body.style.overflow = prev;
-    };
-  }, [open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
-
-  return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.2 }}
-          className="fixed inset-0 z-[80]"
-          role="dialog"
-          aria-modal="true"
-          aria-label={title}
-        >
-          <button
-            type="button"
-            aria-label="Close"
-            onClick={onClose}
-            className="absolute inset-0 cursor-default bg-black/45 backdrop-blur-sm"
-          />
-          <motion.div
-            initial={{ y: "100%" }}
-            animate={{ y: 0 }}
-            exit={{ y: "100%" }}
-            transition={{ type: "tween", ease: EASE, duration: 0.32 }}
-            drag="y"
-            dragConstraints={{ top: 0, bottom: 0 }}
-            dragElastic={0.3}
-            onDragEnd={(_, info) => {
-              if (info.offset.y > 100 || info.velocity.y > 600) onClose();
-            }}
-            className="absolute inset-x-0 bottom-0 max-h-[88dvh] overflow-y-auto rounded-t-[24px] border-t border-app bg-app-elevated shadow-2xl"
-            style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-          >
-            <div className="sticky top-0 z-10 flex flex-col items-center bg-app-elevated/95 pt-2 backdrop-blur">
-              <div className="h-1 w-10 rounded-full bg-app/30" aria-hidden="true" />
-              {title && (
-                <div className="px-5 py-3 text-base font-semibold text-app">
-                  {title}
-                </div>
-              )}
-            </div>
-            {children}
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
-  );
-}
-
-export function SheetList({ children }: { children: React.ReactNode }) {
-  return (
-    <div className="mt-4 overflow-hidden rounded-2xl border border-app bg-app divide-y divide-[color:var(--border)]">
-      {children}
-    </div>
-  );
-}
-
-export function SheetRow({
-  label,
-  trailing,
-  onClick,
-  destructive,
-}: {
-  label: string;
-  trailing?: React.ReactNode;
-  onClick?: () => void;
-  destructive?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`flex w-full items-center justify-between gap-3 px-4 py-3.5 text-left text-sm transition-colors active:bg-surface ${
-        destructive ? "text-rose-500" : "text-app"
-      }`}
-    >
-      <span className="truncate">{label}</span>
-      <span className="flex shrink-0 items-center gap-1.5 text-[13px] text-secondary">
-        {trailing}
-        {!trailing || typeof trailing === "string" ? (
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="2"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-            className="text-faint"
-          >
-            <path d="M9 6l6 6-6 6" />
-          </svg>
-        ) : null}
-      </span>
-    </button>
-  );
-}
+/* ──────────── Bottom-sheet primitive (BottomSheet/SheetList/SheetRow)
+ *  is implemented in ./MobileSheet.tsx and re-exported at the top of this
+ *  file so existing imports from "./MobileShell" continue to work. The
+ *  primitive lives in its own file so individual RE apps can use it
+ *  without pulling in the entire shell. ──────────── */

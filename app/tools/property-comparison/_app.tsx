@@ -16,7 +16,7 @@
    variants). data-tool-theme="research" scopes the research accent.
 ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { NativeAppProps } from "../_data/tools-list";
 
@@ -472,6 +472,120 @@ function PropertyCard({
         Edit Details
       </button>
     </motion.div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  PropertyCarousel — mobile-only swipeable card stack               */
+/* ------------------------------------------------------------------ */
+
+function PropertyCarousel({
+  properties,
+  allMetrics,
+  onUpdate,
+  onRemove,
+  onImageUpload,
+  onEdit,
+  sectionPadX,
+}: {
+  properties: PropertyInput[];
+  allMetrics: Record<string, number | string | null>[];
+  onUpdate: (id: string, field: keyof PropertyInput, value: string) => void;
+  onRemove: (id: string) => void;
+  onImageUpload: (id: string, data: string | null) => void;
+  onEdit: (id: string) => void;
+  sectionPadX: number;
+}) {
+  const trackRef = useRef<HTMLDivElement>(null);
+  const [active, setActive] = useState(0);
+
+  // Drive the active dot off the visible card via scroll-snap. We sample
+  // the closest card-center to the viewport-center on every scroll tick.
+  useEffect(() => {
+    const el = trackRef.current;
+    if (!el) return;
+    const handleScroll = () => {
+      const left = el.scrollLeft;
+      const cardWidth = el.clientWidth;
+      if (cardWidth <= 0) return;
+      const idx = Math.round(left / cardWidth);
+      setActive(Math.max(0, Math.min(properties.length - 1, idx)));
+    };
+    el.addEventListener("scroll", handleScroll, { passive: true });
+    handleScroll();
+    return () => {
+      el.removeEventListener("scroll", handleScroll);
+    };
+  }, [properties.length]);
+
+  // Reset the active index to 0 when properties change so we don't keep
+  // a stale dot lit when a card is removed.
+  useEffect(() => {
+    setActive(0);
+    trackRef.current?.scrollTo({ left: 0, behavior: "auto" });
+  }, [properties.length]);
+
+  const handleDot = (idx: number) => {
+    const el = trackRef.current;
+    if (!el) return;
+    el.scrollTo({ left: idx * el.clientWidth, behavior: "smooth" });
+  };
+
+  return (
+    <div className="py-4">
+      <div
+        ref={trackRef}
+        className="flex w-full snap-x snap-mandatory overflow-x-auto scroll-smooth gap-3"
+        style={{
+          paddingLeft: sectionPadX,
+          paddingRight: sectionPadX,
+          // Hide the scrollbar — tiny gesture handle is the dot row.
+          scrollbarWidth: "none",
+        }}
+      >
+        {properties.map((prop, i) => (
+          <div
+            key={prop.id}
+            className="snap-start shrink-0"
+            style={{ width: `calc(100% - ${sectionPadX * 2}px)` }}
+          >
+            <PropertyCard
+              property={prop}
+              index={i}
+              canRemove={properties.length > 2}
+              metrics={allMetrics[i]}
+              onUpdate={onUpdate}
+              onRemove={onRemove}
+              onImageUpload={onImageUpload}
+              onEdit={() => onEdit(prop.id)}
+            />
+          </div>
+        ))}
+      </div>
+
+      {/* Page-indicator dot row */}
+      <div
+        className="mt-3 flex items-center justify-center gap-1.5"
+        aria-hidden={properties.length <= 1}
+      >
+        {properties.map((p, i) => {
+          const isActive = i === active;
+          return (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => handleDot(i)}
+              aria-label={`Show property ${i + 1}`}
+              className={`h-1.5 rounded-full transition-all ${
+                isActive
+                  ? "w-5 bg-tool-accent"
+                  : "w-1.5 bg-app-elevated ring-1 ring-app"
+              }`}
+            />
+          );
+        })}
+      </div>
+    </div>
   );
 }
 
@@ -1065,29 +1179,41 @@ export default function PropertyComparisonApp({ width }: NativeAppProps) {
             </div>
           </div>
 
-          {/* Card stack */}
-          <div
-            className="py-5"
-            style={{ paddingLeft: sectionPadX, paddingRight: sectionPadX }}
-          >
-            <AnimatePresence mode="popLayout">
-              <div className="grid gap-4" style={cardGridStyle}>
-                {properties.map((prop, i) => (
-                  <PropertyCard
-                    key={prop.id}
-                    property={prop}
-                    index={i}
-                    canRemove={properties.length > 2}
-                    metrics={allMetrics[i]}
-                    onUpdate={updateProperty}
-                    onRemove={removeProperty}
-                    onImageUpload={handleImageUpload}
-                    onEdit={() => setEditId(prop.id)}
-                  />
-                ))}
-              </div>
-            </AnimatePresence>
-          </div>
+          {/* Card stack — desktop grid OR mobile swipe carousel */}
+          {isMobile ? (
+            <PropertyCarousel
+              properties={properties}
+              allMetrics={allMetrics}
+              onUpdate={updateProperty}
+              onRemove={removeProperty}
+              onImageUpload={handleImageUpload}
+              onEdit={(id) => setEditId(id)}
+              sectionPadX={sectionPadX}
+            />
+          ) : (
+            <div
+              className="py-5"
+              style={{ paddingLeft: sectionPadX, paddingRight: sectionPadX }}
+            >
+              <AnimatePresence mode="popLayout">
+                <div className="grid gap-4" style={cardGridStyle}>
+                  {properties.map((prop, i) => (
+                    <PropertyCard
+                      key={prop.id}
+                      property={prop}
+                      index={i}
+                      canRemove={properties.length > 2}
+                      metrics={allMetrics[i]}
+                      onUpdate={updateProperty}
+                      onRemove={removeProperty}
+                      onImageUpload={handleImageUpload}
+                      onEdit={() => setEditId(prop.id)}
+                    />
+                  ))}
+                </div>
+              </AnimatePresence>
+            </div>
+          )}
 
           {/* Comparison area */}
           <AnimatePresence mode="wait">

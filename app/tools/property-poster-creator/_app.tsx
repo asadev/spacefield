@@ -704,6 +704,310 @@ const PROPERTY_DEFAULTS = {
 };
 
 /* ═══════════════════════════════════════════
+   MOBILE FLOW — full-screen 4-tab wizard
+   ═══════════════════════════════════════════ */
+
+type MobilePosterTab = "template" | "listing" | "branding" | "preview";
+
+const MOBILE_TABS: { id: MobilePosterTab; label: string }[] = [
+  { id: "template", label: "Template" },
+  { id: "listing", label: "Listing" },
+  { id: "branding", label: "Branding" },
+  { id: "preview", label: "Preview" },
+];
+
+function PosterMobileFlow({
+  templates,
+  selectedTemplate,
+  setSelectedTemplate,
+  data,
+  updateField,
+  downloadFormat,
+  setDownloadFormat,
+  currentFormat,
+  sizeChip,
+  PosterTemplate,
+  activeRef,
+  exporting,
+  onExport,
+  onReset,
+}: {
+  templates: TemplateConfig[];
+  selectedTemplate: TemplateId;
+  setSelectedTemplate: (id: TemplateId) => void;
+  data: PosterData;
+  updateField: <K extends keyof PosterData>(key: K, value: PosterData[K]) => void;
+  downloadFormat: DownloadFormat;
+  setDownloadFormat: (f: DownloadFormat) => void;
+  currentFormat: PosterFormat;
+  sizeChip: string;
+  PosterTemplate: React.ComponentType<{ data: PosterData; posterRef: React.RefObject<HTMLDivElement | null>; format: PosterFormat }>;
+  activeRef: React.RefObject<HTMLDivElement | null>;
+  exporting: boolean;
+  onExport: () => void;
+  onReset: () => void;
+}) {
+  const [tab, setTab] = useState<MobilePosterTab>("template");
+  const tabIndex = MOBILE_TABS.findIndex((t) => t.id === tab);
+  const goNext = () => {
+    if (tabIndex < MOBILE_TABS.length - 1) setTab(MOBILE_TABS[tabIndex + 1].id);
+  };
+  const goPrev = () => {
+    if (tabIndex > 0) setTab(MOBILE_TABS[tabIndex - 1].id);
+  };
+
+  return (
+    <div
+      data-tool-theme="agent"
+      data-tool="property-poster-creator"
+      className="tool-shell flex h-full w-full flex-col overflow-hidden bg-app"
+    >
+      {/* Top tab bar */}
+      <div className="flex items-center gap-1 border-b border-app bg-app-elevated px-2 py-2 flex-shrink-0">
+        {MOBILE_TABS.map((t) => {
+          const active = tab === t.id;
+          return (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={`relative flex-1 rounded-lg px-2 py-2 text-[11px] font-medium transition-colors ${
+                active
+                  ? "bg-tool-accent-soft text-tool-accent"
+                  : "text-secondary active:bg-app"
+              }`}
+            >
+              {t.label}
+              {active && (
+                <span
+                  aria-hidden
+                  className="absolute -bottom-2 left-1/2 h-[2px] w-6 -translate-x-1/2 rounded-full bg-tool-accent"
+                />
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Tab body */}
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-4 pb-[calc(env(safe-area-inset-bottom)+88px)]">
+        {tab === "template" && (
+          <div className="grid grid-cols-2 gap-3">
+            {templates.map((t) => {
+              const selected = selectedTemplate === t.id;
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  onClick={() => setSelectedTemplate(t.id)}
+                  className={`flex flex-col items-start gap-1.5 rounded-xl border p-3 text-left transition-colors active:scale-[0.98] ${
+                    selected
+                      ? "border-tool-accent bg-tool-accent-soft"
+                      : "border-app bg-app-elevated"
+                  }`}
+                >
+                  <span className={`text-[10px] font-semibold uppercase tracking-[0.18em] ${selected ? "text-tool-accent" : "text-muted"}`}>
+                    {selected ? "Selected" : "Template"}
+                  </span>
+                  <h3 className={`text-sm font-semibold ${selected ? "text-tool-accent" : "text-app"}`}>
+                    {t.name}
+                  </h3>
+                  <p className="text-[11px] leading-relaxed text-secondary">
+                    {t.description}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {tab === "listing" && (
+          <div className="space-y-3">
+            <FormField label="Status Badge">
+              <SelectInput value={data.statusLabel} onChange={(v) => updateField("statusLabel", v)} options={STATUS_OPTIONS} />
+            </FormField>
+            <FormField label="Title">
+              <TextInput value={data.propertyTitle} onChange={(v) => updateField("propertyTitle", v)} placeholder="Stunning Waterfront Residence" />
+            </FormField>
+            <FormField label="Type">
+              <SelectInput value={data.propertyType} onChange={(v) => updateField("propertyType", v)} options={PROPERTY_TYPES} />
+            </FormField>
+            <FormField label="Location">
+              <TextInput value={data.location} onChange={(v) => updateField("location", v)} placeholder="Dubai Marina, Dubai" />
+            </FormField>
+            <FormField label="Price (AED)">
+              <TextInput value={data.price} onChange={(v) => updateField("price", v)} placeholder="2,500,000" />
+            </FormField>
+            <div className="grid grid-cols-3 gap-2">
+              <FormField label="Beds"><TextInput value={data.bedrooms} onChange={(v) => updateField("bedrooms", v)} placeholder="2" /></FormField>
+              <FormField label="Baths"><TextInput value={data.bathrooms} onChange={(v) => updateField("bathrooms", v)} placeholder="3" /></FormField>
+              <FormField label="Sqft"><TextInput value={data.area} onChange={(v) => updateField("area", v)} placeholder="1,450" /></FormField>
+            </div>
+            <FormField label="Highlights">
+              <TextInput value={data.features} onChange={(v) => updateField("features", v)} placeholder="Sea View · Smart Home" />
+            </FormField>
+            <FormField label="Main Photo">
+              <ImageSlot image={data.propertyImage} onChange={(img) => updateField("propertyImage", img)} onRemove={() => updateField("propertyImage", null)} label="Add main property photo" />
+            </FormField>
+            {selectedTemplate === "multi-photo" && (
+              <>
+                <FormField label="Second Photo">
+                  <ImageSlot image={data.propertyImage2} onChange={(img) => updateField("propertyImage2", img)} onRemove={() => updateField("propertyImage2", null)} label="Add second photo" />
+                </FormField>
+                <FormField label="Third Photo">
+                  <ImageSlot image={data.propertyImage3} onChange={(img) => updateField("propertyImage3", img)} onRemove={() => updateField("propertyImage3", null)} label="Add third photo" />
+                </FormField>
+              </>
+            )}
+            <button
+              type="button"
+              onClick={onReset}
+              className="w-full rounded-xl border border-app bg-app-elevated py-2.5 text-xs font-medium text-secondary active:bg-surface"
+            >
+              Reset listing fields
+            </button>
+          </div>
+        )}
+
+        {tab === "branding" && (
+          <div className="space-y-3">
+            <FormField label="Agent Name">
+              <TextInput value={data.agentName} onChange={(v) => updateField("agentName", v)} placeholder="Your name" />
+            </FormField>
+            <FormField label="Phone">
+              <TextInput value={data.agentPhone} onChange={(v) => updateField("agentPhone", v)} placeholder="+971 50 123 4567" />
+            </FormField>
+            <FormField label="Email">
+              <TextInput value={data.agentEmail} onChange={(v) => updateField("agentEmail", v)} placeholder="agent@company.com" />
+            </FormField>
+            <FormField label="Company">
+              <TextInput value={data.companyName} onChange={(v) => updateField("companyName", v)} placeholder="Your brokerage" />
+            </FormField>
+            <div className="space-y-2 rounded-xl border border-app bg-app-elevated p-3">
+              <Toggle checked={data.showAgentPhoto} onChange={(v) => updateField("showAgentPhoto", v)} label="Show agent photo" />
+              <Toggle checked={data.showLogo} onChange={(v) => updateField("showLogo", v)} label="Show company logo" />
+            </div>
+            {data.showAgentPhoto && (
+              <FormField label="Agent Photo">
+                <ImageSlot image={data.agentPhoto} onChange={(img) => updateField("agentPhoto", img)} onRemove={() => updateField("agentPhoto", null)} label="Upload photo" aspect="aspect-square" circular className="max-w-[140px]" />
+              </FormField>
+            )}
+            {data.showLogo && (
+              <FormField label="Company Logo">
+                <ImageSlot image={data.logoImage} onChange={(img) => updateField("logoImage", img)} onRemove={() => updateField("logoImage", null)} label="Upload logo" aspect="aspect-[3/1]" className="max-w-[200px]" />
+              </FormField>
+            )}
+          </div>
+        )}
+
+        {tab === "preview" && (
+          <div className="flex flex-col items-center gap-3">
+            <div className="flex w-full items-center justify-between rounded-lg border border-app bg-app-elevated px-3 py-2">
+              <span className="text-[11px] font-medium uppercase tracking-[0.18em] text-muted">Format</span>
+              <span className="rounded-full bg-tool-accent-soft px-2 py-0.5 font-mono text-[11px] tabular-nums text-tool-accent">
+                {sizeChip}
+              </span>
+            </div>
+            <div className="flex w-full items-center rounded-lg border border-app bg-app p-0.5">
+              {([
+                { id: "jpg" as const, label: "JPG" },
+                { id: "png" as const, label: "PNG" },
+                { id: "story" as const, label: "Story" },
+              ]).map((f) => {
+                const active = downloadFormat === f.id;
+                return (
+                  <button
+                    key={f.id}
+                    type="button"
+                    onClick={() => setDownloadFormat(f.id)}
+                    className={`flex-1 rounded-md py-1.5 text-[12px] font-medium transition-colors ${
+                      active
+                        ? "bg-tool-accent text-white shadow-sm"
+                        : "text-secondary"
+                    }`}
+                  >
+                    {f.label}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="w-full overflow-hidden rounded-xl border border-app bg-[#f3f1ec] dark:bg-[#0b0e11] p-4">
+              <div
+                className="mx-auto overflow-hidden rounded-md shadow-2xl ring-1 ring-black/10"
+                style={{
+                  maxWidth: currentFormat === "story" ? "260px" : selectedTemplate === "bold-gradient" ? "320px" : "280px",
+                }}
+              >
+                <PosterTemplate data={data} posterRef={activeRef} format={currentFormat} />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Sticky bottom action bar */}
+      <div
+        className="border-t border-app bg-app-elevated px-4 pt-2 flex-shrink-0"
+        style={{ paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 8px)" }}
+      >
+        {tab === "preview" ? (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={goPrev}
+              className="rounded-xl border border-app bg-app px-4 py-2.5 text-xs font-medium text-secondary active:bg-surface"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              onClick={onExport}
+              disabled={exporting}
+              className="flex flex-1 items-center justify-center gap-2 rounded-xl bg-tool-accent py-2.5 text-sm font-semibold text-white active:opacity-80 disabled:opacity-60"
+            >
+              {exporting ? (
+                <>
+                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24" aria-hidden>
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Exporting…
+                </>
+              ) : (
+                <>
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5} aria-hidden>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
+                  </svg>
+                  Download
+                </>
+              )}
+            </button>
+          </div>
+        ) : (
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={goPrev}
+              disabled={tabIndex === 0}
+              className="rounded-xl border border-app bg-app px-4 py-2.5 text-xs font-medium text-secondary active:bg-surface disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              Back
+            </button>
+            <button
+              type="button"
+              onClick={goNext}
+              className="flex-1 rounded-xl bg-tool-accent py-2.5 text-sm font-semibold text-white active:opacity-80"
+            >
+              Next
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ═══════════════════════════════════════════
    MAIN NATIVE APP
    ═══════════════════════════════════════════ */
 
@@ -964,6 +1268,32 @@ export default function PropertyPosterCreatorApp({ width }: NativeAppProps) {
       </div>
     </aside>
   );
+
+  // ───── Mobile-only flow: full-screen tabbed wizard.
+  // We reuse the existing per-tab state (`activePanel`) but extend it
+  // with two extra tabs ("template" / "preview") that are mobile-only.
+  // Type widening is local to this branch so the desktop side-panel
+  // keeps its narrower union.
+  if (isMobile) {
+    return (
+      <PosterMobileFlow
+        templates={TEMPLATES}
+        selectedTemplate={selectedTemplate}
+        setSelectedTemplate={setSelectedTemplate}
+        data={data}
+        updateField={updateField}
+        downloadFormat={downloadFormat}
+        setDownloadFormat={setDownloadFormat}
+        currentFormat={currentFormat}
+        sizeChip={sizeChip}
+        PosterTemplate={PosterTemplate}
+        activeRef={activeRef}
+        exporting={exporting}
+        onExport={handleExport}
+        onReset={handleReset}
+      />
+    );
+  }
 
   return (
     <div
