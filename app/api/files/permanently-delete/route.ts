@@ -1,18 +1,19 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { deleteR2Object } from "@/lib/r2";
 
-/* DELETE /api/files/delete?id=<fileId>
+/* DELETE /api/files/permanently-delete
+ *   body: { fileId }
  *
- * SOFT-DELETE — sets deleted_at = now() instead of removing the row.
- * The R2 object is preserved so the user can restore from Trash.
- * Permanent deletion (R2 + DB row drop) lives at
- * /api/files/permanently-delete and is the lifecycle exit from Trash.
+ * Hard-deletes a workspace_files row + its R2 object. Caller must be a
+ * member of the file's workspace. There is no undo. Used by the Trash
+ * view's "Delete forever" action.
  *
- * Aliased to the same membership logic used by /api/files/trash so
- * legacy callers keep working without a client-side change.
+ * R2 delete is best-effort: if it fails we still drop the DB row (a
+ * tiny orphan in R2 is preferable to a stuck row that re-counts against
+ * the workspace quota forever). The sweeper endpoint can clean orphans.
  */
-
 export async function DELETE(req: NextRequest) {
   const supabase = await createClient();
   const {
@@ -21,20 +22,29 @@ export async function DELETE(req: NextRequest) {
   if (!user)
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const id = req.nextUrl.searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
+  let body: { fileId?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "invalid json" }, { status: 400 });
+  }
+  const { fileId } = body;
+  if (!fileId) {
+    return NextResponse.json({ error: "missing fields" }, { status: 400 });
+  }
 
   const admin = createAdminClient();
+
   const { data: file, error: fileErr } = await admin
     .from("workspace_files")
-    .select("id, workspace_id, user_id")
-    .eq("id", id)
+    .select("id, workspace_id, user_id, r2_key")
+    .eq("id", fileId)
     .maybeSingle();
   if (fileErr) {
     return NextResponse.json({ error: fileErr.message }, { status: 500 });
   }
   if (!file) {
-    return NextResponse.json({ error: "not found" }, { status: 404 });
+    return NextResponse.json({ error: "file_not_found" }, { status: 404 });
   }
 
   const { data: ws } = await admin
@@ -71,13 +81,23 @@ export async function DELETE(req: NextRequest) {
     );
   }
 
-  const { error } = await admin
-    .from("workspace_files")
-    .update({ deleted_at: new Date().toISOString() })
-    .eq("id", id);
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+  // R2 first — if this fails we'll still delete the row (best-effort).
+  try {
+    await deleteR2Object(file.r2_key);
+  } catch (err) {
+    console.warn(
+      "[files/permanently-delete] r2 delete failed (orphan):",
+      err
+    );
   }
 
-  return NextResponse.json({ ok: true, soft: true });
+  const { error: delErr } = await admin
+    .from("workspace_files")
+    .delete()
+    .eq("id", fileId);
+  if (delErr) {
+    return NextResponse.json({ error: delErr.message }, { status: 400 });
+  }
+
+  return NextResponse.json({ ok: true });
 }

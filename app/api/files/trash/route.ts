@@ -2,18 +2,18 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
-/* DELETE /api/files/delete?id=<fileId>
+/* POST /api/files/trash
+ *   body: { fileId }
+ *   returns: { file }
  *
- * SOFT-DELETE — sets deleted_at = now() instead of removing the row.
- * The R2 object is preserved so the user can restore from Trash.
- * Permanent deletion (R2 + DB row drop) lives at
- * /api/files/permanently-delete and is the lifecycle exit from Trash.
+ * Soft-deletes a file by setting deleted_at = now(). The R2 object stays
+ * put — restore() and permanently-delete() are the lifecycle exits.
  *
- * Aliased to the same membership logic used by /api/files/trash so
- * legacy callers keep working without a client-side change.
+ * Auth: caller must be a member of the file's workspace. Membership
+ * lookup via service-role to dodge RLS visibility quirks; same self-heal
+ * pattern as the upload/rename routes.
  */
-
-export async function DELETE(req: NextRequest) {
+export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -21,20 +21,29 @@ export async function DELETE(req: NextRequest) {
   if (!user)
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  const id = req.nextUrl.searchParams.get("id");
-  if (!id) return NextResponse.json({ error: "missing id" }, { status: 400 });
+  let body: { fileId?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "invalid json" }, { status: 400 });
+  }
+  const { fileId } = body;
+  if (!fileId) {
+    return NextResponse.json({ error: "missing fields" }, { status: 400 });
+  }
 
   const admin = createAdminClient();
+
   const { data: file, error: fileErr } = await admin
     .from("workspace_files")
     .select("id, workspace_id, user_id")
-    .eq("id", id)
+    .eq("id", fileId)
     .maybeSingle();
   if (fileErr) {
     return NextResponse.json({ error: fileErr.message }, { status: 500 });
   }
   if (!file) {
-    return NextResponse.json({ error: "not found" }, { status: 404 });
+    return NextResponse.json({ error: "file_not_found" }, { status: 404 });
   }
 
   const { data: ws } = await admin
@@ -71,13 +80,17 @@ export async function DELETE(req: NextRequest) {
     );
   }
 
-  const { error } = await admin
+  const { data: updated, error: updErr } = await admin
     .from("workspace_files")
     .update({ deleted_at: new Date().toISOString() })
-    .eq("id", id);
-  if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    .eq("id", fileId)
+    .select(
+      "id, name, size_bytes, content_type, created_at, user_id, workspace_id, deleted_at, tags"
+    )
+    .single();
+  if (updErr) {
+    return NextResponse.json({ error: updErr.message }, { status: 400 });
   }
 
-  return NextResponse.json({ ok: true, soft: true });
+  return NextResponse.json({ file: updated });
 }
