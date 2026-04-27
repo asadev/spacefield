@@ -1386,8 +1386,24 @@ export default function DocumentsApp({
         <div
           data-doc-scroll
           className="relative flex-1 overflow-y-auto bg-app"
+          // Click anywhere in the scroll body that isn't a child of
+          // the editor (the padding margins, the empty space below
+          // the document) → focus the editor at the end. Without
+          // this the user has to land their cursor exactly on the
+          // prose-doc text area, which feels like the editor is
+          // unresponsive everywhere else.
+          onMouseDown={(e) => {
+            if (!editor) return;
+            const t = e.target as HTMLElement;
+            if (t.closest(".ProseMirror")) return;
+            // Don't steal focus from interactive elements that might
+            // sit in this region in the future.
+            if (t.closest("button, a, input, textarea, [contenteditable]")) return;
+            e.preventDefault();
+            editor.chain().focus("end").run();
+          }}
         >
-          <div className="mx-auto max-w-3xl px-6 py-8">
+          <div className="mx-auto max-w-3xl px-6 py-8 min-h-full">
             {isLoading ? (
               <EditorSkeleton />
             ) : (
