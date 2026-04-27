@@ -230,6 +230,32 @@ function DesktopApp() {
     return () => document.removeEventListener("keydown", onKey);
   }, []);
 
+  // Invite link handler: when the user lands at /?invite=<id>, jump
+  // straight into Settings → Workspaces so the pending-invite list +
+  // accept/decline buttons are visible. Email links from the workspace
+  // invite flow point at this URL pattern. We strip the param from the
+  // address bar afterwards so a refresh doesn't re-trigger.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const inviteId = params.get("invite");
+    if (!inviteId) return;
+    // Defer one tick so the rest of DesktopApp finishes mounting (the
+    // SettingsPanel's WorkspacesPane queries for invites on mount).
+    const t = window.setTimeout(() => {
+      setSettingsSection("workspaces");
+      setSettingsOpen(true);
+    }, 60);
+    // Clean the URL so subsequent reloads don't repeat the action.
+    params.delete("invite");
+    const next =
+      window.location.pathname +
+      (params.toString() ? `?${params.toString()}` : "") +
+      window.location.hash;
+    window.history.replaceState({}, "", next);
+    return () => window.clearTimeout(t);
+  }, []);
+
   // F3 OR ⌘↑ toggles Mission Control (window exposé). F3 is the macOS
   // standard; ⌘↑ is a friendly fallback for keyboards where F3 is bound
   // to brightness/media. We don't trap the event when typing inside an

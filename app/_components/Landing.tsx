@@ -45,6 +45,12 @@ export default function Landing() {
 function LandingShell() {
   const [signInOpen, setSignInOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  // If the visitor lands at /?invite=<id> (from a workspace-invite
+  // email), surface a banner above the hero and auto-open the sign-in
+  // sheet. After they sign in, HomeGate flips this page to Desktop and
+  // the URL param survives — DesktopApp picks it up and routes them
+  // to Settings → Workspaces.
+  const [hasInvite, setHasInvite] = useState(false);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 8);
@@ -53,11 +59,21 @@ function LandingShell() {
     return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("invite")) {
+      setHasInvite(true);
+      setSignInOpen(true);
+    }
+  }, []);
+
   const openSignIn = () => setSignInOpen(true);
 
   return (
     <main className="min-h-screen bg-app text-app">
       <TopNav scrolled={scrolled} onSignIn={openSignIn} />
+      {hasInvite && <InviteBanner onSignIn={openSignIn} />}
       <Hero onSignIn={openSignIn} />
       <DesktopShowcase />
       <ValueProps />
@@ -69,6 +85,26 @@ function LandingShell() {
 
       <SignInDialog open={signInOpen} onClose={() => setSignInOpen(false)} />
     </main>
+  );
+}
+
+function InviteBanner({ onSignIn }: { onSignIn: () => void }) {
+  return (
+    <div className="border-b border-tool-accent-soft bg-tool-accent-soft/50">
+      <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="text-sm text-app">
+          <span className="font-semibold">You&apos;ve been invited</span> to
+          a workspace on Space Field. Sign in to view and accept it.
+        </div>
+        <button
+          type="button"
+          onClick={onSignIn}
+          className="self-start rounded-lg bg-tool-accent px-4 py-2 text-sm font-semibold text-white transition-opacity hover:opacity-90 sm:self-auto"
+        >
+          Sign in to accept
+        </button>
+      </div>
+    </div>
   );
 }
 
