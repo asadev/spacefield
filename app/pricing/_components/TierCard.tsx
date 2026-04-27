@@ -7,15 +7,18 @@
  * add-on updates the displayed total cap inline ("100 GB + 2 TB =
  * 2.1 TB") so the user can see the math before they click upgrade.
  *
- * Payment is NOT yet wired. For v1 the upgrade button:
+ * Click flow:
  *   - signed-out → links to /signin (Sign in to upgrade)
- *   - signed-in  → POSTs the chosen add-on to the user's first owned
- *     workspace (best-effort; a workspace must exist) and labels itself
- *     "Upgrade (mock — payment coming soon)" so the UX is in place.
+ *   - signed-in & paid tier (Pro/Team) → POSTs to /api/billing/checkout
+ *     with kind='tier' and redirects the browser to the Polar-hosted
+ *     checkout URL.
+ *   - signed-in & free tier with add-on selected → POSTs to
+ *     /api/billing/checkout with kind='addon' (the add-on attaches to
+ *     the user's first owned workspace; a workspace must exist).
+ *   - signed-in & enterprise → "Contact sales".
  *
- * The "first owned workspace" target is a v1 simplification — when the
- * tier-purchase flow ships we'll let the user pick which workspace the
- * add-on applies to (or auto-bind it to a new workspace).
+ * Once Polar redirects back to /billing/success the webhook flips the
+ * subscriptions row to the new tier (or marks the addon active).
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -109,6 +112,11 @@ export default function TierCard({
     ? "relative flex flex-col rounded-2xl border border-tool-accent bg-app-elevated p-6 ring-1 ring-tool-accent-soft"
     : "relative flex flex-col rounded-2xl border border-app bg-app-elevated p-6";
 
+  // Tier slug for the checkout API. Free / Enterprise can't be
+  // checked out (Free is default; Enterprise is contact-sales).
+  const checkoutTier: "pro" | "team" | null =
+    tierId === "pro" || tierId === "team" ? tierId : null;
+
   async function handleUpgrade() {
     setMsg(null);
     if (!isSignedIn) return;
@@ -119,37 +127,47 @@ export default function TierCard({
       });
       return;
     }
-    if (addonGb === 0) {
+
+    // Decide whether this click means "buy a tier" or "buy an add-on".
+    // Tier cards (pro/team) always check out the tier itself; the
+    // add-on dropdown selection is informational on those cards.
+    // The Free card uses the dropdown to attach an add-on.
+    const body: Record<string, unknown> = { workspaceId: targetWorkspaceId };
+    if (checkoutTier) {
+      body.kind = "tier";
+      body.tier = checkoutTier;
+    } else if (addonGb !== 0) {
+      body.kind = "addon";
+      body.addon_gb = addonGb;
+    } else {
       setMsg({
         kind: "error",
         text: "Pick an add-on from the dropdown above first.",
       });
       return;
     }
+
     setSubmitting(true);
     try {
-      const res = await fetch("/api/workspaces/storage-addon", {
+      const res = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          workspaceId: targetWorkspaceId,
-          addonGb,
-        }),
+        body: JSON.stringify(body),
       });
-      const body = (await res.json().catch(() => ({}))) as { error?: string };
-      if (!res.ok) {
-        throw new Error(body.error || `Failed (${res.status})`);
+      const data = (await res.json().catch(() => ({}))) as {
+        url?: string;
+        error?: string;
+      };
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || `Checkout failed (${res.status})`);
       }
-      setMsg({
-        kind: "success",
-        text: "Add-on saved (mock — payment coming soon).",
-      });
+      // Hand off to Polar.
+      window.location.href = data.url;
     } catch (err) {
       setMsg({
         kind: "error",
         text: err instanceof Error ? err.message : "Failed",
       });
-    } finally {
       setSubmitting(false);
     }
   }
@@ -216,10 +234,12 @@ export default function TierCard({
         }
       >
         {submitting
-          ? "Saving…"
-          : addonGb === 0
-            ? `Continue on ${name}`
-            : "Upgrade (payment coming soon)"}
+          ? "Redirecting…"
+          : checkoutTier
+            ? `Upgrade to ${name}`
+            : addonGb === 0
+              ? `Continue on ${name}`
+              : "Buy add-on"}
       </button>
     );
   }

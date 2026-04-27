@@ -10,6 +10,9 @@ import { createClient } from "@/lib/supabase/server";
  *   - Pricing page / settings → to know the active tier base + any
  *     per-workspace storage add-ons currently selected, so the UI can
  *     compute the effective cap inline.
+ *   - Workspace settings → to surface payment status badges on the
+ *     storage add-on dropdown ("Active", "Pending payment", "Past due")
+ *     once Polar billing is wired.
  *
  * Uncached, server-side. Returns 401 if no session.
  */
@@ -32,6 +35,16 @@ export async function GET() {
     .eq("tier_id", tier)
     .maybeSingle();
 
+  // Pull the calling user's subscription row so the client can display
+  // a "Manage subscription" link / billing status. We expose only the
+  // fields the UI cares about — never the raw Polar customer id (it's
+  // not sensitive but it's noise).
+  const { data: subRow } = await supabase
+    .from("subscriptions")
+    .select("tier_id, status, polar_status, current_period_end")
+    .eq("user_id", user.id)
+    .maybeSingle();
+
   // Workspaces the caller owns — needed to surface the storage add-on
   // selection per workspace (RLS gives the owner read access via the
   // "owners admins read addon" policy).
@@ -45,17 +58,26 @@ export async function GET() {
   const ownedIds = owned.map((w) => w.id);
 
   // Add-ons currently selected for any owned workspace. Absent row =
-  // no add-on; the client should treat as 0 GB.
-  let addons: Array<{ workspace_id: string; addon_gb: number }> = [];
+  // no add-on; the client should treat as 0 GB. payment_status now
+  // reflects the Polar lifecycle: 'mock' (legacy v1), 'pending'
+  // (checkout opened), 'active' (webhook confirmed), 'past_due',
+  // 'canceled'.
+  let addons: Array<{
+    workspace_id: string;
+    addon_gb: number;
+    payment_status: string;
+    polar_status: string | null;
+    polar_subscription_id: string | null;
+    current_period_end: string | null;
+  }> = [];
   if (ownedIds.length > 0) {
     const { data: addonRows } = await supabase
       .from("workspace_storage_addons")
-      .select("workspace_id, addon_gb")
+      .select(
+        "workspace_id, addon_gb, payment_status, polar_status, polar_subscription_id, current_period_end"
+      )
       .in("workspace_id", ownedIds);
-    addons = (addonRows ?? []) as Array<{
-      workspace_id: string;
-      addon_gb: number;
-    }>;
+    addons = (addonRows ?? []) as typeof addons;
   }
 
   const cap = tierRow?.max_owned_workspaces ?? 1;
@@ -65,6 +87,7 @@ export async function GET() {
     user: { id: user.id, email: user.email },
     tier,
     tier_config: tierRow,
+    subscription: subRow ?? null,
     owned_workspaces: ownedCount,
     max_owned_workspaces: cap,
     can_create_workspace: ownedCount < cap,

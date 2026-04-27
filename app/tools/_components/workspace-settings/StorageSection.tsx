@@ -113,24 +113,48 @@ export default function StorageSection({
     }
     setBusy("addon");
     try {
-      const res = await fetch("/api/workspaces/storage-addon", {
+      // Removing the add-on (selecting 0) hits the legacy direct path
+      // — there's no payment to take. The webhook handler treats a
+      // canceled Polar subscription as a separate signal, so this
+      // doesn't conflict.
+      if (draftAddonGb === 0) {
+        const res = await fetch("/api/workspaces/storage-addon", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ workspaceId, addonGb: 0 }),
+        });
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+        };
+        if (!res.ok) throw new Error(body.error || `Update failed (${res.status})`);
+        onSuccess("Storage add-on removed.");
+        await refresh();
+        return;
+      }
+
+      // Purchase (or change) → Polar checkout. Webhook flips the row
+      // to payment_status='active' once payment succeeds.
+      const res = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workspaceId, addonGb: draftAddonGb }),
+        body: JSON.stringify({
+          kind: "addon",
+          addon_gb: draftAddonGb,
+          workspaceId,
+        }),
       });
       const body = (await res.json().catch(() => ({}))) as {
+        url?: string;
         error?: string;
       };
-      if (!res.ok) throw new Error(body.error || `Update failed (${res.status})`);
-      onSuccess(
-        draftAddonGb === 0
-          ? "Storage add-on removed."
-          : "Storage add-on applied (mock — payment coming soon)."
-      );
-      await refresh();
+      if (!res.ok || !body.url) {
+        throw new Error(body.error || `Checkout failed (${res.status})`);
+      }
+      // Redirect the browser to Polar's hosted checkout. The success
+      // page will land us back on /billing/success.
+      window.location.href = body.url;
     } catch (err) {
       onError(err instanceof Error ? err.message : "Update failed");
-    } finally {
       setBusy(null);
     }
   };
@@ -244,15 +268,17 @@ export default function StorageSection({
                 draftAddonGb === stats.addon || busy === "addon"
               }
               onClick={saveAddon}
-              title="Payment integration ships next; this stores your selection."
+              title="Buy or remove the storage add-on for this workspace."
             >
               {busy === "addon"
-                ? "Saving…"
+                ? draftAddonGb === 0
+                  ? "Removing…"
+                  : "Redirecting…"
                 : draftAddonGb === stats.addon
                   ? "Update"
                   : draftAddonGb === 0
                     ? "Remove add-on"
-                    : "Upgrade (mock)"}
+                    : "Buy add-on"}
             </button>
           </div>
         )}
