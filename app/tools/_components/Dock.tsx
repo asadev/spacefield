@@ -14,14 +14,17 @@ import { TOOL_ICONS, TOOLS, type ToolItem } from "../_data/tools-list";
 import type { IconStyleId } from "./icon-styles";
 import { useDockBadges } from "./useDockBadges";
 import { useIconStyle } from "./useIconStyle";
+import AppIcon, { hasAppIcon } from "./AppIcon";
 
-/* Dock icons render in a single neutral tone — rainbow category colors made
- * the dock feel busy / kids-made. Category accent only appears on the
- * Launchpad grid where it helps users scan a full list. */
+/* Dock icons fall back to the legacy outline-path glyph when the tool
+ * doesn't have a launcher SVG (e.g. Documents/Sheets, added after the
+ * Spacefield Suite design pass). For everything else we render the
+ * monochrome launcher icon — same aesthetic across dock + launchpad. */
 function iconFor(slug: string) {
   const t = TOOLS.find((x) => x.slug === slug);
   return {
     path: t ? TOOL_ICONS[t.icon] ?? TOOL_ICONS.home : TOOL_ICONS.home,
+    iconKey: (t?.icon ?? "home") as keyof typeof TOOL_ICONS,
   };
 }
 
@@ -163,9 +166,25 @@ function dockWrapperClass(style: IconStyleId, active: boolean): string {
 }
 
 function ToolGlyph({ slug, style }: { slug: string; style: IconStyleId }) {
-  const { path } = iconFor(slug);
-  // In hairline mode the parent button already owns the surface colour. For
-  // filled/squircle/rounded the glyph inherits from this wrapper.
+  const { iconKey } = iconFor(slug);
+  // When the tool has a launcher SVG, render it directly — it ships its
+  // own squircle bg, so the parent button chrome (border/fill) becomes
+  // pure padding around it. Mono filter keeps the dock visually quiet
+  // (rainbow gradients in the dock looked busy).
+  if (hasAppIcon(slug)) {
+    return (
+      <AppIcon
+        slug={slug}
+        size={28}
+        cornerPct={20}
+        flatShadow
+        mono
+        label={slug}
+      />
+    );
+  }
+  // Outline-path fallback for tools without a launcher SVG.
+  const path = TOOL_ICONS[iconKey] ?? TOOL_ICONS.home;
   const glyphTone =
     style === "hairline"
       ? "text-secondary"

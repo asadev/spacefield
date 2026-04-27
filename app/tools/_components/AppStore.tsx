@@ -8,6 +8,7 @@ import {
   TOOLS,
   type ToolCategoryKey,
 } from "../_data/tools-list";
+import AppIcon, { hasAppIcon } from "./AppIcon";
 
 interface Props {
   open: boolean;
@@ -239,6 +240,7 @@ interface RowProps {
 }
 
 function StoreRow({
+  slug,
   title,
   description,
   category,
@@ -250,13 +252,17 @@ function StoreRow({
 }: RowProps) {
   return (
     <div className="flex items-start gap-3 rounded-lg border border-app bg-app p-3 transition-colors hover:border-app-hover">
-      <span
-        className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${ACCENT_BG[category] ?? DEFAULT_ACCENT}`}
-      >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d={TOOL_ICONS[iconKey] ?? TOOL_ICONS.home} />
-        </svg>
-      </span>
+      {hasAppIcon(slug) ? (
+        <AppIcon slug={slug} size={40} cornerPct={24} mono flatShadow label={title} />
+      ) : (
+        <span
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg ${ACCENT_BG[category] ?? DEFAULT_ACCENT}`}
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d={TOOL_ICONS[iconKey] ?? TOOL_ICONS.home} />
+          </svg>
+        </span>
+      )}
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-semibold text-app">{title}</div>
         <div className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted">{description}</div>
@@ -296,13 +302,23 @@ function StoreRow({
 function FeatureRow(props: RowProps) {
   return (
     <div className="flex items-center gap-3 rounded-xl border border-app bg-app p-4 shadow-card">
-      <span
-        className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${ACCENT_BG[props.category] ?? DEFAULT_ACCENT}`}
-      >
-        <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d={TOOL_ICONS[props.iconKey] ?? TOOL_ICONS.home} />
-        </svg>
-      </span>
+      {hasAppIcon(props.slug) ? (
+        <AppIcon
+          slug={props.slug}
+          size={48}
+          cornerPct={24}
+          mono
+          label={props.title}
+        />
+      ) : (
+        <span
+          className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-xl ${ACCENT_BG[props.category] ?? DEFAULT_ACCENT}`}
+        >
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+            <path d={TOOL_ICONS[props.iconKey] ?? TOOL_ICONS.home} />
+          </svg>
+        </span>
+      )}
       <div className="min-w-0 flex-1">
         <div className="truncate text-sm font-semibold text-app">{props.title}</div>
         <div className="mt-0.5 line-clamp-2 text-[11px] leading-snug text-muted">{props.description}</div>

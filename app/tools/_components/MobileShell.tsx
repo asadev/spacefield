@@ -41,6 +41,7 @@ import {
 } from "react";
 import { useTheme } from "@/components/ThemeProvider";
 import { TOOL_ICONS, TOOLS, toolBySlug, type NativeAppProps } from "../_data/tools-list";
+import AppIcon, { hasAppIcon } from "./AppIcon";
 import DesktopBackground from "./DesktopBackground";
 import MobileSheet, { SheetList, SheetRow } from "./MobileSheet";
 // Re-exports — MobileShell consumers used to import these primitives from
@@ -629,6 +630,7 @@ function MobileHome({
             {items.map((t) => (
               <HomeIcon
                 key={t.slug}
+                slug={t.slug}
                 title={t.title}
                 iconKey={t.icon}
                 editing={editing}
@@ -697,6 +699,7 @@ function MobileHome({
 }
 
 function HomeIcon({
+  slug,
   title,
   iconKey,
   editing,
@@ -705,6 +708,7 @@ function HomeIcon({
   onPressEnd,
   onUninstall,
 }: {
+  slug: string;
   title: string;
   iconKey: keyof typeof TOOL_ICONS;
   editing: boolean;
@@ -713,6 +717,7 @@ function HomeIcon({
   onPressEnd: () => void;
   onUninstall: () => void;
 }) {
+  const useLauncher = hasAppIcon(slug);
   return (
     <div className="flex flex-col items-center gap-1.5">
       <motion.button
@@ -729,17 +734,25 @@ function HomeIcon({
         }
         whileTap={{ scale: 0.92 }}
         aria-label={title}
-        className="relative flex h-16 w-16 items-center justify-center rounded-[20px] bg-tool-accent-soft text-tool-accent shadow-sm ring-1 ring-inset ring-tool-accent/20"
+        className={
+          useLauncher
+            ? "relative flex h-16 w-16 items-center justify-center"
+            : "relative flex h-16 w-16 items-center justify-center rounded-[20px] bg-tool-accent-soft text-tool-accent shadow-sm ring-1 ring-inset ring-tool-accent/20"
+        }
       >
-        <svg
-          width="30"
-          height="30"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          aria-hidden="true"
-        >
-          <path d={TOOL_ICONS[iconKey] ?? TOOL_ICONS.home} />
-        </svg>
+        {useLauncher ? (
+          <AppIcon slug={slug} size={64} cornerPct={24} mono label={title} />
+        ) : (
+          <svg
+            width="30"
+            height="30"
+            viewBox="0 0 24 24"
+            fill="currentColor"
+            aria-hidden="true"
+          >
+            <path d={TOOL_ICONS[iconKey] ?? TOOL_ICONS.home} />
+          </svg>
+        )}
         {editing && (
           <button
             type="button"
@@ -797,6 +810,7 @@ function MobileDock({
         {tools.map((t) => (
           <DockIcon
             key={t.slug}
+            slug={t.slug}
             title={t.title}
             iconKey={t.icon}
             onTap={() => onOpenTool(t.slug, t.title)}
@@ -804,6 +818,7 @@ function MobileDock({
           />
         ))}
         <DockIcon
+          slug={null}
           title="All apps"
           iconKey="dots9"
           onTap={onAllApps}
@@ -826,17 +841,21 @@ function HomeIndicator() {
 }
 
 function DockIcon({
+  slug,
   title,
   iconKey,
   onTap,
   badge,
 }: {
+  /** Tool slug for launcher-SVG lookup. Null for system buttons (All apps). */
+  slug: string | null;
   title: string;
   iconKey: keyof typeof TOOL_ICONS;
   onTap: () => void;
   /** Optional notification count — renders a small red bubble if > 0. */
   badge?: number;
 }) {
+  const useLauncher = slug !== null && hasAppIcon(slug);
   return (
     <motion.button
       type="button"
@@ -845,17 +864,25 @@ function DockIcon({
       aria-label={
         badge && badge > 0 ? `${title} (${badge} notifications)` : title
       }
-      className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-tool-accent-soft text-tool-accent ring-1 ring-inset ring-tool-accent/20"
+      className={
+        useLauncher
+          ? "relative flex h-14 w-14 items-center justify-center"
+          : "relative flex h-14 w-14 items-center justify-center rounded-2xl bg-tool-accent-soft text-tool-accent ring-1 ring-inset ring-tool-accent/20"
+      }
     >
-      <svg
-        width="28"
-        height="28"
-        viewBox="0 0 24 24"
-        fill="currentColor"
-        aria-hidden="true"
-      >
-        <path d={TOOL_ICONS[iconKey] ?? TOOL_ICONS.home} />
-      </svg>
+      {useLauncher && slug ? (
+        <AppIcon slug={slug} size={56} cornerPct={24} mono label={title} />
+      ) : (
+        <svg
+          width="28"
+          height="28"
+          viewBox="0 0 24 24"
+          fill="currentColor"
+          aria-hidden="true"
+        >
+          <path d={TOOL_ICONS[iconKey] ?? TOOL_ICONS.home} />
+        </svg>
+      )}
       {badge !== undefined && badge > 0 && (
         <span
           aria-hidden="true"
@@ -1116,17 +1143,28 @@ function AppSwitcher({
                         className="relative flex h-[60vh] w-[68vw] max-w-[320px] shrink-0 flex-col overflow-hidden rounded-[28px] border border-app bg-app-elevated text-left shadow-2xl transition-transform active:scale-[0.98]"
                       >
                         <div className="flex items-center gap-2 border-b border-app px-4 py-3">
-                          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-tool-accent-soft text-tool-accent">
-                            <svg
-                              width="16"
-                              height="16"
-                              viewBox="0 0 24 24"
-                              fill="currentColor"
-                              aria-hidden="true"
-                            >
-                              <path d={TOOL_ICONS[tool?.icon ?? "home"] ?? TOOL_ICONS.home} />
-                            </svg>
-                          </span>
+                          {tool && hasAppIcon(tool.slug) ? (
+                            <AppIcon
+                              slug={tool.slug}
+                              size={32}
+                              cornerPct={24}
+                              flatShadow
+                              mono
+                              label={w.title}
+                            />
+                          ) : (
+                            <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-tool-accent-soft text-tool-accent">
+                              <svg
+                                width="16"
+                                height="16"
+                                viewBox="0 0 24 24"
+                                fill="currentColor"
+                                aria-hidden="true"
+                              >
+                                <path d={TOOL_ICONS[tool?.icon ?? "home"] ?? TOOL_ICONS.home} />
+                              </svg>
+                            </span>
+                          )}
                           <span className="flex-1 truncate text-sm font-medium text-app">
                             {w.title}
                           </span>
@@ -1239,17 +1277,25 @@ function AllAppsSheet({
                   }
                 }}
                 aria-label={t.title}
-                className="relative flex h-16 w-16 items-center justify-center rounded-[20px] bg-tool-accent-soft text-tool-accent ring-1 ring-inset ring-tool-accent/20 active:scale-95"
+                className={
+                  hasAppIcon(t.slug)
+                    ? "relative flex h-16 w-16 items-center justify-center active:scale-95"
+                    : "relative flex h-16 w-16 items-center justify-center rounded-[20px] bg-tool-accent-soft text-tool-accent ring-1 ring-inset ring-tool-accent/20 active:scale-95"
+                }
               >
-                <svg
-                  width="28"
-                  height="28"
-                  viewBox="0 0 24 24"
-                  fill="currentColor"
-                  aria-hidden="true"
-                >
-                  <path d={TOOL_ICONS[t.icon] ?? TOOL_ICONS.home} />
-                </svg>
+                {hasAppIcon(t.slug) ? (
+                  <AppIcon slug={t.slug} size={64} cornerPct={24} mono label={t.title} />
+                ) : (
+                  <svg
+                    width="28"
+                    height="28"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                    aria-hidden="true"
+                  >
+                    <path d={TOOL_ICONS[t.icon] ?? TOOL_ICONS.home} />
+                  </svg>
+                )}
                 {!isOn && canAdmin && (
                   <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-app-elevated text-app shadow ring-1 ring-app">
                     <svg

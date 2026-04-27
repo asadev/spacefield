@@ -11,6 +11,7 @@ import {
 } from "../_data/tools-list";
 import type { IconStyleId } from "./icon-styles";
 import { useIconStyle } from "./useIconStyle";
+import AppIcon, { hasAppIcon } from "./AppIcon";
 
 interface Props {
   open: boolean;
@@ -214,18 +215,29 @@ export default function Launchpad({
                     }}
                     className="group flex flex-col items-center gap-2"
                   >
-                    <span className={tileCls}>
-                      <svg
-                        width="28"
-                        height="28"
-                        viewBox="0 0 24 24"
-                        fill="currentColor"
-                        aria-hidden="true"
-                        className={glyphTone}
-                      >
-                        <path d={TOOL_ICONS[t.icon] ?? TOOL_ICONS.home} />
-                      </svg>
-                    </span>
+                    {hasAppIcon(t.slug) ? (
+                      <AppIcon
+                        slug={t.slug}
+                        size={64}
+                        cornerPct={24}
+                        mono
+                        label={t.title}
+                        className="transition-transform duration-200 group-hover:-translate-y-0.5"
+                      />
+                    ) : (
+                      <span className={tileCls}>
+                        <svg
+                          width="28"
+                          height="28"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                          aria-hidden="true"
+                          className={glyphTone}
+                        >
+                          <path d={TOOL_ICONS[t.icon] ?? TOOL_ICONS.home} />
+                        </svg>
+                      </span>
+                    )}
                     <span className="line-clamp-2 max-w-[8rem] text-center text-[0.78rem] font-medium leading-tight tracking-tight text-white/95">
                       {t.title}
                     </span>
