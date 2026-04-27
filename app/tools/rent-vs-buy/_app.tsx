@@ -290,6 +290,7 @@ export default function RentVsBuyApp(props: NativeAppProps) {
   const tone = resolved === "light" ? "15,23,42" : "255,255,255";
 
   /* Width-driven breakpoints (live window, not viewport). */
+  const isMobile = width < 700;
   const isUltra = width < 560;
   const isWide = width >= 880;
 
@@ -539,7 +540,7 @@ export default function RentVsBuyApp(props: NativeAppProps) {
   const horizonGridCols = isWide ? "grid-cols-[1.5fr_1fr]" : "grid-cols-1";
   const wealthCardsCols = isUltra ? "grid-cols-1" : "grid-cols-2";
   const buyDetailCols = isUltra ? "grid-cols-1" : "grid-cols-2";
-  const containerPad = isUltra ? "px-3 pt-4 pb-10" : "px-4 sm:px-6 pt-5 pb-12";
+  const containerPad = isMobile ? "px-4 pt-4 pb-12" : isUltra ? "px-3 pt-4 pb-10" : "px-4 sm:px-6 pt-5 pb-12";
 
   return (
     <div

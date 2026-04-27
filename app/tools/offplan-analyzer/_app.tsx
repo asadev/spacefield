@@ -824,9 +824,10 @@ export default function OffplanAnalyzerApp(props: NativeAppProps) {
 
   /* Width-driven breakpoints — based on the live window inner width, not the
      viewport. Tweaks the plan grid, hero stack, and tab layout. */
+  const isMobile = width < 700;
   const isWide = width >= 1100;
   const isMid = width >= 760;
-  const isNarrow = width < 540;
+  const isNarrow = width < 540 || isMobile;
 
   const [plans, setPlans] = useState<PlanConfig[]>([createPlan("Plan A")]);
   const [showResults, setShowResults] = useState(false);

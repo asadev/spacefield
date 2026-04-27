@@ -180,8 +180,9 @@ export default function CashFlowModelerApp(props: NativeAppProps) {
 
   /* Width-driven breakpoints — based on the live window inner width, not the
      viewport. Tweaks the assumptions grid and the hero stack. */
+  const isMobile = width < 700;
   const isWide = width >= 900;
-  const isUltra = width < 540;
+  const isUltra = width < 540 || isMobile;
 
   const [inputs, setInputs] = useState<Inputs>({
     purchasePrice: "2000000",
@@ -704,7 +705,7 @@ export default function CashFlowModelerApp(props: NativeAppProps) {
       data-tool="cash-flow-modeler"
       className="h-full w-full overflow-auto bg-app text-app"
     >
-      <div className={`mx-auto max-w-6xl ${isUltra ? "px-3 pt-4 pb-10" : "px-4 sm:px-6 pt-5 pb-12"} space-y-6`}>
+      <div className={`mx-auto max-w-6xl ${isMobile ? "px-4 pt-4 pb-12" : isUltra ? "px-3 pt-4 pb-10" : "px-4 sm:px-6 pt-5 pb-12"} space-y-6`}>
         {/* ═════════ HEADER STRIP (compact, in-window) ═════════ */}
         <div className="flex flex-wrap items-start gap-4 justify-between">
           <div className="flex items-center gap-3 min-w-0">

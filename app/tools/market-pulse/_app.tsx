@@ -1208,7 +1208,8 @@ export default function MarketPulseApp(props: NativeAppProps) {
   const [section, setSection] = useState<SectionKey>("overview");
 
   // Width-driven layout breakpoints — match the inner content (no max-w-7xl).
-  const isNarrow = width < 720;
+  const isMobile = width < 700;
+  const isNarrow = width < 720 || isMobile;
   const isWide = width >= 1100;
 
   // Compose a temperature score from MARKET_SUMMARY momentum.
@@ -1284,7 +1285,7 @@ export default function MarketPulseApp(props: NativeAppProps) {
             color: "var(--tool-accent)",
           }}
         />
-        <div className="relative px-4 sm:px-6 pt-6 pb-5">
+        <div className={`relative ${isMobile ? "px-4 pt-4 pb-4" : "px-4 sm:px-6 pt-6 pb-5"}`}>
           <ToolHeader
             period={period}
             setPeriod={setPeriod}
@@ -1295,7 +1296,7 @@ export default function MarketPulseApp(props: NativeAppProps) {
         </div>
       </div>
 
-      <section className="px-4 sm:px-6 pb-10 space-y-6 pt-6">
+      <section className={`${isMobile ? "px-4 pb-12 pt-4 space-y-5" : "px-4 sm:px-6 pb-10 space-y-6 pt-6"}`}>
         {/* Temperature + headline trend cards */}
         <div className={`grid ${heroCols} gap-4`}>
           <Panel title="Market Temperature" subtitle={`composite · ${period}`} delay={0.05}>

@@ -98,6 +98,7 @@ export default function CommissionCalculatorApp(props: NativeAppProps) {
   const { width, initialParams, initialParamsKey } = props;
 
   /* Below 900px → stack inputs/breakdown vertically. */
+  const isMobile = width < 700;
   const isWide = width >= 900;
 
   const [form, setForm] = useState({
@@ -383,7 +384,7 @@ export default function CommissionCalculatorApp(props: NativeAppProps) {
         }
       `}</style>
 
-      <div className="px-4 pb-10 pt-5 sm:px-6">
+      <div className={`${isMobile ? "px-4 pb-12 pt-4" : "px-4 pb-10 pt-5 sm:px-6"}`}>
         {/* ═════════ TOTAL HERO ═════════ */}
         <section
           aria-label="Commission total"

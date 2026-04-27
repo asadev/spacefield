@@ -552,6 +552,7 @@ export default function MortgageCalculatorApp(props: NativeAppProps) {
   const { width, initialParams, initialParamsKey } = props;
 
   /* Below 900px → stack chart/table internal controls. */
+  const isMobile = width < 700;
   const isWide = width >= 900;
   const isUltra = width < 500;
 
@@ -807,7 +808,7 @@ export default function MortgageCalculatorApp(props: NativeAppProps) {
         }
       `}</style>
 
-      <div className="px-4 pb-10 pt-5 sm:px-6">
+      <div className={`${isMobile ? "px-4 pb-12 pt-4" : "px-4 pb-10 pt-5 sm:px-6"}`}>
         {/* Two-col above 900px, stacked below — use the live window width, not the viewport */}
         <div
           className={isWide ? "grid gap-6" : "flex flex-col gap-5"}

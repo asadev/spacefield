@@ -223,6 +223,7 @@ export default function DLDFeeCalculatorApp(props: NativeAppProps) {
   const { width, initialParams, initialParamsKey } = props;
 
   /* Below 900px → stack columns. Below 500px → single payer cell. */
+  const isMobile = width < 700;
   const isWide = width >= 900;
 
   const [propertyValue, setPropertyValue] = useState("");
@@ -553,7 +554,7 @@ export default function DLDFeeCalculatorApp(props: NativeAppProps) {
         }
       `}</style>
 
-      <div className="px-4 pb-8 pt-5 sm:px-6">
+      <div className={`${isMobile ? "px-4 pb-12 pt-4" : "px-4 pb-8 pt-5 sm:px-6"}`}>
         {/* Status strip — replaces page hero (the window title bar already
             announces the tool). Keeps the closing-statement framing. */}
         <div className="mb-5 flex flex-wrap items-end justify-between gap-3 border-b border-app pb-4">

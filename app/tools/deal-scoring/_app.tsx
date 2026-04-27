@@ -486,7 +486,8 @@ function AreaPresetDropdown({
 export default function DealScoringApp(props: NativeAppProps) {
   const { width } = props;
   // Single column when the window is narrow — same threshold the prompt called for.
-  const isNarrow = width < 720;
+  const isMobile = width < 700;
+  const isNarrow = width < 720 || isMobile;
   const isUltra = width < 500;
   const dialSize = isUltra ? 180 : isNarrow ? 220 : 260;
 
@@ -599,7 +600,7 @@ export default function DealScoringApp(props: NativeAppProps) {
       data-tool="deal-scoring"
       className="h-full w-full overflow-y-auto bg-app text-app"
     >
-      <div className="px-5 py-5 sm:px-6">
+      <div className={`${isMobile ? "px-4 py-4 pb-28" : "px-5 py-5 sm:px-6"}`}>
         <form
           onSubmit={handleSubmit}
           className={
@@ -716,7 +717,7 @@ export default function DealScoringApp(props: NativeAppProps) {
 
             <button
               type="submit"
-              className="group relative w-full overflow-hidden rounded-lg border border-tool-accent/40 bg-tool-accent px-7 py-4 text-[0.75rem] font-medium uppercase tracking-[0.2em] text-white shadow-lg transition-all duration-300 hover:opacity-95 hover:shadow-xl"
+              className={`group relative w-full overflow-hidden rounded-lg border border-tool-accent/40 bg-tool-accent text-[0.75rem] font-medium uppercase tracking-[0.2em] text-white shadow-lg transition-all duration-300 hover:opacity-95 hover:shadow-xl ${isMobile ? "fixed left-0 right-0 bottom-0 z-30 rounded-none border-0 px-7 py-4 pb-[max(env(safe-area-inset-bottom),16px)] min-h-[56px]" : "px-7 py-4"}`}
             >
               <span className="relative z-10">Run Score Analysis →</span>
             </button>

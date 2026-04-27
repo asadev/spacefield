@@ -572,7 +572,8 @@ export default function InvestmentSimulatorApp(props: NativeAppProps) {
 
   /* Width-driven breakpoints — based on the live window inner width, not the
      viewport. */
-  const isUltra = width < 540;
+  const isMobile = width < 700;
+  const isUltra = width < 540 || isMobile;
   const isWide = width >= 900;
 
   const [selectedArea, setSelectedArea] = useState(historicalData[0].id);
@@ -886,7 +887,9 @@ export default function InvestmentSimulatorApp(props: NativeAppProps) {
   const ctaGridCols = isUltra
     ? "grid-cols-1"
     : "grid-cols-1 md:grid-cols-2";
-  const containerPad = isUltra
+  const containerPad = isMobile
+    ? "px-4 pt-4 pb-12"
+    : isUltra
     ? "px-3 pt-4 pb-10"
     : "px-4 sm:px-6 pt-5 pb-12";
 

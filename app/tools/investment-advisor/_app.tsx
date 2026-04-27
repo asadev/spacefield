@@ -374,7 +374,8 @@ export default function InvestmentAdvisorApp(props: NativeAppProps) {
   const { width, openApp } = props;
 
   // Layout knobs driven by window width
-  const isNarrow = width < 640;
+  const isMobile = width < 700;
+  const isNarrow = width < 640 || isMobile;
   const isUltra = width < 460;
   const donutSize = isUltra ? 160 : isNarrow ? 190 : 220;
 
@@ -1065,7 +1066,7 @@ export default function InvestmentAdvisorApp(props: NativeAppProps) {
       className="h-full w-full overflow-y-auto bg-app text-app"
     >
       <section
-        className={`mx-auto ${isNarrow ? "px-3 pt-4 pb-16" : "px-5 pt-5 pb-20"}`}
+        className={`mx-auto ${isMobile ? "px-4 pt-4 pb-32" : isNarrow ? "px-3 pt-4 pb-16" : "px-5 pt-5 pb-20"}`}
         style={{ maxWidth: isNarrow ? "100%" : 760 }}
       >
         <AdvisorHeader step={step} total={totalSteps} showResults={showResults} />
@@ -1083,7 +1084,7 @@ export default function InvestmentAdvisorApp(props: NativeAppProps) {
                   animate="center"
                   exit="exit"
                   transition={{ duration: 0.3, ease }}
-                  className="rounded-2xl border border-app bg-app-elevated p-5 sm:p-8"
+                  className={`rounded-2xl border border-app bg-app-elevated ${isMobile ? "p-4" : "p-5 sm:p-8"}`}
                 >
                   {stepRenderers[step]()}
                 </motion.div>
@@ -1091,16 +1092,22 @@ export default function InvestmentAdvisorApp(props: NativeAppProps) {
             </div>
 
             {/* Navigation pills */}
-            <div className="flex items-center justify-between gap-3 sticky bottom-3 z-10">
+            <div
+              className={
+                isMobile
+                  ? "fixed left-0 right-0 bottom-0 z-30 px-4 pt-3 pb-[max(env(safe-area-inset-bottom),12px)] bg-app-elevated/90 backdrop-blur border-t border-app flex items-center justify-between gap-3"
+                  : "flex items-center justify-between gap-3 sticky bottom-3 z-10"
+              }
+            >
               <button
                 onClick={goBack}
                 disabled={step === 0}
-                className="px-5 py-2.5 rounded-full border border-app bg-app-elevated text-secondary hover:text-app hover:border-tool-accent text-sm font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                className={`${isMobile ? "min-h-[44px] px-5" : "px-5 py-2.5"} rounded-full border border-app bg-app-elevated text-secondary hover:text-app hover:border-tool-accent text-sm font-medium transition-all disabled:opacity-30 disabled:cursor-not-allowed`}
               >
                 ← Back
               </button>
 
-              {!isUltra && (
+              {!isUltra && !isMobile && (
                 <div className="text-xs text-muted tabular-nums">
                   {step + 1} / {totalSteps}
                 </div>
@@ -1109,7 +1116,7 @@ export default function InvestmentAdvisorApp(props: NativeAppProps) {
               <button
                 onClick={goNext}
                 disabled={!canProceed}
-                className="px-6 py-2.5 rounded-full bg-tool-accent text-white text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 shadow-lg"
+                className={`${isMobile ? "min-h-[44px] px-6 flex-1 max-w-[60%]" : "px-6 py-2.5"} rounded-full bg-tool-accent text-white text-sm font-semibold transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:opacity-90 shadow-lg`}
               >
                 {step === totalSteps - 1 ? "Get recommendations →" : "Next →"}
               </button>

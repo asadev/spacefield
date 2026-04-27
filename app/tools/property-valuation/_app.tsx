@@ -96,7 +96,8 @@ const FIELD_CLASSES =
 export default function PropertyValuationApp(props: NativeAppProps) {
   const { width, resolved } = props;
   // Width-driven layout — collapses charts grid + tightens hero spacing.
-  const isNarrow = width < 680;
+  const isMobile = width < 700;
+  const isNarrow = width < 680 || isMobile;
   const tone = resolved === "light" ? "15,23,42" : "255,255,255";
 
   const [selectedArea, setSelectedArea] = useState("");
@@ -660,14 +661,14 @@ export default function PropertyValuationApp(props: NativeAppProps) {
                 <div className="h-px bg-app" />
                 <div className={`flex items-center justify-between gap-3 flex-wrap ${
                   isNarrow ? "p-5" : "p-5 sm:p-6"
-                }`}>
+                } ${isMobile ? "sticky bottom-0 z-20 bg-app-elevated/90 backdrop-blur pb-[max(env(safe-area-inset-bottom),12px)]" : ""}`}>
                   <p className="text-[12px] text-muted">
                     {valuation ? "Ready to run." : "Pick area + size to enable."}
                   </p>
                   <button
                     onClick={handleCalculate}
                     disabled={!valuation}
-                    className="px-6 py-3 rounded-xl text-sm font-semibold bg-tool-accent text-white hover:brightness-110 disabled:bg-app disabled:text-muted disabled:border disabled:border-app disabled:cursor-not-allowed transition-all shadow-sm"
+                    className={`${isMobile ? "min-h-[44px] flex-1" : ""} px-6 py-3 rounded-xl text-sm font-semibold bg-tool-accent text-white hover:brightness-110 disabled:bg-app disabled:text-muted disabled:border disabled:border-app disabled:cursor-not-allowed transition-all shadow-sm`}
                   >
                     Run Valuation
                   </button>
@@ -768,7 +769,7 @@ export default function PropertyValuationApp(props: NativeAppProps) {
                       return (
                         <div
                           key={adj.label}
-                          className="grid grid-cols-[1fr_auto_auto_80px] items-center gap-3 py-2.5 border-b border-app text-sm"
+                          className={`${isMobile ? "grid grid-cols-[1fr_auto] gap-y-1.5 gap-x-3" : "grid grid-cols-[1fr_auto_auto_80px] items-center gap-3"} py-2.5 border-b border-app text-sm`}
                         >
                           <div className="flex items-center gap-2 min-w-0">
                             <span className="font-mono text-[11px] text-muted tabular-nums">

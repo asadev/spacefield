@@ -371,6 +371,7 @@ export default function AffordabilityApp(props: NativeAppProps) {
   const { width, initialParams, initialParamsKey, openApp } = props;
 
   /* Below 700px → single column, else two-col split */
+  const isMobile = width < 700;
   const isWide = width >= 700;
   const isUltra = width < 500;
 
@@ -531,7 +532,7 @@ export default function AffordabilityApp(props: NativeAppProps) {
         }
       `}</style>
 
-      <div className="px-4 pb-8 pt-5 sm:px-6">
+      <div className={`${isMobile ? "px-4 pb-12 pt-4" : "px-4 pb-8 pt-5 sm:px-6"}`}>
         {/* Tabs (basic / advanced) */}
         <div className="mb-5 flex items-center gap-2">
           <div className="inline-flex rounded-xl border border-app bg-app-elevated p-1">

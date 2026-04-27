@@ -97,7 +97,8 @@ export default function PortfolioTrackerApp(props: NativeAppProps) {
   const { width } = props;
 
   /* Width-driven breakpoints — based on live window inner width, not viewport. */
-  const isUltra = width < 560;
+  const isMobile = width < 700;
+  const isUltra = width < 560 || isMobile;
   const isNarrow = width < 820;
   const isWide = width >= 1040;
 
@@ -464,7 +465,7 @@ export default function PortfolioTrackerApp(props: NativeAppProps) {
         }}
       />
 
-      <section className={`relative z-10 mx-auto ${isUltra ? "px-3 pt-4 pb-10" : "px-4 sm:px-6 pt-5 pb-12"} max-w-6xl`}>
+      <section className={`relative z-10 mx-auto ${isMobile ? "px-4 pt-4 pb-12" : isUltra ? "px-3 pt-4 pb-10" : "px-4 sm:px-6 pt-5 pb-12"} max-w-6xl`}>
         {/* ── Hero summary ── */}
         <header className="mb-5">
           <div className="flex flex-wrap items-end justify-between gap-3">

@@ -549,6 +549,7 @@ export default function ROICalculatorApp(props: NativeAppProps) {
   const { width, initialParams, initialParamsKey } = props;
 
   /* Below 900px → stack inputs above results. */
+  const isMobile = width < 700;
   const isWide = width >= 900;
 
   const [scenarios, setScenarios] = useState<ScenarioInput[]>([
@@ -650,7 +651,7 @@ export default function ROICalculatorApp(props: NativeAppProps) {
       data-tool="roi-calculator"
       className="h-full w-full overflow-auto bg-app text-app"
     >
-      <div className="px-4 pb-10 pt-5 sm:px-6">
+      <div className={`${isMobile ? "px-4 pb-12 pt-4" : "px-4 pb-10 pt-5 sm:px-6"}`}>
         <form onSubmit={handleCalculate}>
           <div
             className={isWide ? "grid gap-6" : "flex flex-col gap-5"}
