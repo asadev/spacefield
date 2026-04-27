@@ -25,21 +25,24 @@ type ProfileLite = {
   created_at: string;
 };
 
+type DashboardStats = {
+  users_count: number;
+  workspaces_count: number;
+  files_count: number;
+  files_total_bytes: number;
+  active_subs_total: number;
+  active_subs_by_tier: Record<string, number>;
+};
+
 export default async function AdminDashboardPage() {
   const admin = createAdminClient();
 
-  const [
-    usersCountRes,
-    workspacesCountRes,
-    filesAggRes,
-    subsAggRes,
-    messagesRes,
-    profilesRes,
-  ] = await Promise.all([
-    admin.from("profiles").select("user_id", { count: "exact", head: true }),
-    admin.from("workspaces").select("id", { count: "exact", head: true }),
-    admin.from("workspace_files").select("size_bytes"),
-    admin.from("subscriptions").select("tier_id, status"),
+  // Single round-trip aggregate via SQL — used to be 4 separate
+  // full-table reads (loading every workspace_files row to sum bytes,
+  // every subscription to count by tier, etc.). The RPC enforces the
+  // is_admin check internally.
+  const [statsRes, messagesRes, profilesRes] = await Promise.all([
+    admin.rpc("admin_dashboard_stats"),
     admin
       .from("contact_messages")
       .select("id, name, email, topic, message, created_at, resolved_at")
@@ -52,32 +55,25 @@ export default async function AdminDashboardPage() {
       .limit(5),
   ]);
 
-  const userCount = usersCountRes.count ?? 0;
-  const workspaceCount = workspacesCountRes.count ?? 0;
-
-  const fileRows = (filesAggRes.data ?? []) as Array<{ size_bytes: number }>;
-  const fileCount = fileRows.length;
-  const fileBytes = fileRows.reduce(
-    (sum, r) => sum + Number(r.size_bytes ?? 0),
-    0
+  const statsRow = (Array.isArray(statsRes.data) ? statsRes.data[0] : statsRes.data) as
+    | DashboardStats
+    | undefined;
+  const userCount = Number(statsRow?.users_count ?? 0);
+  const workspaceCount = Number(statsRow?.workspaces_count ?? 0);
+  const fileCount = Number(statsRow?.files_count ?? 0);
+  const fileBytes = Number(statsRow?.files_total_bytes ?? 0);
+  const activeTotal = Number(statsRow?.active_subs_total ?? 0);
+  const activeByTier = new Map<string, number>(
+    Object.entries(statsRow?.active_subs_by_tier ?? {}).map(([k, v]) => [
+      k,
+      Number(v),
+    ])
   );
-
-  const subRows = (subsAggRes.data ?? []) as Array<{
-    tier_id: string;
-    status: string;
-  }>;
-  const activeByTier = new Map<string, number>();
-  let activeTotal = 0;
-  for (const r of subRows) {
-    if (r.status !== "active" && r.status !== "trialing") continue;
-    activeTotal += 1;
-    activeByTier.set(r.tier_id, (activeByTier.get(r.tier_id) ?? 0) + 1);
-  }
 
   const messages = (messagesRes.data ?? []) as ContactMessage[];
   const recentSignups = (profilesRes.data ?? []) as ProfileLite[];
 
-  // Email lookup for recent signups
+  // Email lookup for recent signups (5 parallel auth.admin.getUserById)
   const emails = await fetchAuthUsersByIds(recentSignups.map((p) => p.user_id));
 
   return (
