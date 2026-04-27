@@ -6,6 +6,7 @@ import { useTheme } from "@/components/ThemeProvider";
 import { TOOLS, toolBySlug, type ToolItem } from "../_data/tools-list";
 import { DesktopShellProvider } from "./DesktopShellContext";
 import AppStore from "./AppStore";
+import ControlCenter from "./ControlCenter";
 import DesktopBackground from "./DesktopBackground";
 import Dock from "./Dock";
 import Launchpad from "./Launchpad";
@@ -34,6 +35,10 @@ import { useDesktopSounds } from "./useDesktopSounds";
 import { useWorkspaceKey, useWorkspaces, WorkspaceProvider } from "./useWorkspaces";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import SignInDialog from "./SignInDialog";
+import Spotlight from "./Spotlight";
+import ClipboardHistory from "./ClipboardHistory";
+import QuickNote from "./QuickNote";
+import EasterEggs from "./EasterEggs";
 import { AuthProvider, useAuth } from "./useAuth";
 import { useWorkspaceSync } from "./useWorkspaceSync";
 import { useWorkspaceRole } from "./useWorkspaceRole";
@@ -171,6 +176,7 @@ function DesktopApp() {
   const [wallpaperPickerOpen, setWallpaperPickerOpen] = useState(false);
   const [iconStylePickerOpen, setIconStylePickerOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [controlCenterOpen, setControlCenterOpen] = useState(false);
   const [missionControlOpen, setMissionControlOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [settingsSection, setSettingsSection] = useState<
@@ -497,6 +503,7 @@ function DesktopApp() {
         onOpenSettings={() => openSettings("appearance")}
         onOpenProfile={openProfile}
         onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
+        onOpenControlCenter={() => setControlCenterOpen((v) => !v)}
         canAdmin={canAdmin}
       />
 
@@ -679,6 +686,24 @@ function DesktopApp() {
         closeAll={closeAll}
         closeAllOfSlug={closeAllOfSlug}
       />
+
+      {/* Control Center — slide-down quick-settings panel (theme, focus,
+        * sound, accent, quick links). Triggered from the topbar. */}
+      <ControlCenter
+        open={controlCenterOpen}
+        onClose={() => setControlCenterOpen(false)}
+        placement="desktop"
+        onOpenSettings={() => openSettings("appearance")}
+        onOpenWorkspaces={openWorkspacesSection}
+      />
+
+      {/* Shell overlays (Agent 3): universal spotlight, clipboard manager,
+        * quick note, and small easter eggs. Each component installs its own
+        * keyboard listeners and renders nothing until triggered. */}
+      <Spotlight />
+      <ClipboardHistory />
+      <QuickNote />
+      <EasterEggs />
     </div>
     </DesktopShellProvider>
   );
