@@ -22,6 +22,13 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useAuth } from "./useAuth";
 import { useWorkspaces } from "./useWorkspaces";
+import {
+  STORAGE_ADDON_OPTIONS,
+  formatStorageBytes,
+  formatStorageMb,
+  formatStorageGb,
+  isValidAddonGb,
+} from "@/app/_data/storage-addons";
 
 type Role = "owner" | "admin" | "member";
 
@@ -89,6 +96,20 @@ export default function WorkspacesPane() {
   const [members, setMembers] = useState<Member[]>([]);
   const [membersLoading, setMembersLoading] = useState(false);
 
+  // Storage state — per-workspace cap + used bytes (from workspace_storage
+  // RPC) and the currently-selected add-on row (from workspace_storage_addons).
+  // Both keyed by workspace id; only owners can mutate.
+  const [storage, setStorage] = useState<
+    Record<string, { capBytes: number; usedBytes: number }>
+  >({});
+  const [addonSel, setAddonSel] = useState<Record<string, number>>({});
+  // Local pending selection (the dropdown value before the user confirms)
+  const [addonDraft, setAddonDraft] = useState<Record<string, number>>({});
+  // Tier base (MB) — same for every workspace the user owns; pulled from
+  // /api/me. Used to render the "Base X + Add-on Y = Z" breakdown.
+  const [tierBaseMb, setTierBaseMb] = useState<number | null>(null);
+  const [tierName, setTierName] = useState<string>("Free");
+
   const refresh = useCallback(async () => {
     if (!enabled || !user) {
       setLoading(false);
@@ -144,6 +165,91 @@ export default function WorkspacesPane() {
       } else {
         setPending([]);
       }
+
+      // Load storage cap + add-on for every owned workspace, plus the
+      // user's tier base from /api/me. RPC + per-row select are RLS-
+      // gated; failures are non-fatal — we just leave the storage row
+      // out of the map.
+      const ownedRowsForStorage = ((ws as MyWorkspace[]) ?? []).filter(
+        (w) => w.role === "owner"
+      );
+      try {
+        const meRes = await fetch("/api/me", { cache: "no-store" });
+        if (meRes.ok) {
+          const meBody = (await meRes.json()) as {
+            tier_config?: {
+              name?: string | null;
+              max_storage_per_workspace_mb?: number | null;
+            } | null;
+          };
+          const baseMb =
+            meBody.tier_config?.max_storage_per_workspace_mb ?? null;
+          setTierBaseMb(baseMb);
+          setTierName(meBody.tier_config?.name ?? "Free");
+        }
+      } catch {
+        // ignore — fall back to RPC-only cap rendering
+      }
+
+      if (ownedRowsForStorage.length > 0) {
+        const ownedIds = ownedRowsForStorage.map((w) => w.id);
+        const [storageResults, { data: addonRows }] = await Promise.all([
+          Promise.all(
+            ownedIds.map(async (id) => {
+              const { data } = await supabase.rpc("workspace_storage", {
+                ws_id: id,
+              });
+              const row = Array.isArray(data) ? data[0] : null;
+              return {
+                id,
+                capBytes: Number(
+                  (row as { cap_bytes?: number } | null)?.cap_bytes ?? 0
+                ),
+                usedBytes: Number(
+                  (row as { used_bytes?: number } | null)?.used_bytes ?? 0
+                ),
+              };
+            })
+          ),
+          supabase
+            .from("workspace_storage_addons")
+            .select("workspace_id, addon_gb")
+            .in("workspace_id", ownedIds),
+        ]);
+        const nextStorage: Record<
+          string,
+          { capBytes: number; usedBytes: number }
+        > = {};
+        for (const s of storageResults) {
+          nextStorage[s.id] = {
+            capBytes: s.capBytes,
+            usedBytes: s.usedBytes,
+          };
+        }
+        setStorage(nextStorage);
+
+        const nextAddons: Record<string, number> = {};
+        for (const a of (addonRows as Array<{
+          workspace_id: string;
+          addon_gb: number;
+        }> | null) ?? []) {
+          nextAddons[a.workspace_id] = a.addon_gb;
+        }
+        setAddonSel(nextAddons);
+        setAddonDraft((prev) => {
+          const merged: Record<string, number> = { ...prev };
+          for (const id of ownedIds) {
+            // Sync draft to server value when the user has no pending edit.
+            if (merged[id] === undefined) {
+              merged[id] = nextAddons[id] ?? 0;
+            }
+          }
+          return merged;
+        });
+      } else {
+        setStorage({});
+        setAddonSel({});
+      }
     } catch (err) {
       setMsg({
         type: "error",
@@ -157,6 +263,64 @@ export default function WorkspacesPane() {
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  /* ───────── Storage add-on mutation ───────── */
+
+  const handleSaveAddon = async (workspaceId: string) => {
+    const next = addonDraft[workspaceId] ?? 0;
+    if (!isValidAddonGb(next)) {
+      setMsg({ type: "error", text: "Invalid storage add-on selection." });
+      return;
+    }
+    if ((addonSel[workspaceId] ?? 0) === next) {
+      setMsg({ type: "success", text: "No change to apply." });
+      return;
+    }
+    setBusy(`addon:${workspaceId}`);
+    setMsg(null);
+    try {
+      const res = await fetch("/api/workspaces/storage-addon", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId, addonGb: next }),
+      });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        capBytes?: number | null;
+        usedBytes?: number | null;
+      };
+      if (!res.ok) {
+        throw new Error(body.error || `Update failed (${res.status})`);
+      }
+      setAddonSel((prev) => ({ ...prev, [workspaceId]: next }));
+      if (
+        typeof body.capBytes === "number" &&
+        typeof body.usedBytes === "number"
+      ) {
+        setStorage((prev) => ({
+          ...prev,
+          [workspaceId]: {
+            capBytes: body.capBytes ?? 0,
+            usedBytes: body.usedBytes ?? 0,
+          },
+        }));
+      }
+      setMsg({
+        type: "success",
+        text:
+          next === 0
+            ? "Storage add-on removed."
+            : `Storage add-on applied (mock — payment coming soon).`,
+      });
+    } catch (err) {
+      setMsg({
+        type: "error",
+        text: err instanceof Error ? err.message : "Update failed",
+      });
+    } finally {
+      setBusy(null);
+    }
+  };
 
   /* ───────── Mutations ───────── */
 
@@ -478,10 +642,8 @@ export default function WorkspacesPane() {
         ) : (
           <ul className="mt-3 divide-y divide-app">
             {ownedRows.map((w) => (
-              <li
-                key={w.id}
-                className="flex flex-col gap-3 py-3 sm:flex-row sm:items-center sm:justify-between"
-              >
+              <li key={w.id} className="py-3">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div className="min-w-0 flex-1">
                   <button
                     type="button"
@@ -522,6 +684,81 @@ export default function WorkspacesPane() {
                     Delete
                   </button>
                 </div>
+                </div>
+                {/* Storage section — base + add-on dropdown */}
+                {(() => {
+                  const s = storage[w.id];
+                  const currentAddon = addonSel[w.id] ?? 0;
+                  const draftAddon = addonDraft[w.id] ?? currentAddon;
+                  const cap = s?.capBytes ?? 0;
+                  const used = s?.usedBytes ?? 0;
+                  const pct =
+                    cap > 0 ? Math.min(100, (used / cap) * 100) : 0;
+                  const baseLabel =
+                    tierBaseMb !== null ? formatStorageMb(tierBaseMb) : "Base";
+                  const addonLabel = formatStorageGb(currentAddon);
+                  const totalLabel = formatStorageBytes(cap);
+                  const isDirty = draftAddon !== currentAddon;
+                  return (
+                    <div className="mt-3 rounded-lg border border-app bg-app p-3">
+                      <div className="flex items-center justify-between text-xs text-secondary">
+                        <span>
+                          {formatStorageBytes(used)} of {totalLabel} used
+                        </span>
+                        <span className="text-muted tabular-nums">
+                          {pct.toFixed(0)}%
+                        </span>
+                      </div>
+                      <div className="mt-2 h-1.5 w-full overflow-hidden rounded-full bg-surface">
+                        <div
+                          className="h-full bg-tool-accent"
+                          style={{ width: `${pct}%` }}
+                        />
+                      </div>
+                      <div className="mt-2 text-[0.7rem] text-muted">
+                        {currentAddon > 0
+                          ? `Base ${baseLabel} + Add-on ${addonLabel} = ${totalLabel}`
+                          : `Base ${baseLabel} included with ${tierName}.`}
+                      </div>
+                      <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-center">
+                        <label className="flex-1 text-[0.6rem] uppercase tracking-[0.14em] text-muted">
+                          Storage add-on
+                          <select
+                            value={draftAddon}
+                            onChange={(e) =>
+                              setAddonDraft((prev) => ({
+                                ...prev,
+                                [w.id]: Number(e.target.value),
+                              }))
+                            }
+                            className="mt-1 w-full rounded-md border border-app bg-app-elevated px-2.5 py-1.5 text-xs font-medium text-app focus:border-tool-accent focus:outline-none focus:ring-2 focus:ring-tool-accent-soft"
+                          >
+                            {STORAGE_ADDON_OPTIONS.map((opt) => (
+                              <option key={opt.gb} value={opt.gb}>
+                                {opt.label} — {opt.price}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+                        <button
+                          type="button"
+                          className={PRIMARY}
+                          disabled={!isDirty || busy === `addon:${w.id}`}
+                          onClick={() => handleSaveAddon(w.id)}
+                          title="Payment integration ships next; this stores your selection."
+                        >
+                          {busy === `addon:${w.id}`
+                            ? "Saving…"
+                            : isDirty
+                              ? draftAddon === 0
+                                ? "Remove add-on"
+                                : "Upgrade (mock — payment coming soon)"
+                              : "Update"}
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })()}
               </li>
             ))}
           </ul>

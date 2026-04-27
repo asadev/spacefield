@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import MarketingShell from "../_components/MarketingShell";
 import { createClient } from "@/lib/supabase/server";
+import TierCard from "./_components/TierCard";
 
 export const metadata: Metadata = {
   title: "Pricing",
@@ -37,7 +38,7 @@ const FALLBACK_TIERS: Tier[] = [
     price_cents_monthly: 0,
     price_cents_yearly: 0,
     max_owned_workspaces: 1,
-    max_storage_per_workspace_mb: 100,
+    max_storage_per_workspace_mb: 5 * 1024,
     max_members_per_workspace: 5,
     features: {},
     is_public: true,
@@ -49,7 +50,7 @@ const FALLBACK_TIERS: Tier[] = [
     price_cents_monthly: 1900,
     price_cents_yearly: 19000,
     max_owned_workspaces: 5,
-    max_storage_per_workspace_mb: 5120,
+    max_storage_per_workspace_mb: 100 * 1024,
     max_members_per_workspace: 25,
     features: { premium_tools: true, priority_support: true, export: true },
     is_public: true,
@@ -61,7 +62,7 @@ const FALLBACK_TIERS: Tier[] = [
     price_cents_monthly: 4900,
     price_cents_yearly: 49000,
     max_owned_workspaces: 25,
-    max_storage_per_workspace_mb: 51200,
+    max_storage_per_workspace_mb: 1024 * 1024,
     max_members_per_workspace: null,
     features: {
       premium_tools: true,
@@ -96,9 +97,9 @@ const FALLBACK_TIERS: Tier[] = [
 ];
 
 const TAGLINES: Record<string, string> = {
-  free: "For solos and curious teams. One workspace, all the tools.",
-  pro: "For people who want to actually use it. 5 workspaces, 5 GB each.",
-  team: "Bring your team. Unlimited members per workspace, admin console.",
+  free: "For solos and curious teams. One workspace, 5 GB included.",
+  pro: "For people who want to actually use it. 5 workspaces, 100 GB each.",
+  team: "Bring your team. 1 TB per workspace, admin console.",
   enterprise: "For larger orgs with bespoke needs.",
 };
 
@@ -150,16 +151,6 @@ function workspacesLine(tier: Tier): string {
   return `${tier.max_owned_workspaces} workspaces`;
 }
 
-function storageLine(tier: Tier): string {
-  const mb = tier.max_storage_per_workspace_mb;
-  if (mb === null || mb === undefined) return "Custom storage";
-  if (mb >= 1024) {
-    const gb = mb / 1024;
-    return `${gb % 1 === 0 ? gb.toFixed(0) : gb.toFixed(1)} GB / workspace`;
-  }
-  return `${mb} MB / workspace`;
-}
-
 function membersLine(tier: Tier): string {
   if (tier.max_members_per_workspace === null) return "Unlimited members";
   return `Up to ${tier.max_members_per_workspace} members / workspace`;
@@ -208,74 +199,21 @@ export default async function PricingPage() {
             TAGLINES[tier.tier_id] ??
             "Flexible tier for teams that need more.";
 
-          const cardClass = isRecommended
-            ? "relative flex flex-col rounded-2xl border border-tool-accent bg-app-elevated p-6 ring-1 ring-tool-accent-soft"
-            : "relative flex flex-col rounded-2xl border border-app bg-app-elevated p-6";
-
           return (
-            <div key={tier.tier_id} className={cardClass}>
-              {isRecommended && (
-                <span className="absolute -top-3 left-6 rounded-full bg-tool-accent-soft px-2.5 py-0.5 text-[0.6rem] font-medium uppercase tracking-[0.14em] text-tool-accent">
-                  Most popular
-                </span>
-              )}
-
-              <h3 className="text-lg font-bold text-app">{tier.name}</h3>
-
-              <div className="mt-3">
-                <div className="text-3xl font-bold text-app tabular-nums">
-                  {price.big}
-                </div>
-                {yearly && (
-                  <div className="mt-1 text-xs text-muted">{yearly}</div>
-                )}
-              </div>
-
-              <p className="mt-3 text-sm text-secondary">{tagline}</p>
-
-              <ul className="mt-5 space-y-2 text-sm text-secondary">
-                <li className="flex gap-2">
-                  <span className="text-tool-accent">✓</span>
-                  <span>{workspacesLine(tier)}</span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-tool-accent">✓</span>
-                  <span>{storageLine(tier)}</span>
-                </li>
-                <li className="flex gap-2">
-                  <span className="text-tool-accent">✓</span>
-                  <span>{membersLine(tier)}</span>
-                </li>
-                {featureBullets.slice(0, 3).map((label) => (
-                  <li key={label} className="flex gap-2">
-                    <span className="text-tool-accent">✓</span>
-                    <span>{label}</span>
-                  </li>
-                ))}
-              </ul>
-
-              <div className="mt-6 pt-4">
-                {isFree ? (
-                  <Link
-                    href="/"
-                    className="inline-flex w-full items-center justify-center rounded-lg border border-app bg-app px-4 py-2.5 text-sm font-medium text-app transition-colors hover:border-tool-accent hover:text-tool-accent"
-                  >
-                    Get started
-                  </Link>
-                ) : (
-                  <Link
-                    href="/contact?topic=sales"
-                    className={
-                      isRecommended
-                        ? "inline-flex w-full items-center justify-center rounded-lg bg-tool-accent px-4 py-2.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
-                        : "inline-flex w-full items-center justify-center rounded-lg border border-app bg-app px-4 py-2.5 text-sm font-medium text-app transition-colors hover:border-tool-accent hover:text-tool-accent"
-                    }
-                  >
-                    Contact sales
-                  </Link>
-                )}
-              </div>
-            </div>
+            <TierCard
+              key={tier.tier_id}
+              tierId={tier.tier_id}
+              name={tier.name}
+              priceBig={price.big}
+              priceYearly={yearly}
+              tagline={tagline}
+              isRecommended={isRecommended}
+              isFree={isFree}
+              baseStorageMb={tier.max_storage_per_workspace_mb}
+              workspacesLine={workspacesLine(tier)}
+              membersLine={membersLine(tier)}
+              featureBullets={featureBullets}
+            />
           );
         })}
       </div>

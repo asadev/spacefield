@@ -7,6 +7,9 @@ import { createClient } from "@/lib/supabase/server";
  *   - CreateWorkspaceDialog → to gate workspace creation on tier cap.
  *   - Files Manager → to know the workspace cap when surfacing ensure
  *     errors ("you're at 1/1, upgrade or delete a workspace").
+ *   - Pricing page / settings → to know the active tier base + any
+ *     per-workspace storage add-ons currently selected, so the UI can
+ *     compute the effective cap inline.
  *
  * Uncached, server-side. Returns 401 if no session.
  */
@@ -29,20 +32,43 @@ export async function GET() {
     .eq("tier_id", tier)
     .maybeSingle();
 
-  const { count: ownedCount } = await supabase
+  // Workspaces the caller owns — needed to surface the storage add-on
+  // selection per workspace (RLS gives the owner read access via the
+  // "owners admins read addon" policy).
+  const { data: ownedWorkspaces } = await supabase
     .from("workspaces")
-    .select("id", { count: "exact", head: true })
-    .eq("user_id", user.id);
+    .select("id, name")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: true });
+
+  const owned = (ownedWorkspaces ?? []) as Array<{ id: string; name: string }>;
+  const ownedIds = owned.map((w) => w.id);
+
+  // Add-ons currently selected for any owned workspace. Absent row =
+  // no add-on; the client should treat as 0 GB.
+  let addons: Array<{ workspace_id: string; addon_gb: number }> = [];
+  if (ownedIds.length > 0) {
+    const { data: addonRows } = await supabase
+      .from("workspace_storage_addons")
+      .select("workspace_id, addon_gb")
+      .in("workspace_id", ownedIds);
+    addons = (addonRows ?? []) as Array<{
+      workspace_id: string;
+      addon_gb: number;
+    }>;
+  }
 
   const cap = tierRow?.max_owned_workspaces ?? 1;
-  const owned = ownedCount ?? 0;
+  const ownedCount = owned.length;
 
   return NextResponse.json({
     user: { id: user.id, email: user.email },
     tier,
     tier_config: tierRow,
-    owned_workspaces: owned,
+    owned_workspaces: ownedCount,
     max_owned_workspaces: cap,
-    can_create_workspace: owned < cap,
+    can_create_workspace: ownedCount < cap,
+    workspaces: owned,
+    storage_addons: addons,
   });
 }
