@@ -10,15 +10,14 @@
  * Click flow:
  *   - signed-out → links to /signin (Sign in to upgrade)
  *   - signed-in & paid tier (Pro/Team) → POSTs to /api/billing/checkout
- *     with kind='tier' and redirects the browser to the Polar-hosted
- *     checkout URL.
+ *     with kind='tier' and opens the Paddle.js overlay.
  *   - signed-in & free tier with add-on selected → POSTs to
  *     /api/billing/checkout with kind='addon' (the add-on attaches to
  *     the user's first owned workspace; a workspace must exist).
  *   - signed-in & enterprise → "Contact sales".
  *
- * Once Polar redirects back to /billing/success the webhook flips the
- * subscriptions row to the new tier (or marks the addon active).
+ * Once the Paddle webhook fires it flips the subscriptions row to the
+ * new tier (or marks the addon active).
  */
 
 import { useEffect, useMemo, useState } from "react";
@@ -50,13 +49,13 @@ interface MeResponse {
   workspaces?: Array<{ id: string; name: string }>;
   storage_addons?: Array<{ workspace_id: string; addon_gb: number }>;
   tier_config?: { name?: string | null } | null;
-  billing_provider?: "paddle" | "polar";
+  billing_provider?: "paddle";
   paddle_client_token?: string | null;
   paddle_environment?: "production" | "sandbox";
 }
 
 interface CheckoutResponse {
-  provider?: "paddle" | "polar";
+  provider?: "paddle";
   url?: string;
   session_id?: string;
   paddle?: {
@@ -174,38 +173,35 @@ export default function TierCard({
       if (!res.ok) {
         throw new Error(data.error || `Checkout failed (${res.status})`);
       }
-      if (data.provider === "paddle" && data.paddle) {
-        const token = me?.paddle_client_token ?? "";
-        if (!token) {
-          throw new Error(
-            "Paddle is not fully configured yet. Try again shortly."
-          );
-        }
-        const Paddle = await ensurePaddle({
-          token,
-          environment: me?.paddle_environment ?? "production",
-          onCheckoutCompleted: () => {
-            window.location.href = "/billing/success?provider=paddle";
-          },
-        });
-        Paddle.Checkout.open({
-          items: [{ priceId: data.paddle.price_id, quantity: 1 }],
-          customer: { email: data.paddle.customer_email },
-          customData: data.paddle.custom_data,
-          settings: {
-            displayMode: "overlay",
-            successUrl: `${window.location.origin}/billing/success?provider=paddle`,
-            allowLogout: false,
-          },
-        });
-        // Overlay opens — leave the button in "Opening…" state until
-        // the user finishes or closes the modal.
-        return;
-      }
-      if (!data.url) {
+      if (!data.paddle) {
         throw new Error(`Checkout failed (${res.status})`);
       }
-      window.location.href = data.url;
+      const token = me?.paddle_client_token ?? "";
+      if (!token) {
+        throw new Error(
+          "Paddle is not fully configured yet. Try again shortly."
+        );
+      }
+      const Paddle = await ensurePaddle({
+        token,
+        environment: me?.paddle_environment ?? "production",
+        onCheckoutCompleted: () => {
+          window.location.href = "/billing/success";
+        },
+      });
+      Paddle.Checkout.open({
+        items: [{ priceId: data.paddle.price_id, quantity: 1 }],
+        customer: { email: data.paddle.customer_email },
+        customData: data.paddle.custom_data,
+        settings: {
+          displayMode: "overlay",
+          successUrl: `${window.location.origin}/billing/success`,
+          allowLogout: false,
+        },
+      });
+      // Overlay opens — leave the button in "Opening…" state until
+      // the user finishes or closes the modal.
+      return;
     } catch (err) {
       setMsg({
         kind: "error",

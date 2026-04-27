@@ -8,18 +8,14 @@ import { isValidAddonGb } from "@/app/_data/storage-addons";
  * POST { kind: 'tier' | 'addon', tier?: 'pro'|'team',
  *        addon_gb?: 500|2048|10240, workspaceId: string }
  *
- *   Spins up a checkout session for either a tier upgrade or a
- *   per-workspace storage add-on. Provider is selected by
- *   BILLING_PROVIDER env var (default: paddle). The shape of the
- *   response varies by provider:
+ *   Spins up a Paddle checkout payload for either a tier upgrade or a
+ *   per-workspace storage add-on. Response shape:
  *
- *     - Polar: { provider: "polar", url, session_id }
- *               → client redirects window.location.href = url
- *     - Paddle: { provider: "paddle", paddle: { price_id, customer_email,
- *                  custom_data } }
- *               → client opens Paddle.Checkout.open(...)
+ *     { provider: "paddle", paddle: { price_id, customer_email,
+ *       custom_data } }
+ *       → client opens Paddle.Checkout.open(...)
  *
- *   custom_data / metadata is the contract with the webhook handler:
+ *   custom_data is the contract with the webhook handler:
  *     - user_id      → which Supabase user this maps to
  *     - workspace_id → which workspace the add-on (if any) attaches to
  *     - kind         → 'tier' | 'addon'

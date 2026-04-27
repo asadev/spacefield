@@ -13,7 +13,7 @@ import { ACTIVE_PROVIDER } from "@/lib/billing";
  *     compute the effective cap inline.
  *   - Workspace settings → to surface payment status badges on the
  *     storage add-on dropdown ("Active", "Pending payment", "Past due")
- *     once Polar billing is wired.
+ *     once Paddle billing is wired.
  *
  * Uncached, server-side. Returns 401 if no session.
  */
@@ -43,7 +43,7 @@ export async function GET() {
   const { data: subRow } = await supabase
     .from("subscriptions")
     .select(
-      "tier_id, status, polar_status, paddle_status, current_period_end"
+      "tier_id, status, paddle_status, current_period_end"
     )
     .eq("user_id", user.id)
     .maybeSingle();
@@ -62,15 +62,13 @@ export async function GET() {
 
   // Add-ons currently selected for any owned workspace. Absent row =
   // no add-on; the client should treat as 0 GB. payment_status now
-  // reflects the Polar lifecycle: 'mock' (legacy v1), 'pending'
+  // reflects the Paddle lifecycle: 'mock' (legacy v1), 'pending'
   // (checkout opened), 'active' (webhook confirmed), 'past_due',
   // 'canceled'.
   let addons: Array<{
     workspace_id: string;
     addon_gb: number;
     payment_status: string;
-    polar_status: string | null;
-    polar_subscription_id: string | null;
     paddle_status: string | null;
     paddle_subscription_id: string | null;
     current_period_end: string | null;
@@ -79,7 +77,7 @@ export async function GET() {
     const { data: addonRows } = await supabase
       .from("workspace_storage_addons")
       .select(
-        "workspace_id, addon_gb, payment_status, polar_status, polar_subscription_id, paddle_status, paddle_subscription_id, current_period_end"
+        "workspace_id, addon_gb, payment_status, paddle_status, paddle_subscription_id, current_period_end"
       )
       .in("workspace_id", ownedIds);
     addons = (addonRows ?? []) as typeof addons;

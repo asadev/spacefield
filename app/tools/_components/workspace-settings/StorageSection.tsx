@@ -116,7 +116,7 @@ export default function StorageSection({
     try {
       // Removing the add-on (selecting 0) hits the legacy direct path
       // — there's no payment to take. The webhook handler treats a
-      // canceled Polar subscription as a separate signal, so this
+      // canceled Paddle subscription as a separate signal, so this
       // doesn't conflict.
       if (draftAddonGb === 0) {
         const res = await fetch("/api/workspaces/storage-addon", {
@@ -145,7 +145,7 @@ export default function StorageSection({
         }),
       });
       const body = (await res.json().catch(() => ({}))) as {
-        provider?: "paddle" | "polar";
+        provider?: "paddle";
         url?: string;
         paddle?: {
           price_id: string;
@@ -157,46 +157,42 @@ export default function StorageSection({
       if (!res.ok) {
         throw new Error(body.error || `Checkout failed (${res.status})`);
       }
-      if (body.provider === "paddle" && body.paddle) {
-        // Pull the client token + env from /api/me. Cheap call; we
-        // don't keep it on the component because StorageSection is
-        // already mounted by the time the user clicks Buy.
-        const meRes = await fetch("/api/me", { cache: "no-store" });
-        const me = (await meRes.json().catch(() => ({}))) as {
-          paddle_client_token?: string | null;
-          paddle_environment?: "production" | "sandbox";
-        };
-        if (!me.paddle_client_token) {
-          throw new Error(
-            "Paddle is not fully configured yet. Try again shortly."
-          );
-        }
-        const Paddle = await ensurePaddle({
-          token: me.paddle_client_token,
-          environment: me.paddle_environment ?? "production",
-          onCheckoutCompleted: () => {
-            window.location.href = "/billing/success?provider=paddle";
-          },
-        });
-        Paddle.Checkout.open({
-          items: [{ priceId: body.paddle.price_id, quantity: 1 }],
-          customer: { email: body.paddle.customer_email },
-          customData: body.paddle.custom_data,
-          settings: {
-            displayMode: "overlay",
-            successUrl: `${window.location.origin}/billing/success?provider=paddle`,
-            allowLogout: false,
-          },
-        });
-        // Overlay's open — leave busy state for clarity until the
-        // overlay closes/redirects.
-        return;
-      }
-      if (!body.url) {
+      if (!body.paddle) {
         throw new Error(`Checkout failed (${res.status})`);
       }
-      // Polar branch: hand off to hosted checkout.
-      window.location.href = body.url;
+      // Pull the client token + env from /api/me. Cheap call; we
+      // don't keep it on the component because StorageSection is
+      // already mounted by the time the user clicks Buy.
+      const meRes = await fetch("/api/me", { cache: "no-store" });
+      const me = (await meRes.json().catch(() => ({}))) as {
+        paddle_client_token?: string | null;
+        paddle_environment?: "production" | "sandbox";
+      };
+      if (!me.paddle_client_token) {
+        throw new Error(
+          "Paddle is not fully configured yet. Try again shortly."
+        );
+      }
+      const Paddle = await ensurePaddle({
+        token: me.paddle_client_token,
+        environment: me.paddle_environment ?? "production",
+        onCheckoutCompleted: () => {
+          window.location.href = "/billing/success";
+        },
+      });
+      Paddle.Checkout.open({
+        items: [{ priceId: body.paddle.price_id, quantity: 1 }],
+        customer: { email: body.paddle.customer_email },
+        customData: body.paddle.custom_data,
+        settings: {
+          displayMode: "overlay",
+          successUrl: `${window.location.origin}/billing/success`,
+          allowLogout: false,
+        },
+      });
+      // Overlay's open — leave busy state for clarity until the
+      // overlay closes/redirects.
+      return;
     } catch (err) {
       onError(err instanceof Error ? err.message : "Update failed");
       setBusy(null);
