@@ -576,6 +576,9 @@ export const TOOLS: ToolItem[] = [
 
   // Documents — Word-style rich-text editor that saves into the workspace.
   { slug: "documents", title: "Documents", description: "Write, edit, and save Word-style documents inside your workspace. Real .docx round-trip, autosave, tables, lists, code, links.", category: "files", icon: "document", defaultSize: { w: 880, h: 640 }, minSize: { w: 480, h: 360 }, app: () => import("../documents/_app").then((m) => ({ default: m.default })) },
+
+  // Sheets — Excel-style spreadsheets with real .xlsx round-trip.
+  { slug: "sheets", title: "Sheets", description: "Excel-style spreadsheets in your workspace. Formulas, multiple sheets, conditional formatting. Real .xlsx round-trip — opens in Numbers, Excel, Google Sheets.", category: "files", icon: "grid", defaultSize: { w: 1100, h: 720 }, minSize: { w: 640, h: 420 }, app: () => import("../sheets/_app").then((m) => ({ default: m.default })) },
 ];
 
 export function toolsByCategory(key: ToolCategoryKey): ToolItem[] {
