@@ -153,7 +153,7 @@ export default function TopBar({
   return (
     <div
       ref={barRef}
-      className="fixed inset-x-0 top-0 z-[1] flex h-8 items-center gap-1 bg-app-elevated/70 px-2 text-[0.72rem] backdrop-blur-xl"
+      className="fixed inset-x-0 top-0 z-[1] flex h-8 items-center gap-1 px-2 text-[0.72rem]"
     >
       {/* Mobile-only trigger. On <sm screens File/Window/View/Help don't
        * fit horizontally, so we collapse them behind a single button that
