@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { isFocusActive } from "./useFocusMode";
 import { useWorkspaceKey } from "./useWorkspaces";
 
 /* Web-Audio synthesized UI sound system for the /tools desktop.
@@ -160,6 +161,8 @@ export function useDesktopSounds(): DesktopSoundsApi {
 
   const tap = useCallback(() => {
     if (stateRef.current.muted) return;
+    // Focus / Do-Not-Disturb suppresses every UI sound, including taps.
+    if (isFocusActive()) return;
     const ctx = ensureRunning();
     if (!ctx) return;
     playTones(ctx, stateRef.current.volume, [
@@ -169,6 +172,7 @@ export function useDesktopSounds(): DesktopSoundsApi {
 
   const chime = useCallback(() => {
     if (stateRef.current.muted) return;
+    if (isFocusActive()) return;
     const ctx = ensureRunning();
     if (!ctx) return;
     playTones(ctx, stateRef.current.volume, [

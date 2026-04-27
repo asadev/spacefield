@@ -57,6 +57,7 @@ import { useWorkspaces } from "./useWorkspaces";
 import { useWorkspaceRole } from "./useWorkspaceRole";
 import { useWorkspaceSync } from "./useWorkspaceSync";
 import { useDesktopShell, DesktopShellProvider } from "./DesktopShellContext";
+import ControlCenter from "./ControlCenter";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
 import SignInDialog from "./SignInDialog";
 import Onboarding from "./Onboarding";
@@ -118,6 +119,7 @@ export default function MobileShell() {
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [workspaceMenuOpen, setWorkspaceMenuOpen] = useState(false);
   const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [controlCenterOpen, setControlCenterOpen] = useState(false);
   const [appSwitcherOpen, setAppSwitcherOpen] = useState(false);
   const [allAppsOpen, setAllAppsOpen] = useState(false);
 
@@ -151,6 +153,7 @@ export default function MobileShell() {
       // Close any open sheet so the new app comes to the front.
       setSettingsOpen(false);
       setNotificationsOpen(false);
+      setControlCenterOpen(false);
       setAppSwitcherOpen(false);
       setAllAppsOpen(false);
       setUserMenuOpen(false);
@@ -244,6 +247,7 @@ export default function MobileShell() {
             refreshPendingInvites();
             setNotificationsOpen(true);
           }}
+          onControlCenterTap={() => setControlCenterOpen(true)}
           pendingInviteCount={pendingInviteCount}
           user={user}
         />
@@ -381,6 +385,16 @@ export default function MobileShell() {
           open={createWorkspaceOpen}
           onClose={() => setCreateWorkspaceOpen(false)}
         />
+
+        {/* Control Center — slides down from the status bar on mobile.
+          * Same component as desktop, different placement strategy. */}
+        <ControlCenter
+          open={controlCenterOpen}
+          onClose={() => setControlCenterOpen(false)}
+          placement="mobile"
+          onOpenSettings={() => openSettings("appearance")}
+          onOpenWorkspaces={() => openSettings("workspaces")}
+        />
       </div>
     </DesktopShellProvider>
   );
@@ -393,6 +407,7 @@ function MobileStatusBar({
   onWorkspaceTap,
   onAvatarTap,
   onNotificationsTap,
+  onControlCenterTap,
   pendingInviteCount,
   user,
 }: {
@@ -400,6 +415,7 @@ function MobileStatusBar({
   onWorkspaceTap: () => void;
   onAvatarTap: () => void;
   onNotificationsTap: () => void;
+  onControlCenterTap: () => void;
   pendingInviteCount: number;
   user: ReturnType<typeof useAuth>["user"];
 }) {
@@ -437,6 +453,30 @@ function MobileStatusBar({
         {workspaceName}
       </button>
       <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={onControlCenterTap}
+          aria-label="Open Control Center"
+          className="flex h-11 w-11 -mr-2 items-center justify-center rounded-full text-app transition-colors active:bg-surface"
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <line x1="4" y1="6" x2="14" y2="6" />
+            <line x1="4" y1="12" x2="20" y2="12" />
+            <line x1="4" y1="18" x2="11" y2="18" />
+            <circle cx="17" cy="6" r="2" fill="currentColor" />
+            <circle cx="14" cy="18" r="2" fill="currentColor" />
+          </svg>
+        </button>
         <button
           type="button"
           onClick={onNotificationsTap}

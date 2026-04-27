@@ -3,6 +3,8 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
+import PomodoroTimer from "./PomodoroTimer";
+import { useFocusMode } from "./useFocusMode";
 import type { WindowState } from "./useWindowManager";
 import { useWorkspaces } from "./useWorkspaces";
 import { usePendingInvites } from "./usePendingInvites";
@@ -48,6 +50,8 @@ interface Props {
   theme: "light" | "dark" | null;
   onToggleTheme: () => void;
   onCreateWorkspace: () => void;
+  /** Open the slide-down Control Center panel. Mounts in Desktop.tsx. */
+  onOpenControlCenter?: () => void;
 }
 
 /* Apple-style menu bar across the very top of /tools.
@@ -81,6 +85,7 @@ export default function TopBar({
   theme,
   onToggleTheme,
   onCreateWorkspace,
+  onOpenControlCenter,
 }: Props) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [now, setNow] = useState<Date | null>(null);
@@ -89,6 +94,8 @@ export default function TopBar({
     useWorkspaces();
   // Pending workspace invites — drives the red dot on the notification bell.
   const { count: pendingInviteCount } = usePendingInvites();
+  // Focus / Do-Not-Disturb — surfaces the moon icon next to the bell when on.
+  const { active: focusActive } = useFocusMode();
 
   useEffect(() => {
     setNow(new Date());
@@ -482,9 +489,68 @@ export default function TopBar({
         </svg>
       </button>
 
+      {/* Pomodoro timer — popover anchors under this trigger. Compact
+       * MM:SS readout shows up next to the icon when a phase is running. */}
+      <PomodoroTimer />
+
+      {/* Focus / Do-Not-Disturb indicator. Visible only while DnD is on.
+       * Tapping it opens Control Center (where the user can toggle off). */}
+      {focusActive && (
+        <button
+          type="button"
+          onClick={onOpenControlCenter}
+          aria-label="Do Not Disturb is on"
+          title="Do Not Disturb is on"
+          className="flex h-6 w-6 items-center justify-center rounded text-tool-accent hover:bg-surface transition-colors"
+        >
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z" />
+          </svg>
+        </button>
+      )}
+
       <span className="hidden sm:inline text-app text-[0.72rem] tabular-nums">
         {clockText}
       </span>
+
+      {/* Control Center — dropdown of theme / focus / sound / accent. The
+       * panel itself is rendered by Desktop.tsx; this button just toggles
+       * its open flag. Anchors visually to the clock area on the topbar. */}
+      <button
+        type="button"
+        onClick={onOpenControlCenter}
+        aria-label="Open Control Center"
+        title="Control Center"
+        className="flex h-6 w-6 items-center justify-center rounded text-app hover:bg-surface transition-colors"
+      >
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <line x1="4" y1="6" x2="14" y2="6" />
+          <line x1="4" y1="12" x2="20" y2="12" />
+          <line x1="4" y1="18" x2="11" y2="18" />
+          <circle cx="17" cy="6" r="2" fill="currentColor" />
+          <circle cx="14" cy="18" r="2" fill="currentColor" />
+        </svg>
+      </button>
 
       {/* Notifications bell — panel itself is rendered by the parent
        * (NotificationCenter) so it can live above other overlays.
