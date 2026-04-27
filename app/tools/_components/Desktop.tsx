@@ -231,6 +231,32 @@ function DesktopApp() {
     return () => obs.disconnect();
   }, []);
 
+  // Spotlight dispatches synthetic events for cross-component actions
+  // (open profile, create workspace, sign out, open settings) instead of
+  // taking direct callback props — the Spotlight component lives outside
+  // DesktopApp's prop tree. We listen here and call the right handler
+  // so those Spotlight result rows actually do something.
+  useEffect(() => {
+    const onOpenProfile = () => openProfile();
+    const onOpenSettings = () => openSettings();
+    const onCreateWorkspace = () => setCreateWorkspaceOpen(true);
+    const onSignOut = () => {
+      void authSignOut();
+    };
+    window.addEventListener("spotlight:open-profile", onOpenProfile);
+    window.addEventListener("spotlight:open-settings", onOpenSettings);
+    window.addEventListener("spotlight:create-workspace", onCreateWorkspace);
+    window.addEventListener("spotlight:sign-out", onSignOut);
+    return () => {
+      window.removeEventListener("spotlight:open-profile", onOpenProfile);
+      window.removeEventListener("spotlight:open-settings", onOpenSettings);
+      window.removeEventListener("spotlight:create-workspace", onCreateWorkspace);
+      window.removeEventListener("spotlight:sign-out", onSignOut);
+    };
+    // openProfile / openSettings are stable closures over setSettings*; safe to omit.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [authSignOut]);
+
   // ⌘K / Ctrl-K toggles Launchpad. ⌘, opens Settings (macOS standard).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
