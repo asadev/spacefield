@@ -1,20 +1,21 @@
 "use client";
 
-/* AppIcon — renders a tool's launcher-style squircle icon.
+/* AppIcon — renders a tool's launcher icon.
  *
- * The 278 SVGs under /public/app-icons/ are 1024×1024 rich icons from
- * the Spacefield Suite design (Claude Design handoff). The design's
- * locked aesthetic is "monochrome" — a desaturated take with no sheen,
- * no vignette, no rim, no saturation, ~24% corner radius.
+ * The 282 SVGs under /public/app-icons/ are flat Google-style icons
+ * from the latest design handoff: per-tool unique glyph + palette,
+ * 24%-radius squircle, premium minimal, no 3D / gloss / sheen / rim /
+ * vignette. They're already in the desired "flat premium" form, so
+ * NO post-filter is applied — colors render as designed.
  *
- * For tools that DON'T have a matching SVG (sheet/documents added
- * after the design, plus system icons like the launchpad-grid glyph),
- * we fall back to the legacy outline-path TOOL_ICONS map so nothing
+ * For system buttons that aren't tools (e.g. dock "All apps"), we
+ * fall back to the legacy outline-path TOOL_ICONS map so nothing
  * goes blank.
  *
- * Theme: each tool ships __dark.svg + __light.svg variants. We pick
- * via `useTheme().resolved`. Mono filter removes the visible color
- * difference but keeps the lightness right for the surface.
+ * Theme: each tool ships __dark.svg + __light.svg variants picked
+ * via `useTheme().resolved`. The light variant uses a near-white
+ * background with deep ink; the dark variant flips to a midnight
+ * background with light ink.
  */
 
 import { useTheme } from "@/components/ThemeProvider";
@@ -63,6 +64,7 @@ const ICON_SLUGS = new Set<string>([
   "developer-track-record",
   "discounted-cash-flow",
   "dld-fee-calculator",
+  "documents",
   "due-diligence",
   "eisenhower-matrix",
   "email-roi",
@@ -144,6 +146,7 @@ const ICON_SLUGS = new Set<string>([
   "sdr-cadence-builder",
   "seo-meta-tags",
   "service-charge-comparison",
+  "sheets",
   "sla-calculator",
   "sop-builder",
   "status-page-generator",
@@ -177,17 +180,20 @@ interface AppIconProps {
   iconKey?: keyof typeof TOOL_ICONS;
   /** Pixel size of the rendered square. Defaults to 64. */
   size?: number;
-  /** Corner-radius percentage of size. Apple/squircle is ~24%. */
+  /** Corner-radius percentage of size. Google-flat is ~24%. */
   cornerPct?: number;
   /** Optional className for the wrapper. */
   className?: string;
-  /** Render as monochrome (saturate 0). True by default — matches the
-   * locked design preset. Set false if a specific surface wants color. */
+  /** Deprecated — kept for prop compatibility with existing call sites.
+   * The Google-flat icon set is already minimal, so we no longer apply
+   * a saturate(0) post-filter. Setting this true is now a no-op. */
   mono?: boolean;
   /** A11y label. */
   label?: string;
-  /** Tone-down the drop shadow (e.g. inside the dock where shadows
-   * compound the surrounding chrome). */
+  /** Drop the heavy elevated drop-shadow in favor of a near-flat one.
+   * Used inside the dock where compounded chrome would otherwise feel
+   * heavy. The Google-flat aesthetic prefers this even outside the
+   * dock; we leave the elevated default for parity with prior surfaces. */
   flatShadow?: boolean;
 }
 
@@ -211,7 +217,7 @@ export default function AppIcon({
   size = 64,
   cornerPct = 24,
   className = "",
-  mono = true,
+  // mono kept for prop-compat but no longer drives a filter; see prop docs.
   label,
   flatShadow = false,
 }: AppIconProps) {
@@ -229,9 +235,12 @@ export default function AppIcon({
           height: size,
           borderRadius: radius,
           overflow: "hidden",
+          // Lighter, more diffuse shadow — matches the Google-flat
+          // aesthetic. Heavy 3-stack drop shadow felt off against the
+          // minimal icon style.
           boxShadow: flatShadow
-            ? "0 1px 2px rgba(0,0,0,0.18), 0 4px 10px rgba(0,0,0,0.22)"
-            : "0 1px 2px rgba(0,0,0,0.22), 0 8px 22px rgba(0,0,0,0.32), 0 14px 38px rgba(0,0,0,0.18)",
+            ? "0 1px 1px rgba(0,0,0,0.10), 0 2px 4px rgba(0,0,0,0.10)"
+            : "0 1px 2px rgba(0,0,0,0.10), 0 6px 14px rgba(0,0,0,0.14)",
           flexShrink: 0,
         }}
         aria-label={label ?? slug}
@@ -250,7 +259,6 @@ export default function AppIcon({
             width: "100%",
             height: "100%",
             display: "block",
-            filter: mono ? "saturate(0) brightness(1.04)" : undefined,
             userSelect: "none",
           }}
         />
@@ -270,14 +278,11 @@ export default function AppIcon({
         width: size,
         height: size,
         borderRadius: radius,
-        background:
-          theme === "dark"
-            ? "linear-gradient(135deg, #1f2937, #0f172a)"
-            : "linear-gradient(135deg, #f1f5f9, #cbd5e1)",
+        background: theme === "dark" ? "#1f2937" : "#f3f4f6",
         boxShadow: flatShadow
-          ? "0 1px 2px rgba(0,0,0,0.18), 0 4px 10px rgba(0,0,0,0.22)"
-          : "0 1px 2px rgba(0,0,0,0.22), 0 8px 22px rgba(0,0,0,0.32), 0 14px 38px rgba(0,0,0,0.18)",
-        color: theme === "dark" ? "#e5e7eb" : "#0f172a",
+          ? "0 1px 1px rgba(0,0,0,0.10), 0 2px 4px rgba(0,0,0,0.10)"
+          : "0 1px 2px rgba(0,0,0,0.10), 0 6px 14px rgba(0,0,0,0.14)",
+        color: theme === "dark" ? "#f3f4f6" : "#1f2937",
         flexShrink: 0,
       }}
       aria-label={label ?? slug ?? "tool"}
@@ -292,9 +297,6 @@ export default function AppIcon({
         strokeWidth="1.6"
         strokeLinecap="round"
         strokeLinejoin="round"
-        style={{
-          filter: mono ? "saturate(0)" : undefined,
-        }}
       >
         <path d={path} />
       </svg>
