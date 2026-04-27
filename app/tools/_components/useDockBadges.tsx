@@ -27,7 +27,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePendingInvites } from "./usePendingInvites";
-import { useWorkspaceKey } from "./useWorkspaces";
+import { useWorkspaceKey, useWorkspaces } from "./useWorkspaces";
 
 const NOTIFICATIONS_SUFFIX = "tools-desktop-notifications-v1";
 
@@ -123,18 +123,74 @@ export function useDockBadges() {
   // Agent 4 lands /api/files/trash it's a one-line change.
   const filesTrashCount = 0;
 
+  // Chat unread — aggregate of all per-channel unread counts across the
+  // active workspace. We poll /api/chat/unread every 60 s and also on
+  // window focus + a same-tab "spacefield:chat-read" event the chat app
+  // dispatches when it marks a channel read so the badge clears
+  // immediately rather than on the next poll tick.
+  const { activeId } = useWorkspaces();
+  const [chatUnread, setChatUnread] = useState(0);
+  useEffect(() => {
+    if (!activeId) {
+      setChatUnread(0);
+      return;
+    }
+    let cancelled = false;
+    const fetchUnread = async () => {
+      try {
+        const res = await fetch(
+          `/api/chat/unread?workspace_id=${encodeURIComponent(activeId)}`,
+          { cache: "no-store" }
+        );
+        if (!res.ok) return;
+        const json = (await res.json()) as { total?: number };
+        if (cancelled) return;
+        setChatUnread(Math.max(0, Number(json.total ?? 0)));
+      } catch {
+        /* swallow — best-effort */
+      }
+    };
+    void fetchUnread();
+    const id = window.setInterval(() => {
+      void fetchUnread();
+    }, 60_000);
+    const onFocus = () => {
+      void fetchUnread();
+    };
+    const onChatRead = () => {
+      void fetchUnread();
+    };
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onFocus);
+    window.addEventListener(
+      "spacefield:chat-read" as keyof WindowEventMap,
+      onChatRead as EventListener
+    );
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onFocus);
+      window.removeEventListener(
+        "spacefield:chat-read" as keyof WindowEventMap,
+        onChatRead as EventListener
+      );
+    };
+  }, [activeId]);
+
   const badges = useMemo<Record<string, number>>(() => {
     const map: Record<string, number> = {};
     if (filesTrashCount > 0) map["files-manager"] = filesTrashCount;
     if (pendingInviteCount > 0) map["settings"] = pendingInviteCount;
     if (unreadNotifications > 0) map["notifications"] = unreadNotifications;
+    if (chatUnread > 0) map["chat"] = chatUnread;
     for (const [slug, count] of unsavedRef.current.entries()) {
       if (count > 0) map[slug] = count;
     }
     return map;
     // unsavedTick forces recompute when the broadcast map mutates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filesTrashCount, pendingInviteCount, unreadNotifications, unsavedTick]);
+  }, [filesTrashCount, pendingInviteCount, unreadNotifications, chatUnread, unsavedTick]);
 
   const getCount = useCallback((slug: string) => badges[slug] ?? 0, [badges]);
 
