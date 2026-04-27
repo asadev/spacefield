@@ -750,7 +750,8 @@ const COUNTRY_CATEGORIES = ["all", "housing", "economy", "demographics"] as cons
 // Main native app component
 // ---------------------------------------------------------------------------
 export default function GlobalMarketComparisonApp({ width }: NativeAppProps) {
-  const compact = width < COMPACT_BREAKPOINT;
+  const isMobile = width < 700;
+  const compact = width < COMPACT_BREAKPOINT || isMobile;
 
   // ── State ──
   const [mode, setMode] = useState<ComparisonMode>("cities");

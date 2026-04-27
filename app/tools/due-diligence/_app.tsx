@@ -56,8 +56,9 @@ interface SavedState {
 export default function DueDiligenceApp(props: NativeAppProps) {
   const { width } = props;
   // Width-driven breakpoints — same idea as deal-scoring/_app.tsx.
-  const isNarrow = width < 720;
-  const isCompact = width < 560;
+  const isMobile = width < 700;
+  const isNarrow = width < 720 || isMobile;
+  const isCompact = width < 560 || isMobile;
   const isUltra = width < 480;
 
   const [type, setType] = useState<PropertyType>("ready-apartment");

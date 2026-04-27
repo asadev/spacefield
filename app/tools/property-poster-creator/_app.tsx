@@ -719,7 +719,8 @@ export default function PropertyPosterCreatorApp({ width }: NativeAppProps) {
   const isLoggedIn = useRef(false);
 
   // Width-driven layout — collapse the side panel below the canvas in narrow windows.
-  const isNarrow = width < PANEL_BREAKPOINT;
+  const isMobile = width < 700;
+  const isNarrow = width < PANEL_BREAKPOINT || isMobile;
 
   const [data, setData] = useState<PosterData>(() => {
     const saved = loadAgentDetailsFromLS();

@@ -89,8 +89,9 @@ const STATUS_FILTERS = ["All", "active", "upcoming", "proposed"] as const;
 export default function RegulationMonitorApp(props: NativeAppProps) {
   const { width } = props;
   // Width-driven breakpoints — same idea as due-diligence/_app.tsx.
-  const isNarrow = width < 760;
-  const isCompact = width < 600;
+  const isMobile = width < 700;
+  const isNarrow = width < 760 || isMobile;
+  const isCompact = width < 600 || isMobile;
   const isUltra = width < 480;
 
   const [selectedCategories, setSelectedCategories] = useState<string[]>([]);

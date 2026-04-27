@@ -241,7 +241,8 @@ export default function TenantScreeningApp({
   const [docChecked, setDocChecked] = useState<Record<string, boolean>>({});
 
   /* ───── Width-driven layout ───── */
-  const compact = width < 720;
+  const isMobile = width < 700;
+  const compact = width < 720 || isMobile;
   const inputCols =
     width >= 900 ? "md:grid-cols-[1.4fr_2fr_1.2fr]" : "md:grid-cols-1";
   const verdictCols =
@@ -540,7 +541,7 @@ export default function TenantScreeningApp({
         </div>
       </div>
 
-      <section className="px-4 py-4 sm:px-5 sm:py-5">
+      <section className={isMobile ? "px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]" : "px-4 py-4 sm:px-5 sm:py-5"}>
         <div className="space-y-4">
           {/* ───── Input strip ───── */}
           <div className="rounded-xl border border-app bg-app-elevated p-4 transition-colors sm:p-5">

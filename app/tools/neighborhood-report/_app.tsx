@@ -471,8 +471,11 @@ export default function NeighborhoodReportApp({ width, openApp }: NativeAppProps
   }, [scored, search, budget, propertyType, sort]);
 
   // ─── responsive layout ───────────────────────────────────────────────
+  const isMobile = width < 700;
   const cols = width >= 1000 ? 3 : width >= 700 ? 2 : 1;
   const gridClass = cols === 3 ? "grid-cols-3" : cols === 2 ? "grid-cols-2" : "grid-cols-1";
+  // Mobile: collapsible sections + bottom-sheet TOC trigger.
+  const [tocOpen, setTocOpen] = useState(false);
 
   // ─── compare helpers ─────────────────────────────────────────────────
   const compareItems = useMemo(
@@ -554,7 +557,7 @@ export default function NeighborhoodReportApp({ width, openApp }: NativeAppProps
       data-tool="neighborhood-report"
       className="h-full w-full overflow-y-auto bg-app text-app"
     >
-      <div ref={printRef} className="px-5 py-4 sm:px-6 sm:py-5">
+      <div ref={printRef} className={isMobile ? "px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+1.5rem)]" : "px-5 py-4 sm:px-6 sm:py-5"}>
         {/* ════════════════ TOP BAR ════════════════ */}
         <div className="mb-4 flex flex-wrap items-center gap-3 rounded-2xl border border-app bg-app-elevated px-4 py-3 shadow-card">
           <div className="flex items-center gap-2">

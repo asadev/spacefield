@@ -653,7 +653,8 @@ export default function ServiceChargeComparisonApp({
   /*  Width-driven layout switches (no sm:/md:/lg: prefixes)            */
   /* ------------------------------------------------------------------ */
 
-  const compact = width < 640;
+  const isMobile = width < 700;
+  const compact = width < 640 || isMobile;
   const veryCompact = width < 480;
   const padX = compact ? 16 : 24;
 

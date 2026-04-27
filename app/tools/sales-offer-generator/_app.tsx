@@ -255,8 +255,9 @@ export default function SalesOfferGeneratorApp(props: NativeAppProps) {
 
   // Width-driven breakpoints — single column below 900px, ultra-compact
   // header below 600px, image grid 2-up below 480px.
-  const isWide = width >= 900;
-  const isCompact = width < 600;
+  const isMobile = width < 700;
+  const isWide = width >= 900 && !isMobile;
+  const isCompact = width < 600 || isMobile;
   const isUltra = width < 480;
 
   const [form, setForm] = useState<FormData>({

@@ -595,7 +595,8 @@ export default function AreaComparisonApp({
         : `${labelCol}px 1fr`,
   };
 
-  const compact = width < 640;
+  const isMobile = width < 700;
+  const compact = width < 640 || isMobile;
   const heroPadX = compact ? 16 : 24;
   const sectionPadX = compact ? 16 : 24;
 

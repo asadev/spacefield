@@ -223,10 +223,12 @@ function DetailPanel({
   area,
   onClose,
   onOpenApp,
+  isMobile,
 }: {
   area: AreaYield;
   onClose: () => void;
   onOpenApp: (slug: string, params?: Record<string, unknown>) => void;
+  isMobile?: boolean;
 }) {
   const panelRef = useRef<HTMLDivElement>(null);
 
@@ -251,19 +253,28 @@ function DetailPanel({
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
       transition={{ duration: 0.2 }}
-      className="absolute inset-0 z-[60] flex justify-end bg-black/60 backdrop-blur-sm"
+      className={`absolute inset-0 z-[60] flex bg-black/60 backdrop-blur-sm ${isMobile ? "items-end" : "justify-end"}`}
       onClick={(e) => {
         if (e.target === e.currentTarget) onClose();
       }}
     >
       <motion.div
         ref={panelRef}
-        initial={{ x: "100%" }}
-        animate={{ x: 0 }}
-        exit={{ x: "100%" }}
+        initial={isMobile ? { y: "100%" } : { x: "100%" }}
+        animate={isMobile ? { y: 0 } : { x: 0 }}
+        exit={isMobile ? { y: "100%" } : { x: "100%" }}
         transition={{ duration: 0.35, ease }}
-        className="relative flex h-full w-full max-w-md flex-col overflow-hidden border-l border-tool-accent/20 bg-app-elevated"
+        className={
+          isMobile
+            ? "relative flex max-h-[85vh] w-full flex-col overflow-hidden rounded-t-2xl border-t border-tool-accent/20 bg-app-elevated"
+            : "relative flex h-full w-full max-w-md flex-col overflow-hidden border-l border-tool-accent/20 bg-app-elevated"
+        }
       >
+        {isMobile && (
+          <div className="flex justify-center pt-2.5 pb-1">
+            <span className="h-1 w-10 rounded-full bg-app" />
+          </div>
+        )}
         <div className="h-1 w-full bg-gradient-to-r from-tool-accent via-tool-accent/60 to-transparent" />
 
         <div className="flex items-start justify-between gap-3 border-b border-app px-5 py-3">
@@ -666,7 +677,8 @@ export default function YieldHeatmapApp({
   const [yieldMin, setYieldMin] = useState(3);
   const [yieldMax, setYieldMax] = useState(10);
 
-  const isNarrow = width < NARROW_BREAKPOINT;
+  const isMobile = width < 700;
+  const isNarrow = width < NARROW_BREAKPOINT || isMobile;
 
   // All areas after zone filter (for map — dimmed if outside yield range)
   const zoneFiltered = useMemo(() => {
@@ -1020,6 +1032,7 @@ export default function YieldHeatmapApp({
             area={selectedArea}
             onClose={() => setSelectedArea(null)}
             onOpenApp={openApp}
+            isMobile={isMobile}
           />
         )}
       </AnimatePresence>

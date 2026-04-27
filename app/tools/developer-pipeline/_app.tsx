@@ -628,7 +628,8 @@ export default function DeveloperPipelineApp({
 
   /* ───── Width-driven layout ─────
    * Grid columns scale with the actual window width, not viewport. */
-  const compact = width < 720;
+  const isMobile = width < 700;
+  const compact = width < 720 || isMobile;
   const kanbanCols =
     width >= 1400
       ? "grid-cols-5"

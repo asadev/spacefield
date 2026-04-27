@@ -551,8 +551,9 @@ export default function DeveloperTrackRecordApp({
   const [sortBy, setSortBy] = useState<SortKey>("overall");
   const [view, setView] = useState<SubView>("leaderboard");
 
-  const stackHeader = width < HEADER_STACK_BREAKPOINT;
-  const showColumnHeader = view === "leaderboard" && width >= SM_BREAKPOINT;
+  const isMobile = width < 700;
+  const stackHeader = width < HEADER_STACK_BREAKPOINT || isMobile;
+  const showColumnHeader = view === "leaderboard" && width >= SM_BREAKPOINT && !isMobile;
 
   const filtered = useMemo(() => {
     let result = [...developers];

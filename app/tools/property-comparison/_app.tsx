@@ -967,7 +967,8 @@ export default function PropertyComparisonApp({ width }: NativeAppProps) {
   // Matrix label column.
   const labelCol = width >= 720 ? 200 : 160;
 
-  const compact = width < 640;
+  const isMobile = width < 700;
+  const compact = width < 640 || isMobile;
   const sectionPadX = compact ? 16 : 24;
 
   const totalDirectionalMetrics = METRICS.filter((m) => m.direction !== "none").length;

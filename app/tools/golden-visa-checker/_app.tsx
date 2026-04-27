@@ -357,8 +357,10 @@ const INPUT_CLASSES =
 export default function GoldenVisaCheckerApp(props: NativeAppProps) {
   const { width, openApp } = props;
   // Width-driven layout — collapse to a single column for narrow windows.
-  const isNarrow = width < 860;
-  const isUltra = width < 560;
+  // isMobile triggers iOS-style touches (full-width inputs, sticky CTA, larger tap targets).
+  const isMobile = width < 700;
+  const isNarrow = width < 860 || isMobile;
+  const isUltra = width < 560 || isMobile;
 
   /* form state */
   const [visaTrack, setVisaTrack] = useState<VisaTrack>("investor");
@@ -543,7 +545,7 @@ export default function GoldenVisaCheckerApp(props: NativeAppProps) {
       data-tool="golden-visa-checker"
       className="h-full w-full overflow-y-auto bg-app text-app"
     >
-      <div className="px-5 py-5 sm:px-6">
+      <div className={isMobile ? "px-4 pt-4 pb-[calc(env(safe-area-inset-bottom)+5.5rem)]" : "px-5 py-5 sm:px-6"}>
         <div
           className={
             isNarrow
