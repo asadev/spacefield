@@ -42,6 +42,8 @@ interface Props {
   onSnap?: (x: number, y: number, w: number, h: number) => void;
   /** Restore from a snapped state to the previously-saved size at a new x/y. */
   onUnsnap?: (x: number, y: number) => void;
+  /** Restore pinned (picture-in-picture) window back to normal. */
+  onUnpin?: () => void;
 }
 
 const TOPBAR = 32;
@@ -56,6 +58,7 @@ export default function Window({
   onResize,
   onSnap,
   onUnsnap,
+  onUnpin,
 }: Props) {
   const dragRef = useRef<{ ox: number; oy: number } | null>(null);
   const resizeRef = useRef<{ sw: number; sh: number; sx: number; sy: number } | null>(null);
@@ -174,8 +177,10 @@ export default function Window({
           }),
         );
         // Only commit a snap if we actually moved the window (i.e. we
-        // unsnapped from a previous snap, or we started free).
+        // unsnapped from a previous snap, or we started free). PiP windows
+        // never snap — they stay in their floating bottom-right zone.
         if (startedSnapped && !didUnsnap) return;
+        if (win.pinned) return;
         const snap = computeSnapRect(lastClientX, lastClientY);
         if (!snap) return;
         if (snap.zone === "top") {
@@ -200,6 +205,7 @@ export default function Window({
       win.w,
       win.h,
       win.maximized,
+      win.pinned,
       win.prev,
       onFocus,
       onMove,
@@ -298,21 +304,25 @@ export default function Window({
       exit={{ opacity: 0, scale: 0.96, y: 8 }}
       transition={{ type: "spring", stiffness: 320, damping: 28 }}
       style={{
-        position: win.maximized ? "fixed" : "absolute",
+        position: win.maximized || win.pinned ? "fixed" : "absolute",
         left: win.x,
         top: win.y,
         width: win.w,
         height: win.h,
         // Maximized windows render above the topbar (z-50) so true fullscreen
-        // hides the menu bar. Non-maximized stack uses each window's own z.
-        zIndex: win.maximized ? 60 : win.z,
+        // hides the menu bar. Pinned (PiP) windows float above all regular
+        // windows but below modals (z-[80]). Non-maximized stack uses each
+        // window's own z.
+        zIndex: win.pinned ? 70 : win.maximized ? 60 : win.z,
         pointerEvents: win.minimized ? "none" : "auto",
         borderRadius: win.maximized ? 0 : undefined,
       }}
       className={
         win.maximized
           ? "overflow-hidden bg-app-elevated shadow-2xl"
-          : "overflow-hidden rounded-xl border border-app bg-app-elevated shadow-2xl"
+          : win.pinned
+            ? "overflow-hidden rounded-xl border border-app bg-app-elevated shadow-2xl ring-1 ring-tool-accent-soft"
+            : "overflow-hidden rounded-xl border border-app bg-app-elevated shadow-2xl"
       }
     >
       {/* Title bar */}
@@ -387,6 +397,17 @@ export default function Window({
           {win.title}
         </div>
         <div className="flex items-center gap-1" data-no-drag>
+          {win.pinned && onUnpin && (
+            <button
+              type="button"
+              onClick={onUnpin}
+              aria-label="Restore window from picture-in-picture"
+              title="Restore window"
+              className="rounded-full bg-tool-accent-soft px-2 py-0.5 text-[10px] font-medium uppercase tracking-wide text-tool-accent transition-opacity hover:opacity-80"
+            >
+              Restore
+            </button>
+          )}
           <button
             type="button"
             onClick={resetIframe}
@@ -442,7 +463,7 @@ export default function Window({
        * (12x12). Cursor changes per edge. Edges are positioned just inside
        * the window border so they don't fight title-bar drag or content
        * clicks. The SE corner gets a subtle visible chevron grip. */}
-      {!win.maximized && (
+      {!win.maximized && !win.pinned && (
         <>
           <div onPointerDown={startResize("n")} aria-label="Resize top edge" className="absolute left-3 right-3 top-0 h-1.5 cursor-ns-resize" />
           <div onPointerDown={startResize("s")} aria-label="Resize bottom edge" className="absolute left-3 right-3 bottom-0 h-1.5 cursor-ns-resize" />

@@ -24,6 +24,10 @@ import Widgets from "./Widgets";
 import WidgetGallery from "./WidgetGallery";
 import WallpaperPicker from "./WallpaperPicker";
 import Window from "./Window";
+import AppSwitcher from "./AppSwitcher";
+import SavedLayouts from "./SavedLayouts";
+import PiPManager from "./PiPManager";
+import { useRecents } from "./useRecents";
 import { useIsMobile } from "./useIsMobile";
 import { useWindowManager } from "./useWindowManager";
 import { useDesktopSounds } from "./useDesktopSounds";
@@ -123,6 +127,7 @@ function DesktopApp() {
     open,
     close,
     closeAll,
+    closeAllOfSlug,
     minimize,
     minimizeAll,
     focus,
@@ -131,7 +136,13 @@ function DesktopApp() {
     resize,
     snap,
     unsnap,
+    pinWindow,
+    unpinWindow,
   } = useWindowManager();
+
+  // Cross-app history — auto-records every tool open and exposes a hook
+  // for other surfaces (Spotlight, Files Manager) to consume.
+  const { record: recordRecent } = useRecents();
 
   const {
     hydrated: installHydrated,
@@ -318,6 +329,7 @@ function DesktopApp() {
     setSignInOpen(false);
     setCreateWorkspaceOpen(false);
     open(slug, title, params);
+    recordRecent({ kind: "tool", slug });
     sounds.tap();
   };
 
@@ -535,6 +547,7 @@ function DesktopApp() {
               onResize={(ww, hh) => resize(w.id, ww, hh)}
               onSnap={(x, y, ww, hh) => snap(w.id, x, y, ww, hh)}
               onUnsnap={(x, y) => unsnap(w.id, x, y)}
+              onUnpin={() => unpinWindow(w.id)}
             />
           ))}
         </AnimatePresence>
@@ -646,6 +659,25 @@ function DesktopApp() {
       <SignInDialog
         open={signInOpen}
         onClose={() => setSignInOpen(false)}
+      />
+
+      {/* ⌘Tab / Ctrl-Tab application switcher — overlay rendered above all
+        * windows; cycles through windows by most-recently-focused. */}
+      <AppSwitcher windows={windows} onFocus={focus} />
+
+      {/* Saved window layouts — ⌘⇧L toggles. Captures + restores the full
+        * arrangement of windows (slug + bounds + initialParams). */}
+      <SavedLayouts windows={windows} closeAll={closeAll} open={open} />
+
+      {/* Picture-in-picture + close-window keyboard shortcuts. Renders
+        * nothing visible — pure keyboard controller. */}
+      <PiPManager
+        windows={windows}
+        pinWindow={pinWindow}
+        unpinWindow={unpinWindow}
+        close={close}
+        closeAll={closeAll}
+        closeAllOfSlug={closeAllOfSlug}
       />
     </div>
     </DesktopShellProvider>
