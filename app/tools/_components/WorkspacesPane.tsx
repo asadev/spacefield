@@ -165,13 +165,37 @@ export default function WorkspacesPane() {
     setInviteSending(true);
     setMsg(null);
     try {
-      const { error } = await supabase.rpc("send_workspace_invite", {
-        ws_id: workspaceId,
-        identifier: inviteIdentifier.trim(),
-        role_in: inviteRole,
+      // POST /api/workspaces/invite wraps the RPC and ALSO fires the
+      // branded email via Resend. Calling the RPC directly from the
+      // client only created the row; recipients didn't actually get
+      // notified.
+      const res = await fetch("/api/workspaces/invite", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          workspaceId,
+          identifier: inviteIdentifier.trim(),
+          role: inviteRole,
+        }),
       });
-      if (error) throw error;
-      setMsg({ type: "success", text: `Invite sent to ${inviteIdentifier}.` });
+      const body = (await res.json().catch(() => ({}))) as {
+        error?: string;
+        email_sent?: boolean;
+        reason?: string;
+      };
+      if (!res.ok) {
+        throw new Error(body.error || `Invite failed (${res.status})`);
+      }
+      const sentNote =
+        body.email_sent === false
+          ? body.reason === "no_recipient_email"
+            ? " (couldn't email — recipient has no address on file yet)"
+            : " (the email failed to send, but the invite is saved)"
+          : "";
+      setMsg({
+        type: "success",
+        text: `Invite sent to ${inviteIdentifier}.${sentNote}`,
+      });
       setInviteIdentifier("");
       setInviteRole("member");
       setInviteOpenFor(null);
