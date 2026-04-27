@@ -5,10 +5,12 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useTheme } from "@/components/ThemeProvider";
 import { TOOLS, toolBySlug, type ToolItem } from "../_data/tools-list";
 import { DesktopShellProvider } from "./DesktopShellContext";
+import AmbientSounds from "./AmbientSounds";
 import AppStore from "./AppStore";
 import ControlCenter from "./ControlCenter";
 import DesktopBackground from "./DesktopBackground";
 import Dock from "./Dock";
+import ScreenshotCapture from "./ScreenshotCapture";
 import Launchpad from "./Launchpad";
 import MissionControl from "./MissionControl";
 import MobileShell from "./MobileShell";
@@ -704,6 +706,16 @@ function DesktopApp() {
       <ClipboardHistory />
       <QuickNote />
       <EasterEggs />
+
+      {/* Ambient sound mixer — floating button + panel. AudioContext is
+       * lazily created only after the user clicks a track on. Other UI
+       * (Control Center) can open the panel by dispatching the
+       * `spacefield:ambient-toggle` window event. */}
+      <AmbientSounds />
+
+      {/* Screenshot capture — ⌘⇧3 (full viewport) / ⌘⇧4 (rectangle).
+       * Saves PNGs into Files Manager via /api/files/save-content. */}
+      <ScreenshotCapture />
     </div>
     </DesktopShellProvider>
   );

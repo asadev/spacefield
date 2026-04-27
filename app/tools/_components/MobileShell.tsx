@@ -49,6 +49,7 @@ import MobileSheet, { SheetList, SheetRow } from "./MobileSheet";
 const BottomSheet = MobileSheet;
 export { BottomSheet, SheetList, SheetRow };
 import { useAuth } from "./useAuth";
+import { useDockBadges } from "./useDockBadges";
 import { useDockOrder } from "./useDockOrder";
 import { useInstalledTools } from "./useInstalledTools";
 import { usePendingInvites } from "./usePendingInvites";
@@ -57,8 +58,10 @@ import { useWorkspaces } from "./useWorkspaces";
 import { useWorkspaceRole } from "./useWorkspaceRole";
 import { useWorkspaceSync } from "./useWorkspaceSync";
 import { useDesktopShell, DesktopShellProvider } from "./DesktopShellContext";
+import AmbientSounds from "./AmbientSounds";
 import ControlCenter from "./ControlCenter";
 import CreateWorkspaceDialog from "./CreateWorkspaceDialog";
+import ScreenshotCapture from "./ScreenshotCapture";
 import SignInDialog from "./SignInDialog";
 import Onboarding from "./Onboarding";
 import MobileSettings from "./MobileSettings";
@@ -395,6 +398,14 @@ export default function MobileShell() {
           onOpenSettings={() => openSettings("appearance")}
           onOpenWorkspaces={() => openSettings("workspaces")}
         />
+
+        {/* Ambient sound mixer — same component the desktop mounts.
+         * Control Center can dispatch `spacefield:ambient-toggle` to
+         * surface its panel. */}
+        <AmbientSounds />
+
+        {/* Screenshot capture (⌘⇧3 / ⌘⇧4) — handy on iPad keyboards. */}
+        <ScreenshotCapture />
       </div>
     </DesktopShellProvider>
   );
@@ -773,6 +784,7 @@ function MobileDock({
   onOpenTool: (slug: string, title: string) => void;
   onAllApps: () => void;
 }) {
+  const { getCount } = useDockBadges();
   return (
     <div
       className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center"
@@ -788,6 +800,7 @@ function MobileDock({
             title={t.title}
             iconKey={t.icon}
             onTap={() => onOpenTool(t.slug, t.title)}
+            badge={getCount(t.slug)}
           />
         ))}
         <DockIcon
@@ -816,18 +829,23 @@ function DockIcon({
   title,
   iconKey,
   onTap,
+  badge,
 }: {
   title: string;
   iconKey: keyof typeof TOOL_ICONS;
   onTap: () => void;
+  /** Optional notification count — renders a small red bubble if > 0. */
+  badge?: number;
 }) {
   return (
     <motion.button
       type="button"
       onClick={onTap}
       whileTap={{ scale: 0.9 }}
-      aria-label={title}
-      className="flex h-14 w-14 items-center justify-center rounded-2xl bg-tool-accent-soft text-tool-accent ring-1 ring-inset ring-tool-accent/20"
+      aria-label={
+        badge && badge > 0 ? `${title} (${badge} notifications)` : title
+      }
+      className="relative flex h-14 w-14 items-center justify-center rounded-2xl bg-tool-accent-soft text-tool-accent ring-1 ring-inset ring-tool-accent/20"
     >
       <svg
         width="28"
@@ -838,6 +856,14 @@ function DockIcon({
       >
         <path d={TOOL_ICONS[iconKey] ?? TOOL_ICONS.home} />
       </svg>
+      {badge !== undefined && badge > 0 && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-0.5 -top-0.5 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold leading-none text-white ring-2 ring-app-elevated"
+        >
+          {badge > 99 ? "99+" : badge}
+        </span>
+      )}
     </motion.button>
   );
 }

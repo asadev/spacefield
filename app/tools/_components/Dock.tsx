@@ -12,6 +12,7 @@ import { createPortal } from "react-dom";
 import type { WindowState } from "./useWindowManager";
 import { TOOL_ICONS, TOOLS, type ToolItem } from "../_data/tools-list";
 import type { IconStyleId } from "./icon-styles";
+import { useDockBadges } from "./useDockBadges";
 import { useIconStyle } from "./useIconStyle";
 
 /* Dock icons render in a single neutral tone — rainbow category colors made
@@ -45,6 +46,7 @@ function DockIcon({
   active,
   minimized,
   iconStyle,
+  badge,
 }: {
   mouseX: ReturnType<typeof useMotionValue<number>>;
   containerRef: RefObject<HTMLDivElement | null>;
@@ -55,6 +57,8 @@ function DockIcon({
   active?: boolean;
   minimized?: boolean;
   iconStyle: IconStyleId;
+  /** Optional red badge — number > 0 renders a counter, 0 hides. */
+  badge?: number;
 }) {
   const ref = useRef<HTMLButtonElement>(null);
   const [hovered, setHovered] = useState(false);
@@ -117,6 +121,18 @@ function DockIcon({
           aria-hidden="true"
           className="absolute -bottom-1.5 h-1 w-1 rounded-full bg-muted"
         />
+      )}
+      {/* Notification badge — small red bubble at the top-right of the
+       * icon, mirroring iOS / macOS app badges. The ring matches the
+       * dock background so the bubble visually "lifts" off the icon
+       * even on light themes. */}
+      {badge !== undefined && badge > 0 && (
+        <span
+          aria-label={`${badge} notifications`}
+          className="pointer-events-none absolute -right-1 -top-1 flex h-[18px] min-w-[18px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-semibold leading-none text-white ring-2 ring-app-elevated"
+        >
+          {badge > 99 ? "99+" : badge}
+        </span>
       )}
     </motion.button>
   );
@@ -186,6 +202,7 @@ export default function Dock({
   const [menu, setMenu] = useState<{ slug: string; title: string; x: number; y: number } | null>(null);
   const [mounted, setMounted] = useState(false);
   const { style: iconStyle } = useIconStyle();
+  const { getCount } = useDockBadges();
 
   useEffect(() => {
     setMounted(true);
@@ -287,6 +304,7 @@ export default function Dock({
                 active={!!openWindow}
                 minimized={openWindow?.minimized}
                 iconStyle={iconStyle}
+                badge={getCount(t.slug)}
               >
                 <ToolGlyph slug={t.slug} style={iconStyle} />
               </DockIcon>
@@ -306,6 +324,7 @@ export default function Dock({
               active
               minimized={w.minimized}
               iconStyle={iconStyle}
+              badge={getCount(w.slug)}
             >
               <ToolGlyph slug={w.slug} style={iconStyle} />
             </DockIcon>

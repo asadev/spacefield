@@ -4,6 +4,12 @@ import { AnimatePresence, motion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useWorkspaces } from "./useWorkspaces";
+import {
+  WORKSPACE_TEMPLATES,
+  TemplatePicker,
+  applyWorkspaceTemplate,
+  type TemplateKey,
+} from "./WorkspaceTemplates";
 
 /* Modal dialog for creating a new workspace.
  *
@@ -37,6 +43,11 @@ interface Props {
 export default function CreateWorkspaceDialog({ open, onClose }: Props) {
   const { createWorkspace, workspaces } = useWorkspaces();
   const [name, setName] = useState("");
+  const [template, setTemplate] = useState<TemplateKey>("personal");
+  // Tracks whether the user has manually edited the name. Once they have,
+  // we stop auto-filling from the template — the autofill is a
+  // convenience, not a takeover.
+  const [nameTouched, setNameTouched] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [me, setMe] = useState<MeResponse | null>(null);
   const [meLoading, setMeLoading] = useState(false);
@@ -95,12 +106,24 @@ export default function CreateWorkspaceDialog({ open, onClose }: Props) {
   useEffect(() => {
     if (!open) return;
     setName("");
+    setTemplate("personal");
+    setNameTouched(false);
     const t = window.setTimeout(() => {
       inputRef.current?.focus();
       inputRef.current?.select();
     }, 80);
     return () => window.clearTimeout(t);
   }, [open, workspaces.length]);
+
+  // Auto-fill the name with the template's pretty default until the user
+  // types — picking "Real Estate Agent" suggests "Real Estate" while
+  // still letting the user override.
+  useEffect(() => {
+    if (!open || nameTouched) return;
+    const tpl = WORKSPACE_TEMPLATES.find((t) => t.key === template);
+    if (!tpl) return;
+    setName(template === "personal" ? "" : tpl.defaultWorkspaceName);
+  }, [template, open, nameTouched]);
 
   // Esc closes
   useEffect(() => {
@@ -128,7 +151,10 @@ export default function CreateWorkspaceDialog({ open, onClose }: Props) {
     e.preventDefault();
     if (!canCreate) return;
     const trimmed = name.trim() || `Workspace ${workspaces.length + 1}`;
-    createWorkspace(trimmed);
+    // Apply the template synchronously inside createWorkspace's post-create
+    // hook so the new workspace's localStorage namespace is seeded BEFORE
+    // the Desktop remounts on activeId — see useWorkspaces.tsx.
+    createWorkspace(trimmed, (id) => applyWorkspaceTemplate(id, template));
     onClose();
   };
 
@@ -205,26 +231,43 @@ export default function CreateWorkspaceDialog({ open, onClose }: Props) {
               )}
 
               {!atCap && (
-                <label className="mt-5 block">
-                  <span className="text-[0.72rem] uppercase tracking-[0.14em] text-muted">
-                    Name
-                    {me && (
-                      <span className="ml-2 normal-case tracking-normal text-faint">
-                        ({owned}/{cap} on {me.tier_config?.name ?? me.tier})
-                      </span>
-                    )}
-                  </span>
-                  <input
-                    ref={inputRef}
-                    type="text"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                    placeholder={`Workspace ${workspaces.length + 1}`}
-                    maxLength={48}
-                    disabled={meLoading}
-                    className="mt-1 block w-full rounded-lg border border-app bg-app px-3 py-2 text-sm text-app placeholder:text-faint focus:border-tool-accent focus:outline-none focus:ring-2 focus:ring-tool-accent-soft disabled:opacity-50"
-                  />
-                </label>
+                <>
+                  <div className="mt-5">
+                    <span className="text-[0.72rem] uppercase tracking-[0.14em] text-muted">
+                      Pick a template
+                    </span>
+                    <div className="mt-2">
+                      <TemplatePicker
+                        selected={template}
+                        onSelect={setTemplate}
+                      />
+                    </div>
+                  </div>
+
+                  <label className="mt-5 block">
+                    <span className="text-[0.72rem] uppercase tracking-[0.14em] text-muted">
+                      Name
+                      {me && (
+                        <span className="ml-2 normal-case tracking-normal text-faint">
+                          ({owned}/{cap} on {me.tier_config?.name ?? me.tier})
+                        </span>
+                      )}
+                    </span>
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={name}
+                      onChange={(e) => {
+                        setName(e.target.value);
+                        setNameTouched(true);
+                      }}
+                      placeholder={`Workspace ${workspaces.length + 1}`}
+                      maxLength={48}
+                      disabled={meLoading}
+                      className="mt-1 block w-full rounded-lg border border-app bg-app px-3 py-2 text-sm text-app placeholder:text-faint focus:border-tool-accent focus:outline-none focus:ring-2 focus:ring-tool-accent-soft disabled:opacity-50"
+                    />
+                  </label>
+                </>
               )}
 
               <div className="mt-6 flex items-center justify-end gap-2">

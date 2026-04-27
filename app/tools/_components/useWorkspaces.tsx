@@ -44,7 +44,18 @@ interface WorkspaceContextValue {
   activeId: string;
   active: Workspace;
   hydrated: boolean;
-  createWorkspace: (name: string) => string;
+  /**
+   * Create a new workspace and switch to it. The optional `applyAfter`
+   * hook fires synchronously right after the localStorage row is written
+   * and before activeId flips — used by the template system to seed
+   * `ws:<id>:tools-desktop-install-v1` etc. before the Desktop remounts
+   * against the new namespace. We don't import WorkspaceTemplates from
+   * here directly to avoid a cycle.
+   */
+  createWorkspace: (
+    name: string,
+    applyAfter?: (id: string) => void
+  ) => string;
   switchWorkspace: (id: string) => void;
   renameWorkspace: (id: string, name: string) => void;
   deleteWorkspace: (id: string) => void;
@@ -250,37 +261,51 @@ export function WorkspaceProvider({ children }: ProviderProps) {
     setHydrated(true);
   }, []);
 
-  const createWorkspace = useCallback((name: string) => {
-    const trimmed = name.trim() || `Workspace ${Date.now()}`;
-    const id = uid();
-    const ws: Workspace = { id, name: trimmed, createdAt: Date.now() };
-    setWorkspaces((prev) => {
-      const next = [...prev, ws];
-      writeJSON(LIST_KEY, next);
-      return next;
-    });
-    setActiveId(id);
-    if (typeof window !== "undefined") {
-      window.localStorage.setItem(ACTIVE_KEY, id);
-    }
-    // Eagerly materialize in the cloud — fire-and-forget. Without this,
-    // the workspace only reaches the DB when Files Manager next opens
-    // (which calls /api/workspaces/ensure). That left a window where
-    // /api/me's owned-count was stale and the user could race past
-    // the workspace cap. We swallow errors here because the cap-trigger
-    // legitimately rejects creates beyond the tier limit, and the
-    // dialog already enforces the cap client-side using the local list.
-    if (typeof window !== "undefined") {
-      void fetch("/api/workspaces/ensure", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, name: trimmed }),
-      }).catch(() => {
-        /* swallow — Files Manager will retry on next open */
+  const createWorkspace = useCallback(
+    (name: string, applyAfter?: (id: string) => void) => {
+      const trimmed = name.trim() || `Workspace ${Date.now()}`;
+      const id = uid();
+      const ws: Workspace = { id, name: trimmed, createdAt: Date.now() };
+      setWorkspaces((prev) => {
+        const next = [...prev, ws];
+        writeJSON(LIST_KEY, next);
+        return next;
       });
-    }
-    return id;
-  }, []);
+      // Run the post-create hook BEFORE flipping activeId so the Desktop
+      // remounts against an already-seeded namespace. Without this, the
+      // hooks read defaults first and the template "flashes in" a tick
+      // later, jolting the dock.
+      if (applyAfter) {
+        try {
+          applyAfter(id);
+        } catch {
+          /* template apply errors must not block creation */
+        }
+      }
+      setActiveId(id);
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(ACTIVE_KEY, id);
+      }
+      // Eagerly materialize in the cloud — fire-and-forget. Without this,
+      // the workspace only reaches the DB when Files Manager next opens
+      // (which calls /api/workspaces/ensure). That left a window where
+      // /api/me's owned-count was stale and the user could race past
+      // the workspace cap. We swallow errors here because the cap-trigger
+      // legitimately rejects creates beyond the tier limit, and the
+      // dialog already enforces the cap client-side using the local list.
+      if (typeof window !== "undefined") {
+        void fetch("/api/workspaces/ensure", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id, name: trimmed }),
+        }).catch(() => {
+          /* swallow — Files Manager will retry on next open */
+        });
+      }
+      return id;
+    },
+    []
+  );
 
   const switchWorkspace = useCallback((id: string) => {
     setActiveId((current) => {
