@@ -104,6 +104,119 @@ const SPACEFIELD_FILE_MIME = "application/x-spacefield-file";
  * dragend. Read via DragDropOverlay. */
 const SPACEFIELD_DRAG_KEY = "spacefield:drag:active:v1";
 
+// ---------------------------------------------------------------------------
+// Boot cache — instant-render layer
+// ---------------------------------------------------------------------------
+// We persist the last-good file list and quota snapshot per workspace so
+// the next mount can paint immediately, then reconcile against fresh
+// data in the background. Without this, every cold open of the Files
+// app shows a skeleton for hundreds of ms while the network round-trip
+// for ensure + select runs.
+//
+// The ensure marker uses sessionStorage with a 5-minute TTL — once the
+// workspace is materialized server-side we don't need to call the
+// endpoint again this tab, so the upload-disabled "preparing" gate
+// resolves synchronously on subsequent mounts.
+
+const FILES_CACHE_VERSION = 1;
+const ENSURE_TTL_MS = 5 * 60 * 1000;
+
+function filesCacheKey(workspaceId: string): string {
+  return `ws:${workspaceId}:files-cache:v${FILES_CACHE_VERSION}`;
+}
+
+function ensuredKey(workspaceId: string): string {
+  return `workspaces:ensured:${workspaceId}`;
+}
+
+interface FilesCacheSnapshot {
+  v: number;
+  ts: number;
+  files: WorkspaceFile[];
+  cap: number;
+  used: number;
+}
+
+function loadFilesCache(workspaceId: string): FilesCacheSnapshot | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(filesCacheKey(workspaceId));
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<FilesCacheSnapshot>;
+    if (
+      !parsed ||
+      parsed.v !== FILES_CACHE_VERSION ||
+      !Array.isArray(parsed.files) ||
+      typeof parsed.cap !== "number" ||
+      typeof parsed.used !== "number"
+    ) {
+      return null;
+    }
+    return {
+      v: FILES_CACHE_VERSION,
+      ts: typeof parsed.ts === "number" ? parsed.ts : 0,
+      files: parsed.files as WorkspaceFile[],
+      cap: parsed.cap,
+      used: parsed.used,
+    };
+  } catch {
+    return null;
+  }
+}
+
+function saveFilesCache(
+  workspaceId: string,
+  snapshot: { files: WorkspaceFile[]; cap: number; used: number }
+): void {
+  if (typeof window === "undefined") return;
+  try {
+    const payload: FilesCacheSnapshot = {
+      v: FILES_CACHE_VERSION,
+      ts: Date.now(),
+      files: snapshot.files,
+      cap: snapshot.cap,
+      used: snapshot.used,
+    };
+    window.localStorage.setItem(
+      filesCacheKey(workspaceId),
+      JSON.stringify(payload)
+    );
+  } catch {
+    /* quota or serialize fail — non-fatal, the next refresh repaints. */
+  }
+}
+
+function invalidateFilesCache(workspaceId: string | null): void {
+  if (!workspaceId || typeof window === "undefined") return;
+  try {
+    window.localStorage.removeItem(filesCacheKey(workspaceId));
+  } catch {
+    /* noop */
+  }
+}
+
+function isEnsuredThisSession(workspaceId: string): boolean {
+  if (typeof window === "undefined") return false;
+  try {
+    const raw = window.sessionStorage.getItem(ensuredKey(workspaceId));
+    if (!raw) return false;
+    const ts = Number.parseInt(raw, 10);
+    if (!Number.isFinite(ts)) return false;
+    return Date.now() - ts < ENSURE_TTL_MS;
+  } catch {
+    return false;
+  }
+}
+
+function markEnsuredThisSession(workspaceId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.sessionStorage.setItem(ensuredKey(workspaceId), String(Date.now()));
+  } catch {
+    /* noop */
+  }
+}
+
 interface UploadJob {
   id: string; // local job id
   fileId: string | null; // assigned by /upload
@@ -609,27 +722,36 @@ export default function FilesManagerApp({
 }: NativeAppProps) {
   const supabase = useMemo(() => getSupabase(), []);
 
-  // Workspace
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const [activeName, setActiveName] = useState<string>("Workspace");
-  useEffect(() => {
-    if (typeof window === "undefined") return;
+  // Workspace — read synchronously during initial render so the cache
+  // hydrate below can paint files on the very first paint, no skeleton.
+  const initialWorkspace = useMemo(() => {
+    if (typeof window === "undefined") {
+      return { id: null as string | null, name: "Workspace" };
+    }
     try {
       const v = window.localStorage.getItem(ACTIVE_WS_KEY);
-      setActiveId(v && v.length > 0 ? v : null);
-
-      // Pull the workspace's display name out of workspaces:list:v1 so
-      // we can pass it to /api/workspaces/ensure below.
+      const id = v && v.length > 0 ? v : null;
+      let name = "Workspace";
       const listRaw = window.localStorage.getItem("workspaces:list:v1");
-      if (listRaw && v) {
+      if (listRaw && id) {
         const list = JSON.parse(listRaw) as Array<{ id: string; name: string }>;
-        const match = list.find((w) => w.id === v);
-        if (match) setActiveName(match.name);
+        const match = list.find((w) => w.id === id);
+        if (match) name = match.name;
       }
+      return { id, name };
     } catch {
-      setActiveId(null);
+      return { id: null as string | null, name: "Workspace" };
     }
   }, []);
+  const [activeId] = useState<string | null>(initialWorkspace.id);
+  const [activeName] = useState<string>(initialWorkspace.name);
+
+  // Hydrate the cache snapshot synchronously too — used as the seed for
+  // files/cap/used so we render real content before any network call.
+  const initialCache = useMemo(
+    () => (initialWorkspace.id ? loadFilesCache(initialWorkspace.id) : null),
+    [initialWorkspace.id]
+  );
 
   // Lazy materializer — guarantees the workspace + owner-membership rows
   // exist in the DB before any upload/refresh is attempted. Runs once
@@ -642,11 +764,22 @@ export default function FilesManagerApp({
   // already at their tier's max_owned_workspaces — we surface that as a
   // dedicated `ensureError` banner so the user can act on it (delete a
   // workspace or upgrade) instead of just seeing a half-broken UI.
-  const [ensured, setEnsured] = useState(false);
+  // If the workspace was already materialized in this tab within the
+  // last 5 min, skip the round-trip and render uploads as ready
+  // immediately. The server still re-checks membership on every upload
+  // call, so the session cache is a UX layer not an authorization one.
+  const [ensured, setEnsured] = useState<boolean>(() =>
+    activeId ? isEnsuredThisSession(activeId) : false
+  );
   const [ensureError, setEnsureError] = useState<string | null>(null);
   useEffect(() => {
     if (!activeId) return;
-    setEnsured(false);
+    // Cache hit — already ensured this session, nothing to do.
+    if (isEnsuredThisSession(activeId)) {
+      setEnsured(true);
+      setEnsureError(null);
+      return;
+    }
     setEnsureError(null);
     let cancelled = false;
     (async () => {
@@ -731,7 +864,10 @@ export default function FilesManagerApp({
         if (!cancelled) setEnsureError("network error preparing workspace");
         return;
       }
-      if (!cancelled) setEnsured(true);
+      if (!cancelled) {
+        markEnsuredThisSession(activeId);
+        setEnsured(true);
+      }
     })();
     return () => {
       cancelled = true;
@@ -749,14 +885,17 @@ export default function FilesManagerApp({
   const ensureNotMember =
     !!ensureError && /not a member|caller is not a member/i.test(ensureError);
 
-  // Data
-  const [files, setFiles] = useState<WorkspaceFile[]>([]);
-  const [loading, setLoading] = useState(false);
+  // Data — seed from cache so first paint shows real content.
+  const [files, setFiles] = useState<WorkspaceFile[]>(
+    () => initialCache?.files ?? []
+  );
+  const [loading, setLoading] = useState<boolean>(() => !initialCache);
   const [listError, setListError] = useState<string | null>(null);
 
-  // Quota
-  const [cap, setCap] = useState(0);
-  const [used, setUsed] = useState(0);
+  // Quota — seed from cache too so the QuotaBar renders the last-known
+  // cap immediately instead of flashing 0/0.
+  const [cap, setCap] = useState<number>(() => initialCache?.cap ?? 0);
+  const [used, setUsed] = useState<number>(() => initialCache?.used ?? 0);
 
   // UI state
   const [searchInput, setSearchInput] = useState("");
@@ -837,15 +976,23 @@ export default function FilesManagerApp({
           .order("created_at", { ascending: false }),
         supabase.rpc("workspace_storage", { ws_id: activeId }),
       ]);
+      const nextFiles =
+        error ? [] : ((rows as WorkspaceFile[] | null) ?? []);
       if (error) {
-        setFiles([]);
         setListError(null); // treat as empty
-      } else {
-        setFiles((rows as WorkspaceFile[] | null) ?? []);
       }
+      setFiles(nextFiles);
       const row = Array.isArray(storage) ? storage[0] : null;
-      setCap(Number(row?.cap_bytes ?? 0));
-      setUsed(Number(row?.used_bytes ?? 0));
+      const nextCap = Number(row?.cap_bytes ?? 0);
+      const nextUsed = Number(row?.used_bytes ?? 0);
+      setCap(nextCap);
+      setUsed(nextUsed);
+      // Persist a last-good snapshot so the next mount paints instantly.
+      saveFilesCache(activeId, {
+        files: nextFiles,
+        cap: nextCap,
+        used: nextUsed,
+      });
     } catch {
       setFiles([]);
     } finally {
@@ -854,12 +1001,15 @@ export default function FilesManagerApp({
   }, [activeId, supabase]);
 
   useEffect(() => {
-    // Wait for the lazy materializer so workspace_storage returns real
-    // values (not 0/0) and the membership check on upload passes.
-    if (activeId && ensured) refresh();
+    // Run the data fetch in parallel with /api/workspaces/ensure — the
+    // server-side membership check on upload self-heals, so we don't
+    // need to wait for ensure to finish before showing the file list.
+    // This converts the perceived sequence from "ensure → refresh"
+    // (sequential) into "max(ensure, refresh)" (parallel).
+    if (activeId) refresh();
     // re-list on re-open via openApp()
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeId, ensured, initialParamsKey]);
+  }, [activeId, initialParamsKey]);
 
   // -----------------------------------------------------------------------
   // Upload pipeline
@@ -1020,6 +1170,7 @@ export default function FilesManagerApp({
               return [row, ...prev];
             });
             setUsed((u) => u + job.size);
+            invalidateFilesCache(activeId);
 
             updateJob(job.id, { status: "done" });
 
@@ -1126,6 +1277,7 @@ export default function FilesManagerApp({
       setPreviewId((p) => (p === id ? null : p));
       setSelectedId((s) => (s === id ? null : s));
       setConfirmDeleteId(null);
+      invalidateFilesCache(activeId);
       try {
         await fetch("/api/files/trash", {
           method: "POST",
@@ -1158,7 +1310,7 @@ export default function FilesManagerApp({
         },
       });
     },
-    [files, showToast, dismissToast]
+    [files, showToast, dismissToast, activeId]
   );
 
   const handleRestore = useCallback(
@@ -1166,6 +1318,7 @@ export default function FilesManagerApp({
       setFiles((prev) =>
         prev.map((f) => (f.id === id ? { ...f, deleted_at: null } : f))
       );
+      invalidateFilesCache(activeId);
       try {
         await fetch("/api/files/restore", {
           method: "POST",
@@ -1176,7 +1329,7 @@ export default function FilesManagerApp({
         await refresh();
       }
     },
-    [refresh]
+    [refresh, activeId]
   );
 
   // Hard-delete from Trash. Removes the R2 object + DB row. No undo.
@@ -1225,6 +1378,7 @@ export default function FilesManagerApp({
       setFiles((prev) =>
         prev.map((f) => (f.id === id ? { ...f, tags } : f))
       );
+      invalidateFilesCache(activeId);
       try {
         const res = await fetch("/api/files/tag", {
           method: "POST",
@@ -1236,7 +1390,7 @@ export default function FilesManagerApp({
         await refresh();
       }
     },
-    [refresh]
+    [refresh, activeId]
   );
 
   const handleRename = useCallback(
@@ -1248,6 +1402,7 @@ export default function FilesManagerApp({
       setFiles((prev) =>
         prev.map((f) => (f.id === id ? { ...f, name: trimmed } : f))
       );
+      invalidateFilesCache(activeId);
       try {
         const res = await fetch("/api/files/rename", {
           method: "POST",
@@ -1262,7 +1417,7 @@ export default function FilesManagerApp({
         await refresh();
       }
     },
-    [refresh]
+    [refresh, activeId]
   );
 
   // -----------------------------------------------------------------------
@@ -1600,18 +1755,16 @@ export default function FilesManagerApp({
                 <div className="text-sm font-semibold text-app">
                   {ensureError
                     ? "Workspace not ready"
-                    : !ensured
-                    ? "Preparing workspace…"
                     : "Drag files here, or choose from your computer"}
                 </div>
                 <div className="font-mono text-[10px] tabular-nums text-muted">
                   {activeJobCount > 0
                     ? `${activeJobCount} uploading · ${fmtBytes(activeJobBytes)}`
-                    : ensured && cap > 0
-                    ? `${fmtBytes(cap)} of storage available`
                     : ensureError
                     ? "Resolve the issue above to upload"
-                    : "Connecting to your workspace…"}
+                    : cap > 0
+                    ? `${fmtBytes(cap)} of storage available`
+                    : "Loading…"}
                 </div>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -1880,11 +2033,7 @@ export default function FilesManagerApp({
         {/* File grid */}
         <section className="px-4 pb-6 pt-4 sm:px-5">
           {loading && files.length === 0 ? (
-            <div className="flex h-48 items-center justify-center text-secondary">
-              <span className="font-mono text-[11px] uppercase tracking-[0.2em]">
-                Loading files…
-              </span>
-            </div>
+            <FileGridSkeleton cols={cols} />
           ) : visible.length === 0 ? (
             <EmptyState
               hasSearch={!!searchTerm}
@@ -2832,6 +2981,38 @@ function DragDropOverlay({
       }}
     >
       {hint}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// File grid skeleton — single quiet placeholder shown only on cold-boot
+// cache miss, until the data fetch resolves. No text labels, no
+// transitions between states — just neutral shimmering rows that match
+// the real card layout.
+// ---------------------------------------------------------------------------
+
+function FileGridSkeleton({ cols }: { cols: number }) {
+  const rows = cols === 1 ? 4 : cols === 2 ? 6 : 6;
+  return (
+    <div
+      aria-hidden
+      className="grid gap-3"
+      style={{ gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }}
+    >
+      {Array.from({ length: rows }).map((_, i) => (
+        <div
+          key={i}
+          className="flex items-center gap-3 rounded-xl border border-app bg-app-elevated p-3"
+        >
+          <div className="h-16 w-16 flex-shrink-0 animate-pulse rounded-lg bg-app" />
+          <div className="min-w-0 flex-1 space-y-2">
+            <div className="h-3 w-3/4 animate-pulse rounded bg-app" />
+            <div className="h-2 w-1/2 animate-pulse rounded bg-app" />
+            <div className="h-2 w-1/3 animate-pulse rounded bg-app" />
+          </div>
+        </div>
+      ))}
     </div>
   );
 }
