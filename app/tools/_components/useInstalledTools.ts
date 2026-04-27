@@ -2,9 +2,15 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { TOOLS } from "../_data/tools-list";
-import { useWorkspaceKey } from "./useWorkspaces";
+import { useWorkspaceKey, useWorkspaces } from "./useWorkspaces";
 
 const STORAGE_SUFFIX = "tools-desktop-install-v1";
+
+type ToolAvailability =
+  | "allowed"
+  | "disabled"
+  | "tier_locked"
+  | "workspace_blocked";
 
 interface InstallState {
   onboarded: boolean;
@@ -42,8 +48,43 @@ function save(storageKey: string, state: InstallState) {
   } catch {}
 }
 
+/**
+ * Server-side gate before mutating local install state. Returns the
+ * canonical availability string so the UI can react (toast / route to
+ * pricing / silently no-op). Falls back to "allowed" on transport
+ * errors — the same RPC is enforced at the tool runtime layer, so a
+ * stale or offline client can't actually use a forbidden tool.
+ */
+async function checkAvailability(
+  workspaceId: string,
+  slug: string
+): Promise<ToolAvailability> {
+  if (!workspaceId) return "allowed";
+  try {
+    const r = await fetch("/api/tools/availability", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspaceId, slugs: [slug] }),
+    });
+    if (!r.ok) return "allowed";
+    const j = (await r.json()) as {
+      availability?: Record<string, ToolAvailability>;
+    };
+    const v = j.availability?.[slug];
+    return v === "disabled" ||
+      v === "tier_locked" ||
+      v === "workspace_blocked" ||
+      v === "allowed"
+      ? v
+      : "allowed";
+  } catch {
+    return "allowed";
+  }
+}
+
 export function useInstalledTools() {
   const STORAGE_KEY = useWorkspaceKey(STORAGE_SUFFIX);
+  const { activeId } = useWorkspaces();
   const [state, setState] = useState<InstallState>(DEFAULT_STATE);
   const [hydrated, setHydrated] = useState(false);
 
@@ -58,14 +99,34 @@ export function useInstalledTools() {
     save(STORAGE_KEY, next);
   }, [STORAGE_KEY]);
 
-  const install = useCallback((slug: string) => {
-    setState((prev) => {
-      if (prev.installed.includes(slug)) return prev;
-      const next = { ...prev, installed: [...prev.installed, slug] };
-      save(STORAGE_KEY, next);
-      return next;
-    });
-  }, [STORAGE_KEY]);
+  // Install applies the local state mutation only after the server
+  // RPC clears the request. The client AppStore already greys the
+  // button for non-"allowed" tools, but a tampered call (or a
+  // stale-cache install) goes through the same gate.
+  const install = useCallback(
+    (slug: string) => {
+      void (async () => {
+        const verdict = await checkAvailability(activeId, slug);
+        if (verdict !== "allowed") {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(
+              new CustomEvent("tools:install-blocked", {
+                detail: { slug, reason: verdict },
+              })
+            );
+          }
+          return;
+        }
+        setState((prev) => {
+          if (prev.installed.includes(slug)) return prev;
+          const next = { ...prev, installed: [...prev.installed, slug] };
+          save(STORAGE_KEY, next);
+          return next;
+        });
+      })();
+    },
+    [STORAGE_KEY, activeId]
+  );
 
   const uninstall = useCallback((slug: string) => {
     setState((prev) => {

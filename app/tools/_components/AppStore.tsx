@@ -1,6 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
+import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import {
   TOOL_CATEGORIES,
@@ -9,6 +10,13 @@ import {
   type ToolCategoryKey,
 } from "../_data/tools-list";
 import AppIcon, { hasAppIcon } from "./AppIcon";
+import { useWorkspaces } from "./useWorkspaces";
+
+type ToolAvailability =
+  | "allowed"
+  | "disabled"
+  | "tier_locked"
+  | "workspace_blocked";
 
 interface Props {
   open: boolean;
@@ -54,6 +62,10 @@ export default function AppStore({
 }: Props) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<ToolCategoryKey | "all">("all");
+  const { activeId } = useWorkspaces();
+  const [availability, setAvailability] = useState<
+    Record<string, ToolAvailability>
+  >({});
 
   useEffect(() => {
     if (!open) {
@@ -70,6 +82,43 @@ export default function AppStore({
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
+
+  // Pull per-tool availability from the gating endpoint when the store
+  // opens. Failures fall back to "allowed" — the install path also
+  // pre-flights the same RPC server-side, so a stale client view can't
+  // sneak through a disabled or tier-locked tool. Empty `activeId`
+  // means we haven't hydrated a workspace yet; skip until we have one.
+  useEffect(() => {
+    if (!open || !activeId) return;
+    let cancelled = false;
+    const slugs = TOOLS.map((t) => t.slug);
+    fetch("/api/tools/availability", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workspaceId: activeId, slugs }),
+    })
+      .then(async (r) => {
+        if (!r.ok) return null;
+        return (await r.json()) as {
+          availability?: Record<string, ToolAvailability>;
+        };
+      })
+      .then((json) => {
+        if (cancelled) return;
+        if (json && json.availability) {
+          setAvailability(json.availability);
+        }
+      })
+      .catch(() => {
+        /* leave map empty — defaults to "allowed" */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, activeId]);
+
+  const availabilityFor = (slug: string): ToolAvailability =>
+    availability[slug] ?? "allowed";
 
   const tools = useMemo(() => {
     let list = filter === "all" ? TOOLS : TOOLS.filter((t) => t.category === filter);
@@ -182,6 +231,7 @@ export default function AppStore({
                         category={t.category}
                         iconKey={t.icon}
                         installed={isInstalled(t.slug)}
+                        availability={availabilityFor(t.slug)}
                         onInstall={() => onInstall(t.slug)}
                         onUninstall={() => onUninstall(t.slug)}
                         onOpen={() => onOpenTool(t.slug, t.title)}
@@ -205,6 +255,7 @@ export default function AppStore({
                       category={t.category}
                       iconKey={t.icon}
                       installed={isInstalled(t.slug)}
+                      availability={availabilityFor(t.slug)}
                       onInstall={() => onInstall(t.slug)}
                       onUninstall={() => onUninstall(t.slug)}
                       onOpen={() => onOpenTool(t.slug, t.title)}
@@ -234,6 +285,7 @@ interface RowProps {
   category: ToolCategoryKey;
   iconKey: keyof typeof TOOL_ICONS;
   installed: boolean;
+  availability: ToolAvailability;
   onInstall: () => void;
   onUninstall: () => void;
   onOpen: () => void;
@@ -246,6 +298,7 @@ function StoreRow({
   category,
   iconKey,
   installed,
+  availability,
   onInstall,
   onUninstall,
   onOpen,
@@ -285,13 +338,7 @@ function StoreRow({
               </button>
             </>
           ) : (
-            <button
-              type="button"
-              onClick={onInstall}
-              className="rounded-md bg-app px-2.5 py-1 text-[0.7rem] font-medium text-app hover:opacity-90 transition-opacity"
-            >
-              Get
-            </button>
+            <InstallControl availability={availability} onInstall={onInstall} />
           )}
         </div>
       </div>
@@ -341,15 +388,77 @@ function FeatureRow(props: RowProps) {
           </button>
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={props.onInstall}
-          className="shrink-0 rounded-full bg-app px-4 py-1.5 text-[0.72rem] font-medium text-app hover:opacity-90 transition-opacity"
-        >
-          Get
-        </button>
+        <div className="shrink-0">
+          <InstallControl
+            availability={props.availability}
+            onInstall={props.onInstall}
+            variant="featured"
+          />
+        </div>
       )}
     </div>
+  );
+}
+
+/* ───────── Install / gated CTA ───────── */
+
+function InstallControl({
+  availability,
+  onInstall,
+  variant = "row",
+}: {
+  availability: ToolAvailability;
+  onInstall: () => void;
+  variant?: "row" | "featured";
+}) {
+  const baseRow =
+    "rounded-md px-2.5 py-1 text-[0.7rem] font-medium transition-opacity";
+  const baseFeatured =
+    "rounded-full px-4 py-1.5 text-[0.72rem] font-medium transition-opacity";
+  const base = variant === "featured" ? baseFeatured : baseRow;
+
+  if (availability === "allowed") {
+    return (
+      <button
+        type="button"
+        onClick={onInstall}
+        className={`${base} bg-app text-app hover:opacity-90`}
+      >
+        Get
+      </button>
+    );
+  }
+
+  if (availability === "tier_locked") {
+    return (
+      <Link
+        href="/pricing"
+        className={`${base} bg-tool-accent-soft text-tool-accent hover:opacity-90`}
+      >
+        Upgrade to install
+      </Link>
+    );
+  }
+
+  if (availability === "workspace_blocked") {
+    return (
+      <span
+        className={`${base} cursor-not-allowed bg-surface text-muted opacity-80`}
+        aria-disabled="true"
+      >
+        Not enabled for this workspace
+      </span>
+    );
+  }
+
+  // disabled
+  return (
+    <span
+      className={`${base} cursor-not-allowed bg-surface text-faint opacity-70`}
+      aria-disabled="true"
+    >
+      Unavailable
+    </span>
   );
 }
 
