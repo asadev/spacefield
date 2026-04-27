@@ -1744,8 +1744,10 @@ export default function SheetsApp({
         )}
       </AnimatePresence>
 
-      {/* Editor body */}
-      <div className="relative flex-1 overflow-hidden bg-app">
+      {/* Editor body — `min-h-0` is critical: without it the `flex-1` slot
+          can collapse to 0 height in a flex column, leaving Univer's host
+          unmeasurable and the grid invisible. */}
+      <div className="relative flex min-h-0 flex-1 overflow-hidden bg-app">
         {loading && (
           <div className="absolute inset-0 z-20 flex items-center justify-center bg-app/80 backdrop-blur-sm">
             <span className="font-mono text-[11px] uppercase tracking-[0.22em] text-secondary">

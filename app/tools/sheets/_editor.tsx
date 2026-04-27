@@ -22,7 +22,7 @@
      IWorkbookData ──univerToSheetjs──► sheetjs WB ──XLSX.write──► .xlsx bytes
 ═══════════════════════════════════════════════════════════════════════════ */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import {
   Univer,
   LocaleType,
@@ -421,10 +421,18 @@ export default function SheetsEditor({
   onEditingChange,
   onSheetTabsChange,
 }: EditorProps) {
+  // Inner host — what Univer mounts into. Absolute-positioned inside the
+  // wrapper so it ALWAYS fills the parent regardless of any flex quirks.
   const containerRef = useRef<HTMLDivElement | null>(null);
   const univerRef = useRef<Univer | null>(null);
   // FUniver is the friendly facade — see imports above.
   const apiRef = useRef<FUniver | null>(null);
+
+  // Univer's UIPlugin reads container dimensions at registerPlugin time. If
+  // the host is 0×0 then (dynamic import resolved before layout settled, or
+  // a parent still animating), the canvas never sizes correctly and the
+  // grid renders invisible. Gate the mount on a measurable size.
+  const [hasSize, setHasSize] = useState(false);
 
   const onReadyRef = useRef(onReady);
   const onErrorRef = useRef(onError);
@@ -445,12 +453,47 @@ export default function SheetsEditor({
   }, [theme]);
 
   // -----------------------------------------------------------------------
-  // Mount Univer once.
+  // Wait for the host to have non-zero dimensions before mounting Univer.
+  // useLayoutEffect runs synchronously after DOM mutation, before paint, so
+  // we measure as early as possible. ResizeObserver covers the case where
+  // the parent is mid-animation or still resolving its flex layout.
+  // -----------------------------------------------------------------------
+  useLayoutEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      if (rect.width > 0 && rect.height > 0) {
+        setHasSize(true);
+        return true;
+      }
+      return false;
+    };
+    if (measure()) return;
+    const ro = new ResizeObserver(() => {
+      if (measure()) ro.disconnect();
+    });
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  // -----------------------------------------------------------------------
+  // Mount Univer once the container is sized.
   // -----------------------------------------------------------------------
   useEffect(() => {
     if (typeof window === "undefined") return;
+    if (!hasSize) return;
     const container = containerRef.current;
     if (!container) return;
+
+    // Defensive: if anything got left in the host (stale Univer DOM from a
+    // previous mount that didn't tear down cleanly), wipe it before Univer
+    // appends its fresh tree. New/Import remounts use a `key` bump in the
+    // shell, but this guards against any edge case where the same node is
+    // reused across mounts.
+    while (container.firstChild) {
+      container.removeChild(container.firstChild);
+    }
 
     let disposed = false;
     let univer: Univer | null = null;
@@ -820,13 +863,23 @@ export default function SheetsEditor({
       apiRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [hasSize]);
 
+  // Outer wrapper: establishes the flex slot + a positioning context.
+  // `min-h-0` is the missing-piece fix for nested flex columns — without it,
+  // `flex-1` parents can compute height from content rather than from the
+  // available space, leaving Univer's host effectively 0px tall.
+  // Inner host: absolutely fills the wrapper. Univer registers its UIPlugin
+  // against this node, so it ALWAYS has measurable dimensions.
   return (
     <div
-      ref={containerRef}
-      className="univer-host h-full w-full"
-      data-univer-host
-    />
+      className="relative h-full min-h-0 w-full flex-1 bg-app-elevated"
+    >
+      <div
+        ref={containerRef}
+        className="absolute inset-0"
+        data-univer-host
+      />
+    </div>
   );
 }
