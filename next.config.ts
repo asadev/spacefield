@@ -23,6 +23,24 @@ const nextConfig: NextConfig = {
         ],
       },
       {
+        // App icons are static SVGs that never change between deploys
+        // for a given filename. Vercel's default for /public is
+        // `max-age=0, must-revalidate`, which means a 304 round-trip
+        // per icon on every page load — and the Launcher/Dock fires
+        // 100+ of those concurrently. Pin them immutable so they hit
+        // the disk cache without revalidating.
+        source: '/app-icons/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+      {
+        source: '/wallpapers/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
+        ],
+      },
+      {
         source: '/images/:path*',
         headers: [
           { key: 'Cache-Control', value: 'public, max-age=86400, stale-while-revalidate=604800' },
