@@ -573,6 +573,9 @@ export const TOOLS: ToolItem[] = [
 
   // Files Manager — workspace storage, backed by Cloudflare R2.
   { slug: "files-manager", title: "Files", description: "Upload, organize, and share files inside this workspace. Storage is shared across members. Free workspaces include 100 MB.", category: "files", icon: "document", route: "/tools/files-manager", topRated: true, app: () => import("../files-manager/_app").then((m) => ({ default: m.default })) },
+
+  // Documents — Word-style rich-text editor that saves into the workspace.
+  { slug: "documents", title: "Documents", description: "Write, edit, and save Word-style documents inside your workspace. Real .docx round-trip, autosave, tables, lists, code, links.", category: "files", icon: "document", defaultSize: { w: 880, h: 640 }, minSize: { w: 480, h: 360 }, app: () => import("../documents/_app").then((m) => ({ default: m.default })) },
 ];
 
 export function toolsByCategory(key: ToolCategoryKey): ToolItem[] {
