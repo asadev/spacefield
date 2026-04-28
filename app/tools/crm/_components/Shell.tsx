@@ -151,6 +151,61 @@ function WorkspaceRequired({
   section: CrmSection;
   signedIn: boolean;
 }) {
+  const { workspaces, setCurrent, loading } = useWorkspace();
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  /* Inline create-and-switch flow. Bypasses the desktop's
+   * CreateWorkspaceDialog because that dialog only writes the desktop's
+   * local-workspace selection, not the lib/workspaces team selection
+   * that the CRM gates on. The endpoint /api/workspaces/ensure adds the
+   * user as owner, so the next CRM API call inherits the correct
+   * membership. */
+  const createInline = async () => {
+    if (creating) return;
+    setCreating(true);
+    setCreateError(null);
+    try {
+      // Generate a UUID v4 — crypto.randomUUID is available in all
+      // browsers we support.
+      const id = crypto.randomUUID();
+      const name = "My CRM workspace";
+      const r = await fetch("/api/workspaces/ensure", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, name }),
+      });
+      if (!r.ok) {
+        const j = (await r.json().catch(() => null)) as
+          | { error?: string; message?: string }
+          | null;
+        throw new Error(
+          j?.message ?? j?.error ?? `Could not create workspace (${r.status})`
+        );
+      }
+      const j = (await r.json()) as {
+        workspace: { id: string; name: string };
+      };
+      setCurrent({
+        kind: "team",
+        id: j.workspace.id,
+        // slug is a display-only field for our local selection — the
+        // server uses workspace_members membership for auth, not the
+        // slug. The id-as-slug fallback survives until the workspaces
+        // list reloads with the canonical slug from a future migration.
+        slug: j.workspace.id,
+        name: j.workspace.name,
+        role: "owner",
+      });
+    } catch (e) {
+      setCreateError(
+        e instanceof Error ? e.message : "Could not create workspace"
+      );
+    } finally {
+      setCreating(false);
+    }
+  };
+
   return (
     <div className="flex h-full w-full items-center justify-center bg-app p-6">
       <div className="w-full max-w-md rounded-xl border border-dashed border-app bg-app-elevated p-6 text-center">
@@ -158,13 +213,63 @@ function WorkspaceRequired({
           crm.{section}
         </div>
         <h2 className="mt-2 text-lg font-semibold text-app">
-          {signedIn ? "Pick a team workspace" : "Sign in to use the CRM"}
+          {signedIn ? "Pick a workspace for the CRM" : "Sign in to use the CRM"}
         </h2>
         <p className="mt-2 text-sm text-secondary">
           {signedIn
-            ? "Records live inside team workspaces. Switch to one from the workspace switcher to load this section."
-            : "Personal mode is local-only. Sign in and join or create a team workspace to use CRM records."}
+            ? "CRM records sync to a team workspace. Pick one of yours below — or create one if you haven't yet."
+            : "Personal mode is local-only. Sign in to load or create a team workspace."}
         </p>
+
+        {signedIn && !loading && workspaces.length > 0 && (
+          <div className="mt-5 flex flex-col gap-2">
+            {workspaces.map((w) => (
+              <button
+                key={w.id}
+                type="button"
+                onClick={() =>
+                  setCurrent({
+                    kind: "team",
+                    id: w.id,
+                    slug: w.slug,
+                    name: w.name,
+                    role: w.role,
+                  })
+                }
+                className="flex items-center justify-between rounded-lg border border-app bg-app px-3 py-2.5 text-left transition-colors hover:bg-surface-hover"
+              >
+                <span className="flex flex-col">
+                  <span className="text-sm font-semibold text-app">{w.name}</span>
+                  <span className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-faint">
+                    {w.slug} · {w.role}
+                  </span>
+                </span>
+                <span className="rounded-md bg-tool-accent px-2 py-1 font-mono text-[0.55rem] font-semibold uppercase tracking-[0.14em] text-white">
+                  Use
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {signedIn && !loading && workspaces.length === 0 && (
+          <div className="mt-5">
+            <button
+              type="button"
+              onClick={createInline}
+              disabled={creating}
+              className="inline-flex items-center gap-2 rounded-lg bg-tool-accent px-4 py-2 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
+            >
+              {creating ? "Creating…" : "Create your first workspace"}
+            </button>
+            {createError && (
+              <p className="mt-3 text-[0.7rem] text-rose-500">{createError}</p>
+            )}
+            <p className="mt-3 text-[0.7rem] text-faint">
+              You can rename it later from Settings → Workspaces.
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -443,10 +548,17 @@ export default function Shell({ width, initialParams, openApp }: NativeAppProps)
         >
           {(() => {
             const workspaceId = current.kind === "team" ? current.id : "";
+            // Every record-driven section needs a team workspace. The
+            // settings/reports surfaces are static enough to render even
+            // without one, so we exempt them.
             const needsWorkspace =
+              section === "pipeline" ||
+              section === "deals" ||
+              section === "leads" ||
               section === "contacts" ||
               section === "companies" ||
-              section === "inventory";
+              section === "inventory" ||
+              section === "activities";
             if (needsWorkspace && (!signedIn || !workspaceId)) {
               return <WorkspaceRequired section={section} signedIn={signedIn} />;
             }
