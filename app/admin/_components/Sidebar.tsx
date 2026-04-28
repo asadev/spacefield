@@ -12,6 +12,7 @@ const NAV: { href: string; label: string }[] = [
   { href: "/admin/tiers", label: "Tiers" },
   { href: "/admin/tools", label: "Tools" },
   { href: "/admin/wallpapers", label: "Wallpapers" },
+  { href: "/admin/social", label: "Social" },
 ];
 
 export default function Sidebar() {
