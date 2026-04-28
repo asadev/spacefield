@@ -113,14 +113,27 @@ export function useWorkspace(): {
         }
         if (!cancelled) setSignedIn(true);
 
-        const { data } = await supabase
+        /* The workspaces table uses `user_id` (creator) — older code
+         * referenced a `created_by` column that never existed in the
+         * schema, which made this whole query error out and the
+         * workspaces list come back empty for every signed-in user.
+         * We alias user_id → created_by here so the rest of the type
+         * shape stays the same. */
+        const { data, error } = await supabase
           .from("workspace_members")
           .select(
-            "role, workspace:workspaces(id, name, slug, created_by, created_at)"
+            "role, workspace:workspaces(id, name, slug, created_by:user_id, created_at)"
           )
           .eq("user_id", userData.user.id);
 
         if (cancelled) return;
+        if (error) {
+          // Surface in dev consoles but don't break the UI — fall
+          // through to an empty list and let the auto-resolve drop
+          // back to personal.
+          // eslint-disable-next-line no-console
+          console.warn("[workspaces] list query failed:", error.message);
+        }
 
         type Row = {
           role: WorkspaceRole;
