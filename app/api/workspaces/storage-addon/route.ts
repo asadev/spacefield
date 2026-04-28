@@ -1,23 +1,29 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isValidAddonGb } from "@/app/_data/storage-addons";
+import { checkIsAdmin } from "@/app/admin/_lib";
 
 /* /api/workspaces/storage-addon
  *
- * POST   { workspaceId, addonGb }   upsert a workspace's add-on row.
- *                                   addonGb 0 removes the add-on.
- * DELETE { workspaceId }            clear the add-on (back to base).
+ * POST   { workspaceId, addonGb }   admin-only override: stamp an
+ *                                   addon row with payment_status='active'
+ *                                   for free testing or manual support.
+ *                                   addonGb 0 removes the row.
+ * DELETE { workspaceId }            admin-only: clear the row entirely.
  *
- * Auth model: we use the user-scoped Supabase client so the existing
- * RLS policy ("owners write addon") gates the write. No service role.
+ * History:
+ *   v1 — open to workspace owners. Mock cap, no payment.
+ *   v2 — open to workspace owners but row was 'pending' until Paddle
+ *        webhook flipped it. The owner could still pick a new add-on
+ *        without ever paying because the prior row stayed visible.
+ *   v3 (this) — locked to admins only. Members + owners must use the
+ *        Paddle Checkout flow at /api/billing/checkout, which stages a
+ *        'pending' row and only flips to 'active' when the
+ *        subscription.created webhook fires. This route exists purely
+ *        for ops overrides (refunds, comp, debugging).
  *
- * Returns the new effective cap by re-running the workspace_storage
- * RPC after the mutation so the client doesn't need a second round-
- * trip to refresh the storage bar.
- *
- * Payment is NOT yet wired. For v1 a row simply means "the user chose
- * this add-on, apply the cap." When Stripe / Lemon Squeezy lands,
- * this route will gate the upsert on a successful payment intent.
+ * Returns the new effective cap by re-running the workspace_storage RPC
+ * after the mutation so the caller doesn't need a second round-trip.
  */
 
 interface PostBody {
@@ -48,13 +54,20 @@ async function fetchEffectiveCap(
 }
 
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const adminCheck = await checkIsAdmin();
+  if (!adminCheck.ok) {
+    return NextResponse.json(
+      {
+        error:
+          adminCheck.reason === "no-user"
+            ? "unauthorized"
+            : "admin only — use /api/billing/checkout to purchase an add-on",
+      },
+      { status: adminCheck.reason === "no-user" ? 401 : 403 }
+    );
   }
+
+  const supabase = await createClient();
 
   let body: PostBody;
   try {
@@ -85,14 +98,19 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 400 });
     }
   } else {
+    // Admin override stamps payment_status='active' so workspace_storage
+    // immediately credits the cap. This is the manual-support escape
+    // hatch — the normal user path is the Paddle webhook flipping the
+    // row to 'active' after subscription.created.
     const { error } = await supabase
       .from("workspace_storage_addons")
       .upsert(
         {
           workspace_id: workspaceId,
           addon_gb: addonGb,
-          selected_by: user.id,
+          selected_by: adminCheck.userId,
           selected_at: new Date().toISOString(),
+          payment_status: "active",
         },
         { onConflict: "workspace_id" }
       );
@@ -112,13 +130,20 @@ export async function POST(req: NextRequest) {
 }
 
 export async function DELETE(req: NextRequest) {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-  if (!user) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const adminCheck = await checkIsAdmin();
+  if (!adminCheck.ok) {
+    return NextResponse.json(
+      {
+        error:
+          adminCheck.reason === "no-user"
+            ? "unauthorized"
+            : "admin only — use /api/billing/checkout to manage subscriptions",
+      },
+      { status: adminCheck.reason === "no-user" ? 401 : 403 }
+    );
   }
+
+  const supabase = await createClient();
 
   let body: DeleteBody;
   try {

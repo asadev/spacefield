@@ -51,6 +51,7 @@ interface TrendRow {
 interface AddonRow {
   workspace_id: string;
   addon_gb: number;
+  payment_status: string | null;
 }
 interface ProfileRow {
   user_id: string;
@@ -85,7 +86,7 @@ export async function GET(req: NextRequest) {
     supabase.rpc("workspace_upload_trend_30d", { ws_id: workspaceId }),
     supabase
       .from("workspace_storage_addons")
-      .select("workspace_id, addon_gb")
+      .select("workspace_id, addon_gb, payment_status")
       .eq("workspace_id", workspaceId)
       .maybeSingle(),
   ]);
@@ -129,6 +130,7 @@ export async function GET(req: NextRequest) {
     cap: Number(capRow.cap_bytes),
     used: Number(capRow.used_bytes),
     addon: addonRow ? Number(addonRow.addon_gb) : 0,
+    addon_payment_status: addonRow?.payment_status ?? null,
     by_kind: kindRows.map((r) => ({
       kind: r.kind,
       file_count: Number(r.file_count),

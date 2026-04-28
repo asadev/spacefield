@@ -90,7 +90,13 @@ export default function StorageSection({
       }
       const s = body as StorageStatsBody;
       setStats(s);
-      setDraftAddonGb(s.addon);
+      // Initialise the dropdown to the *effective* (paid + counted)
+      // value. If the saved row is 'pending', the user hasn't actually
+      // paid yet — surface the dropdown back at 0 so they're not staring
+      // at a value that isn't real.
+      const isEffective =
+        s.addon_payment_status === "active" || s.addon_payment_status === "mock";
+      setDraftAddonGb(isEffective ? s.addon : 0);
     } catch (err) {
       onError(err instanceof Error ? err.message : "Load failed");
     } finally {
@@ -108,33 +114,40 @@ export default function StorageSection({
       onError("Invalid storage add-on selection.");
       return;
     }
-    if (stats.addon === draftAddonGb) {
+
+    const status = stats.addon_payment_status;
+    const hasActiveAddon =
+      stats.addon > 0 && (status === "active" || status === "mock");
+
+    // Removing the add-on (draft 0):
+    //  - Active subscription: send the user to manage via Paddle. We do
+    //    NOT delete the row here — that would orphan a still-billing
+    //    Paddle subscription. Cancellation flows through Paddle's
+    //    customer portal and the webhook flips payment_status to
+    //    'canceled' on subscription.canceled.
+    //  - Pending row only: nothing to remove client-side; the user can
+    //    just pick a new value and the webhook reconciles on completion.
+    if (draftAddonGb === 0) {
+      if (hasActiveAddon) {
+        onError(
+          "Cancel via the Paddle receipt link in your email — billing portal coming soon."
+        );
+        return;
+      }
       onSuccess("No change to apply.");
       return;
     }
+
+    if (hasActiveAddon && stats.addon === draftAddonGb) {
+      onSuccess("Already on this add-on.");
+      return;
+    }
+
     setBusy("addon");
     try {
-      // Removing the add-on (selecting 0) hits the legacy direct path
-      // — there's no payment to take. The webhook handler treats a
-      // canceled Paddle subscription as a separate signal, so this
-      // doesn't conflict.
-      if (draftAddonGb === 0) {
-        const res = await fetch("/api/workspaces/storage-addon", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ workspaceId, addonGb: 0 }),
-        });
-        const body = (await res.json().catch(() => ({}))) as {
-          error?: string;
-        };
-        if (!res.ok) throw new Error(body.error || `Update failed (${res.status})`);
-        onSuccess("Storage add-on removed.");
-        await refresh();
-        return;
-      }
-
-      // Purchase (or change) → checkout. Webhook flips the row
-      // to payment_status='active' once payment succeeds.
+      // Purchase (or change) → checkout. Webhook flips the
+      // workspace_storage_addons row to payment_status='active' once
+      // payment succeeds. We never write the addon row from here.
       const res = await fetch("/api/billing/checkout", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -178,6 +191,10 @@ export default function StorageSection({
         environment: me.paddle_environment ?? "production",
         onCheckoutCompleted: () => {
           window.location.href = "/billing/success";
+        },
+        onCheckoutError: (message) => {
+          onError(message);
+          setBusy(null);
         },
       });
       Paddle.Checkout.open({
@@ -261,6 +278,24 @@ export default function StorageSection({
   const baseLabel = tierBaseMb !== null ? formatStorageMb(tierBaseMb) : "Base";
   const addonLabel = formatStorageGb(stats.addon);
 
+  // Drive the breakdown line off the row's payment_status, NOT off the
+  // raw addon_gb. Otherwise a stale 'pending' row from a previous flow
+  // makes the UI claim "Base 5 GB + Add-on 2 TB = 5 GB" — the cap from
+  // the RPC excludes pending addons, but the textual label was using
+  // the raw GB value.
+  const addonStatus = stats.addon_payment_status;
+  const isAddonActive =
+    stats.addon > 0 && (addonStatus === "active" || addonStatus === "mock");
+  const isAddonPending = stats.addon > 0 && addonStatus === "pending";
+  const isAddonPastDue = stats.addon > 0 && addonStatus === "past_due";
+
+  // Disable the Update button when the dropdown matches what's already
+  // bought-and-billing. We use the effective (paid) state here because
+  // a pending row should still let the user re-trigger checkout.
+  const effectiveAddonGb = isAddonActive ? stats.addon : 0;
+  const updateDisabled =
+    draftAddonGb === effectiveAddonGb || busy === "addon";
+
   return (
     <div className="space-y-5">
       {/* Cap + used + add-on */}
@@ -278,11 +313,15 @@ export default function StorageSection({
           />
         </div>
         <div className="mt-2 text-[0.7rem] text-muted">
-          {stats.addon > 0
+          {isAddonActive
             ? `Base ${baseLabel} + Add-on ${addonLabel} = ${formatStorageBytes(
                 cap
               )}`
-            : `Base ${baseLabel} included with ${tierName}.`}
+            : isAddonPending
+              ? `Base ${baseLabel} included with ${tierName}. Pending upgrade: +${addonLabel} (awaiting payment).`
+              : isAddonPastDue
+                ? `Base ${baseLabel} included with ${tierName}. Add-on payment past due — please update billing.`
+                : `Base ${baseLabel} included with ${tierName}.`}
         </div>
 
         {role === "owner" && (
@@ -304,17 +343,13 @@ export default function StorageSection({
             <button
               type="button"
               className={PRIMARY}
-              disabled={
-                draftAddonGb === stats.addon || busy === "addon"
-              }
+              disabled={updateDisabled}
               onClick={saveAddon}
-              title="Buy or remove the storage add-on for this workspace."
+              title="Buy or change the storage add-on for this workspace."
             >
               {busy === "addon"
-                ? draftAddonGb === 0
-                  ? "Removing…"
-                  : "Redirecting…"
-                : draftAddonGb === stats.addon
+                ? "Redirecting…"
+                : draftAddonGb === effectiveAddonGb
                   ? "Update"
                   : draftAddonGb === 0
                     ? "Remove add-on"

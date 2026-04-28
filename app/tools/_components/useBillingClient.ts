@@ -34,6 +34,18 @@ interface PaddleCheckoutOpenOptions {
 interface PaddleCheckoutEvent {
   name?: string;
   data?: unknown;
+  // Paddle Billing v2 surfaces error metadata in `error`. Shape varies
+  // by failure mode (init vs payment vs validation), so we keep this
+  // loose and only read `.detail` / `.message` opportunistically.
+  error?:
+    | {
+        type?: string;
+        code?: string;
+        detail?: string;
+        message?: string;
+      }
+    | string
+    | null;
 }
 
 /* Paddle Billing v2's Initialize API — DOES NOT accept `environment`.
@@ -66,6 +78,16 @@ const PADDLE_SCRIPT_SRC = "https://cdn.paddle.com/paddle/v2/paddle.js";
 
 let scriptLoadedPromise: Promise<void> | null = null;
 let setupDone = false;
+
+/* Paddle.Initialize() can only be called once per page load — calling it
+ * twice with different tokens throws. So we capture the latest set of
+ * caller callbacks in module-scope refs and the single Paddle init's
+ * eventCallback dispatches into whichever handler is currently active.
+ * Without this the second caller's onCheckoutError/onCheckoutCompleted
+ * silently no-ops because the first call's closure is the only one
+ * installed. */
+let liveOnCompleted: (() => void) | null = null;
+let liveOnError: ((message: string) => void) | null = null;
 
 function loadScriptOnce(): Promise<void> {
   if (typeof window === "undefined") {
@@ -105,6 +127,34 @@ export interface EnsurePaddleOptions {
   token: string;
   environment?: "production" | "sandbox";
   onCheckoutCompleted?: () => void;
+  /**
+   * Surface Paddle's `checkout.error` and `checkout.payment_failed`
+   * events so we can replace Paddle's generic "Something went wrong"
+   * overlay with a meaningful toast. Without this hook, an init failure
+   * (bad client token, unapproved domain, archived product) shows the
+   * Paddle overlay's stock error message and the user has no recourse.
+   */
+  onCheckoutError?: (message: string) => void;
+}
+
+/**
+ * Pull a human-readable message out of Paddle's loose error shape.
+ * Falls back to a generic string if the payload is missing fields.
+ */
+function describePaddleEventError(event: PaddleCheckoutEvent): string {
+  const err = event.error;
+  if (typeof err === "string" && err.trim().length > 0) return err;
+  if (err && typeof err === "object") {
+    const detail = err.detail || err.message;
+    if (typeof detail === "string" && detail.trim().length > 0) return detail;
+    if (typeof err.code === "string" && err.code.trim().length > 0) {
+      return `Paddle error: ${err.code}`;
+    }
+  }
+  if (event.name === "checkout.payment_failed") {
+    return "Payment was declined. Try a different card or contact support.";
+  }
+  return "Checkout failed. Please try again or contact support.";
 }
 
 /**
@@ -119,6 +169,12 @@ export async function ensurePaddle(opts: EnsurePaddleOptions): Promise<PaddleGlo
   await loadScriptOnce();
   const Paddle = window.Paddle;
   if (!Paddle) throw new Error("Paddle.js loaded but global Paddle object is missing");
+
+  // Always refresh the live handlers so the most recent caller's
+  // callbacks fire — see comment on liveOn* refs above.
+  liveOnCompleted = opts.onCheckoutCompleted ?? null;
+  liveOnError = opts.onCheckoutError ?? null;
+
   if (!setupDone) {
     // Paddle Billing v2 contract:
     //   - environment goes through Paddle.Environment.set() BEFORE init
@@ -130,8 +186,17 @@ export async function ensurePaddle(opts: EnsurePaddleOptions): Promise<PaddleGlo
     Paddle.Initialize({
       token: opts.token,
       eventCallback: (event) => {
-        if (event?.name === "checkout.completed") {
-          opts.onCheckoutCompleted?.();
+        if (!event?.name) return;
+        if (event.name === "checkout.completed") {
+          liveOnCompleted?.();
+          return;
+        }
+        if (
+          event.name === "checkout.error" ||
+          event.name === "checkout.payment_failed"
+        ) {
+          liveOnError?.(describePaddleEventError(event));
+          return;
         }
       },
     });

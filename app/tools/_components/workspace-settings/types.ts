@@ -45,7 +45,23 @@ export interface MemberRow {
 export interface StorageStatsBody {
   cap: number;
   used: number;
+  /**
+   * GB delta of the saved add-on row (0 = no row). This is the GB column
+   * on workspace_storage_addons regardless of whether payment cleared.
+   * Pair with `addon_payment_status` to know whether it's actually
+   * counting toward the cap.
+   */
   addon: number;
+  /**
+   * Lifecycle of the saved add-on row, mirroring Paddle:
+   *   - null            no row at all (no add-on selected)
+   *   - 'pending'       checkout opened, webhook hasn't fired
+   *   - 'active'        Paddle confirmed payment — counts toward cap
+   *   - 'mock'          legacy v1 row pre-Paddle — counts toward cap
+   *   - 'past_due'      payment failed; Paddle retrying
+   *   - 'canceled'      user canceled; period may still be running
+   */
+  addon_payment_status: string | null;
   by_kind: Array<{ kind: string; file_count: number; total_bytes: number }>;
   by_user: Array<{
     user_id: string;

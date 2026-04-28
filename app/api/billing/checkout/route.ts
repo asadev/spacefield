@@ -2,6 +2,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createCheckout, type CheckoutInput } from "@/lib/billing";
 import { isValidAddonGb } from "@/app/_data/storage-addons";
+import {
+  PADDLE_ADDON_PRODUCTS,
+  PADDLE_TIER_PRODUCTS,
+} from "@/app/_data/paddle-products";
 
 /* /api/billing/checkout
  *
@@ -43,6 +47,25 @@ function originFromRequest(req: NextRequest): string {
 }
 
 export async function POST(req: NextRequest) {
+  // Fail fast + explicit if billing isn't configured. Without this the
+  // request continues into createCheckout(), gets a malformed payload,
+  // and the user sees Paddle's stock "Something went wrong" overlay.
+  if (!process.env.PADDLE_API_KEY) {
+    return NextResponse.json(
+      { error: "Billing is not configured (PADDLE_API_KEY missing)." },
+      { status: 500 }
+    );
+  }
+  if (!process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN) {
+    return NextResponse.json(
+      {
+        error:
+          "Billing is not configured (NEXT_PUBLIC_PADDLE_CLIENT_TOKEN missing).",
+      },
+      { status: 500 }
+    );
+  }
+
   const supabase = await createClient();
   const {
     data: { user },
@@ -95,6 +118,15 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
+    // Defensive: if paddle-products.ts is missing or malformed, fail
+    // explicitly instead of letting an undefined price_id flow into
+    // Paddle.Checkout.open().
+    if (!PADDLE_TIER_PRODUCTS[tier]?.price_id) {
+      return NextResponse.json(
+        { error: `Paddle price_id missing for tier '${tier}'.` },
+        { status: 500 }
+      );
+    }
     checkoutInput.tier = tier;
   } else {
     const gb = Number(addon_gb);
@@ -104,7 +136,14 @@ export async function POST(req: NextRequest) {
         { status: 400 }
       );
     }
-    checkoutInput.addon_gb = gb as 500 | 2048 | 10240;
+    const addonKey = gb as 500 | 2048 | 10240;
+    if (!PADDLE_ADDON_PRODUCTS[addonKey]?.price_id) {
+      return NextResponse.json(
+        { error: `Paddle price_id missing for addon '+${gb} GB'.` },
+        { status: 500 }
+      );
+    }
+    checkoutInput.addon_gb = addonKey;
 
     // Pre-stage a pending row. Webhook flips to 'active' on success.
     const { error: stageErr } = await supabase
