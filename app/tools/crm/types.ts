@@ -606,6 +606,7 @@ export const CRM_SECTIONS = [
   "contacts",
   "companies",
   "inventory",
+  "boards",
   "activities",
   "reports",
   "settings",

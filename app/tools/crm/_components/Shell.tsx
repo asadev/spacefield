@@ -43,6 +43,8 @@ import CustomFieldsAdmin from "./CustomFieldsAdmin";
 import PermissionsAdmin from "./PermissionsAdmin";
 import SavedViewsManager from "./SavedViewsManager";
 import TemplatePicker from "./TemplatePicker";
+import LeadSourcesAdmin from "./LeadSourcesAdmin";
+import BoardsListView from "./BoardsListView";
 import { useCrmTemplate } from "./useCrmTemplate";
 import { CRM_TEMPLATES } from "../_templates/registry";
 
@@ -53,6 +55,7 @@ const NAV_ITEMS: CrmSectionMeta[] = [
   { key: "contacts", label: "Contacts", icon: "users" },
   { key: "companies", label: "Companies", icon: "building" },
   { key: "inventory", label: "Inventory", icon: "layers" },
+  { key: "boards", label: "Boards", icon: "kanban" },
   { key: "activities", label: "Activities", icon: "clock" },
   { key: "reports", label: "Reports", icon: "chart" },
   { key: "settings", label: "Settings", icon: "lock" },
@@ -71,7 +74,12 @@ const SIDEBAR_WIDTH = 220;
 const SIDEBAR_COLLAPSED = 56;
 const MOBILE_BREAKPOINT = 720;
 
-type SettingsSub = "template" | "custom-fields" | "permissions" | "saved-views";
+type SettingsSub =
+  | "template"
+  | "custom-fields"
+  | "permissions"
+  | "saved-views"
+  | "lead-sources";
 
 // Tiny inline icon set — same SVG path family as TOOL_ICONS so the shell
 // renders without a separate icon registry import. Keeps Phase 1 surface
@@ -204,6 +212,7 @@ function SettingsSurface({
   const tabs: { key: SettingsSub; label: string }[] = [
     { key: "template", label: "Template" },
     { key: "custom-fields", label: "Custom fields" },
+    { key: "lead-sources", label: "Lead sources" },
     { key: "permissions", label: "Permissions" },
     { key: "saved-views", label: "Saved views" },
   ];
@@ -235,6 +244,7 @@ function SettingsSurface({
       <div className="min-h-0 flex-1">
         {sub === "template" && <TemplatePicker />}
         {sub === "custom-fields" && <CustomFieldsAdmin />}
+        {sub === "lead-sources" && <LeadSourcesAdmin />}
         {sub === "permissions" && <PermissionsAdmin />}
         {sub === "saved-views" && <SavedViewsManager />}
       </div>
@@ -260,7 +270,8 @@ export default function Shell({ width, initialParams, openApp }: NativeAppProps)
       sub === "template" ||
       sub === "custom-fields" ||
       sub === "permissions" ||
-      sub === "saved-views"
+      sub === "saved-views" ||
+      sub === "lead-sources"
     ) {
       return sub;
     }
@@ -309,6 +320,9 @@ export default function Shell({ width, initialParams, openApp }: NativeAppProps)
         break;
       case "inventory":
         prefetchUrl(`/api/crm/inventory?workspace_id=${wsId}&limit=200`);
+        break;
+      case "boards":
+        prefetchUrl(`/api/crm/boards?workspace_id=${wsId}`);
         break;
       case "activities":
         prefetchUrl(
@@ -540,6 +554,7 @@ export default function Shell({ width, initialParams, openApp }: NativeAppProps)
               section === "contacts" ||
               section === "companies" ||
               section === "inventory" ||
+              section === "boards" ||
               section === "activities";
             if (needsWorkspace && (!signedIn || !workspaceId)) {
               return <WorkspaceRequired section={section} signedIn={signedIn} />;
@@ -599,6 +614,14 @@ export default function Shell({ width, initialParams, openApp }: NativeAppProps)
                   workspaceLabel={workspaceLabel}
                   width={width}
                   openApp={openApp}
+                />
+              );
+            }
+            if (section === "boards") {
+              return (
+                <BoardsListView
+                  workspaceId={workspaceId}
+                  workspaceLabel={workspaceLabel}
                 />
               );
             }
