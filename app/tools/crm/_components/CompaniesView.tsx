@@ -12,6 +12,7 @@ import type {
   CrmDeal,
   CrmTag,
 } from "../types";
+import { cachedFetch, invalidate } from "@/lib/cache/swr";
 import RecordDetail from "./RecordDetail";
 import { RecordTable, type RecordColumn } from "./RecordTable";
 import { Avatar, CountPill } from "./_records/Chips";
@@ -88,9 +89,9 @@ export default function CompaniesView({
       url.searchParams.set("workspace_id", workspaceId);
       if (debounced) url.searchParams.set("search", debounced);
       url.searchParams.set("limit", "200");
-      const res = await fetch(url.toString());
-      const j = (await res.json()) as { items?: CrmCompany[]; error?: string };
-      if (!res.ok) throw new Error(j.error ?? "Load failed");
+      const j = await cachedFetch<{ items?: CrmCompany[]; error?: string }>(
+        url.toString()
+      );
       setRows(j.items ?? []);
     } catch (e) {
       setError((e as Error).message);
@@ -110,17 +111,17 @@ export default function CompaniesView({
     void (async () => {
       try {
         const [t, cf, contactsAll, dealsAll] = await Promise.all([
-          fetch(`/api/crm/tags?workspace_id=${workspaceId}`).then(
-            (r) => r.json() as Promise<{ items?: CrmTag[] }>
+          cachedFetch<{ items?: CrmTag[] }>(
+            `/api/crm/tags?workspace_id=${workspaceId}`
           ),
-          fetch(
+          cachedFetch<{ items?: CrmCustomField[] }>(
             `/api/crm/custom-fields?workspace_id=${workspaceId}&record_type=company`
-          ).then((r) => r.json() as Promise<{ items?: CrmCustomField[] }>),
-          fetch(`/api/crm/contacts?workspace_id=${workspaceId}&limit=1000`).then(
-            (r) => r.json() as Promise<{ items?: CrmContact[] }>
           ),
-          fetch(`/api/crm/deals?workspace_id=${workspaceId}&limit=1000`).then(
-            (r) => r.json() as Promise<{ items?: CrmDeal[] }>
+          cachedFetch<{ items?: CrmContact[] }>(
+            `/api/crm/contacts?workspace_id=${workspaceId}&limit=1000`
+          ),
+          cachedFetch<{ items?: CrmDeal[] }>(
+            `/api/crm/deals?workspace_id=${workspaceId}&limit=1000`
           ),
         ]);
         if (cancelled) return;
@@ -291,6 +292,7 @@ export default function CompaniesView({
       const j = (await res.json()) as { item?: CrmCompany; error?: string };
       if (!res.ok || !j.item) throw new Error(j.error ?? "Create failed");
       setRows((prev) => [j.item as CrmCompany, ...prev]);
+      invalidate({ prefix: `/api/crm/companies?workspace_id=${workspaceId}` });
       setQaName("");
       setQaDomain("");
     } catch (e) {
@@ -311,6 +313,7 @@ export default function CompaniesView({
           )
         );
         setRows((prev) => prev.filter((r) => !ids.includes(r.id)));
+        invalidate({ prefix: `/api/crm/companies?workspace_id=${workspaceId}` });
         setSelectedIds([]);
       } catch (e) {
         setError((e as Error).message);
@@ -353,6 +356,7 @@ export default function CompaniesView({
               if (!confirm("Delete this company?")) return;
               await fetch(`/api/crm/companies/${r.id}`, { method: "DELETE" });
               setRows((prev) => prev.filter((x) => x.id !== r.id));
+              invalidate({ prefix: `/api/crm/companies?workspace_id=${workspaceId}` });
             },
           },
         ]}

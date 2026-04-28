@@ -28,6 +28,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspace } from "@/lib/workspaces/client";
+import { prefetch as prefetchUrl } from "@/lib/cache/swr";
 import type { CrmSection, CrmSectionMeta } from "../types";
 import type { NativeAppProps } from "../../_data/tools-list";
 import PipelineView from "./PipelineView";
@@ -260,6 +261,42 @@ export default function Shell({ width, initialParams, openApp }: NativeAppProps)
   const { current, signedIn } = useWorkspace();
   const workspaceLabel =
     current.kind === "team" ? current.name : "loading…";
+  const wsId = current.kind === "team" ? current.id : "";
+
+  /* Pre-warm the cache for a section's main GET endpoint when the user
+   * hovers its sidebar nav item. By the time the click fires, the
+   * cachedFetch inside the view already has data (or is in flight),
+   * making the section transition feel instant. */
+  const prefetchSection = (key: CrmSection) => {
+    if (!wsId) return;
+    switch (key) {
+      case "pipeline":
+        prefetchUrl(`/api/crm/pipelines?workspace_id=${wsId}`);
+        break;
+      case "deals":
+        prefetchUrl(`/api/crm/deals?workspace_id=${wsId}&limit=200`);
+        break;
+      case "leads":
+        prefetchUrl(`/api/crm/leads?workspace_id=${wsId}&limit=200`);
+        break;
+      case "contacts":
+        prefetchUrl(`/api/crm/contacts?workspace_id=${wsId}&limit=200`);
+        break;
+      case "companies":
+        prefetchUrl(`/api/crm/companies?workspace_id=${wsId}&limit=200`);
+        break;
+      case "inventory":
+        prefetchUrl(`/api/crm/inventory?workspace_id=${wsId}&limit=200`);
+        break;
+      case "activities":
+        prefetchUrl(
+          `/api/crm/activities/?workspace_id=${wsId}&limit=500`
+        );
+        break;
+      default:
+        break;
+    }
+  };
 
   const compact = width < MOBILE_BREAKPOINT;
 
@@ -317,6 +354,8 @@ export default function Shell({ width, initialParams, openApp }: NativeAppProps)
                     setSection(item.key);
                     if (compact) setDrawerOpen(false);
                   }}
+                  onPointerEnter={() => prefetchSection(item.key)}
+                  onFocus={() => prefetchSection(item.key)}
                   aria-current={active ? "page" : undefined}
                   className={`flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors ${
                     active
@@ -339,7 +378,7 @@ export default function Shell({ width, initialParams, openApp }: NativeAppProps)
         </div>
       </nav>
     ),
-    [section, compact, showCollapsedSidebar, effectiveSidebarWidth]
+    [section, compact, showCollapsedSidebar, effectiveSidebarWidth, wsId]
   );
 
   return (

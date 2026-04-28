@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useWorkspace } from "@/lib/workspaces/client";
+import { cachedFetch, invalidate } from "@/lib/cache/swr";
 import type {
   CrmContact,
   CrmDeal,
@@ -91,9 +92,7 @@ function LeadsViewInner({ width, search, onSearchChange }: Props) {
       if (statusFilter) url.searchParams.set("status", statusFilter);
       if (search.trim()) url.searchParams.set("search", search.trim());
       url.searchParams.set("limit", "200");
-      const res = await fetch(url.toString());
-      if (!res.ok) throw new Error("failed to load leads");
-      const json = (await res.json()) as { items: CrmLead[] };
+      const json = await cachedFetch<{ items: CrmLead[] }>(url.toString());
       setLeads(json.items);
     } catch (err) {
       toast.push("error", (err as Error).message);
@@ -120,6 +119,7 @@ function LeadsViewInner({ width, search, onSearchChange }: Props) {
       if (!res.ok) throw new Error("update failed");
       const json = (await res.json()) as { item: CrmLead };
       setLeads((cur) => cur.map((l) => (l.id === lead.id ? json.item : l)));
+      invalidate({ prefix: `/api/crm/leads?workspace_id=${workspaceId}` });
     } catch (err) {
       setLeads(prev);
       toast.push("error", (err as Error).message);
@@ -375,6 +375,7 @@ function NewLeadForm({
       }
       const json = (await res.json()) as { item: CrmLead };
       onCreated(json.item);
+      invalidate({ prefix: `/api/crm/leads?workspace_id=${workspaceId}` });
     } catch (err) {
       toast.push("error", (err as Error).message);
     } finally {

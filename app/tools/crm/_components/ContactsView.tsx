@@ -20,6 +20,7 @@ import type {
   CrmCustomField,
   CrmTag,
 } from "../types";
+import { cachedFetch, invalidate } from "@/lib/cache/swr";
 import RecordDetail, { type DetailRecord } from "./RecordDetail";
 import { RecordTable, type RecordColumn } from "./RecordTable";
 import { Avatar } from "./_records/Chips";
@@ -92,9 +93,9 @@ export default function ContactsView({
       url.searchParams.set("workspace_id", workspaceId);
       if (debounced) url.searchParams.set("search", debounced);
       url.searchParams.set("limit", "200");
-      const res = await fetch(url.toString());
-      const j = (await res.json()) as { items?: CrmContact[]; error?: string };
-      if (!res.ok) throw new Error(j.error ?? "Load failed");
+      const j = await cachedFetch<{ items?: CrmContact[]; error?: string }>(
+        url.toString()
+      );
       setRows(j.items ?? []);
     } catch (e) {
       setError((e as Error).message);
@@ -114,15 +115,15 @@ export default function ContactsView({
     const run = async () => {
       try {
         const [c, t, cf] = await Promise.all([
-          fetch(`/api/crm/companies?workspace_id=${workspaceId}&limit=500`).then(
-            (r) => r.json() as Promise<{ items?: CrmCompany[] }>
+          cachedFetch<{ items?: CrmCompany[] }>(
+            `/api/crm/companies?workspace_id=${workspaceId}&limit=500`
           ),
-          fetch(`/api/crm/tags?workspace_id=${workspaceId}`).then(
-            (r) => r.json() as Promise<{ items?: CrmTag[] }>
+          cachedFetch<{ items?: CrmTag[] }>(
+            `/api/crm/tags?workspace_id=${workspaceId}`
           ),
-          fetch(
+          cachedFetch<{ items?: CrmCustomField[] }>(
             `/api/crm/custom-fields?workspace_id=${workspaceId}&record_type=contact`
-          ).then((r) => r.json() as Promise<{ items?: CrmCustomField[] }>),
+          ),
         ]);
         if (cancelled) return;
         const map = new Map<string, CrmCompany>();
@@ -271,6 +272,7 @@ export default function ContactsView({
       const j = (await res.json()) as { item?: CrmContact; error?: string };
       if (!res.ok || !j.item) throw new Error(j.error ?? "Create failed");
       setRows((prev) => [j.item as CrmContact, ...prev]);
+      invalidate({ prefix: `/api/crm/contacts?workspace_id=${workspaceId}` });
       setQaFirst("");
       setQaLast("");
       setQaEmail("");
@@ -296,6 +298,7 @@ export default function ContactsView({
         );
         setRows((prev) => prev.filter((r) => !ids.includes(r.id)));
         setSelectedIds([]);
+        invalidate({ prefix: `/api/crm/contacts?workspace_id=${workspaceId}` });
       } catch (e) {
         setError((e as Error).message);
       }
@@ -341,6 +344,7 @@ export default function ContactsView({
               if (!confirm("Delete this contact?")) return;
               await fetch(`/api/crm/contacts/${r.id}`, { method: "DELETE" });
               setRows((prev) => prev.filter((x) => x.id !== r.id));
+              invalidate({ prefix: `/api/crm/contacts?workspace_id=${workspaceId}` });
             },
           },
         ]}

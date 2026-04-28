@@ -21,6 +21,7 @@ import {
   useState,
 } from "react";
 import { useWorkspace } from "@/lib/workspaces/client";
+import { cachedFetch, invalidate } from "@/lib/cache/swr";
 import { createClient } from "@/lib/supabase/client";
 import type {
   CrmActivity,
@@ -82,9 +83,9 @@ export default function ActivitiesView() {
       if (completedFilter === "open") params.set("completed", "false");
       else if (completedFilter === "done") params.set("completed", "true");
       params.set("limit", "500");
-      const res = await fetch(`/api/crm/activities/?${params.toString()}`);
-      if (!res.ok) throw new Error("load failed");
-      const json = (await res.json()) as { items: CrmActivity[] };
+      const json = await cachedFetch<{ items: CrmActivity[] }>(
+        `/api/crm/activities/?${params.toString()}`
+      );
       setItems(json.items ?? []);
     } catch (e) {
       setError((e as Error).message);
@@ -154,6 +155,7 @@ export default function ActivitiesView() {
           body: JSON.stringify({ completed_at: next }),
         });
         if (!res.ok) throw new Error("update failed");
+        invalidate({ prefix: `/api/crm/activities/?workspace_id=${workspaceId}` });
       } catch {
         // Revert.
         setItems((prev) =>
@@ -161,7 +163,7 @@ export default function ActivitiesView() {
         );
       }
     },
-    []
+    [workspaceId]
   );
 
   const onMoveTaskTo = useCallback(

@@ -12,6 +12,7 @@ import type {
   CrmInventoryStatus,
   CrmTag,
 } from "../types";
+import { cachedFetch, invalidate } from "@/lib/cache/swr";
 import RecordDetail from "./RecordDetail";
 import { RecordTable, type RecordColumn } from "./RecordTable";
 import { InventoryStatusPill } from "./_records/Chips";
@@ -95,12 +96,10 @@ export default function InventoryView({
       if (debounced) url.searchParams.set("search", debounced);
       if (statusFilter) url.searchParams.set("status", statusFilter);
       url.searchParams.set("limit", "200");
-      const res = await fetch(url.toString());
-      const j = (await res.json()) as {
+      const j = await cachedFetch<{
         items?: CrmInventoryItem[];
         error?: string;
-      };
-      if (!res.ok) throw new Error(j.error ?? "Load failed");
+      }>(url.toString());
       setRows(j.items ?? []);
     } catch (e) {
       setError((e as Error).message);
@@ -119,12 +118,12 @@ export default function InventoryView({
     void (async () => {
       try {
         const [t, cf] = await Promise.all([
-          fetch(`/api/crm/tags?workspace_id=${workspaceId}`).then(
-            (r) => r.json() as Promise<{ items?: CrmTag[] }>
+          cachedFetch<{ items?: CrmTag[] }>(
+            `/api/crm/tags?workspace_id=${workspaceId}`
           ),
-          fetch(
+          cachedFetch<{ items?: CrmCustomField[] }>(
             `/api/crm/custom-fields?workspace_id=${workspaceId}&record_type=inventory`
-          ).then((r) => r.json() as Promise<{ items?: CrmCustomField[] }>),
+          ),
         ]);
         if (cancelled) return;
         setTags(t.items ?? []);
@@ -279,6 +278,7 @@ export default function InventoryView({
       };
       if (!res.ok || !j.item) throw new Error(j.error ?? "Create failed");
       setRows((prev) => [j.item as CrmInventoryItem, ...prev]);
+      invalidate({ prefix: `/api/crm/inventory?workspace_id=${workspaceId}` });
       setQaName("");
       setQaSku("");
       setQaPrice("");
@@ -347,6 +347,7 @@ export default function InventoryView({
         );
         setRows((prev) => prev.filter((r) => !ids.includes(r.id)));
         setSelectedIds([]);
+        invalidate({ prefix: `/api/crm/inventory?workspace_id=${workspaceId}` });
       } catch (e) {
         setError((e as Error).message);
       }
@@ -388,6 +389,7 @@ export default function InventoryView({
               if (!confirm("Delete this item?")) return;
               await fetch(`/api/crm/inventory/${r.id}`, { method: "DELETE" });
               setRows((prev) => prev.filter((x) => x.id !== r.id));
+              invalidate({ prefix: `/api/crm/inventory?workspace_id=${workspaceId}` });
             },
           },
         ]}

@@ -40,6 +40,7 @@ import {
 } from "@dnd-kit/sortable";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspace } from "@/lib/workspaces/client";
+import { cachedFetch, invalidate } from "@/lib/cache/swr";
 import type {
   CrmCompany,
   CrmContact,
@@ -134,9 +135,9 @@ function PipelineViewInner({ width, search, onSearchChange }: PipelineViewProps)
     let cancelled = false;
     (async () => {
       try {
-        const res = await fetch(`/api/crm/pipelines?workspace_id=${workspaceId}`);
-        if (!res.ok) return;
-        const json = (await res.json()) as { items: CrmPipelineWithStages[] };
+        const json = await cachedFetch<{ items: CrmPipelineWithStages[] }>(
+          `/api/crm/pipelines?workspace_id=${workspaceId}`
+        );
         if (cancelled) return;
         setPipelines(json.items);
         const def =
@@ -166,11 +167,9 @@ function PipelineViewInner({ width, search, onSearchChange }: PipelineViewProps)
     }
     setLoading(true);
     try {
-      const res = await fetch(
+      const json = await cachedFetch<{ items: CrmDeal[] }>(
         `/api/crm/deals?workspace_id=${workspaceId}&pipeline_id=${activePipelineId}&limit=500`
       );
-      if (!res.ok) throw new Error("failed to load deals");
-      const json = (await res.json()) as { items: CrmDeal[] };
       setDeals(json.items);
 
       // Hydrate contacts + companies referenced by these deals.
@@ -183,8 +182,9 @@ function PipelineViewInner({ width, search, onSearchChange }: PipelineViewProps)
 
       const [contactsMap, companiesMap] = await Promise.all([
         contactIds.size > 0
-          ? fetch(`/api/crm/contacts?workspace_id=${workspaceId}&limit=500`)
-              .then((r) => r.json() as Promise<{ items: CrmContact[] }>)
+          ? cachedFetch<{ items: CrmContact[] }>(
+              `/api/crm/contacts?workspace_id=${workspaceId}&limit=500`
+            )
               .then((j) => {
                 const m = new Map<string, CrmContact>();
                 for (const c of j.items) if (contactIds.has(c.id)) m.set(c.id, c);
@@ -193,8 +193,9 @@ function PipelineViewInner({ width, search, onSearchChange }: PipelineViewProps)
               .catch(() => new Map<string, CrmContact>())
           : Promise.resolve(new Map<string, CrmContact>()),
         companyIds.size > 0
-          ? fetch(`/api/crm/companies?workspace_id=${workspaceId}&limit=500`)
-              .then((r) => r.json() as Promise<{ items: CrmCompany[] }>)
+          ? cachedFetch<{ items: CrmCompany[] }>(
+              `/api/crm/companies?workspace_id=${workspaceId}&limit=500`
+            )
               .then((j) => {
                 const m = new Map<string, CrmCompany>();
                 for (const c of j.items) if (companyIds.has(c.id)) m.set(c.id, c);
@@ -358,6 +359,9 @@ function PipelineViewInner({ width, search, onSearchChange }: PipelineViewProps)
       if (!res.ok) throw new Error("move failed");
       const json = (await res.json()) as { item: CrmDeal };
       setDeals((cur) => cur.map((d) => (d.id === dealId ? json.item : d)));
+      // Bust the deals list cache so the next pipeline-revisit shows
+      // the moved card in its new stage instead of the cached snapshot.
+      invalidate({ prefix: `/api/crm/deals?workspace_id=${workspaceId}` });
     } catch (err) {
       setDeals(prevDeals);
       toast.push("error", (err as Error).message);
@@ -371,6 +375,7 @@ function PipelineViewInner({ width, search, onSearchChange }: PipelineViewProps)
 
   const handleCreated = (deal: CrmDeal) => {
     setDeals((cur) => [...cur, deal]);
+    invalidate({ prefix: `/api/crm/deals?workspace_id=${workspaceId}` });
   };
 
   const handleDealUpdated = (deal: CrmDeal) => {
