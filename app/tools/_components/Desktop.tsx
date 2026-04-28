@@ -25,6 +25,10 @@ import IconStylePicker from "./IconStylePicker";
 import SettingsPanel from "./SettingsPanel";
 import Widgets from "./Widgets";
 import WidgetGallery from "./WidgetGallery";
+import HomeApps from "./HomeApps";
+import HomeFiles from "./HomeFiles";
+import { useHomeApps } from "./useHomeApps";
+import { readAppDragPayload, type AppDragPayload } from "./appDrag";
 import WallpaperPicker from "./WallpaperPicker";
 import Window from "./Window";
 import AppSwitcher from "./AppSwitcher";
@@ -170,6 +174,45 @@ function DesktopApp() {
     movePin,
     resetToDefault: resetDockToDefault,
   } = useDockOrder();
+
+  const {
+    setPosition: setHomeAppPosition,
+    remove: removeHomeApp,
+  } = useHomeApps();
+
+  /* Cross-zone app move coordinator. The three zones (Launchpad / Dock /
+   * Home) each persist into their own storage key, so a "move" is really
+   * a delete-from-source + add-to-target. Apps stay installed in all
+   * cases — Launchpad just shows the installed set unfiltered, so dropping
+   * onto Launchpad cleanly equates to "remove the shortcut from wherever
+   * it lived." */
+  const moveAppToDock = (payload: AppDragPayload, atIndex?: number) => {
+    if (!isInstalled(payload.slug)) install(payload.slug);
+    if (payload.fromZone === "home") removeHomeApp(payload.slug);
+    const without = pinnedSlugs.filter((s) => s !== payload.slug);
+    const insertAt = typeof atIndex === "number"
+      ? Math.max(0, Math.min(atIndex, without.length))
+      : without.length;
+    const next = without.slice();
+    next.splice(insertAt, 0, payload.slug);
+    setPinnedSlugs(next);
+  };
+
+  const moveAppToHome = (payload: AppDragPayload, x: number, y: number) => {
+    if (!isInstalled(payload.slug)) install(payload.slug);
+    if (payload.fromZone === "dock") {
+      setPinnedSlugs(pinnedSlugs.filter((s) => s !== payload.slug));
+    }
+    setHomeAppPosition(payload.slug, x, y);
+  };
+
+  const moveAppToLaunchpad = (payload: AppDragPayload) => {
+    if (payload.fromZone === "dock") {
+      setPinnedSlugs(pinnedSlugs.filter((s) => s !== payload.slug));
+    } else if (payload.fromZone === "home") {
+      removeHomeApp(payload.slug);
+    }
+  };
 
   const [launchpadOpen, setLaunchpadOpen] = useState(false);
   const [storeOpen, setStoreOpen] = useState(false);
@@ -503,7 +546,36 @@ function DesktopApp() {
 
   return (
     <DesktopShellProvider api={shellApi}>
-    <div data-tools-desktop className="relative h-[100dvh] w-screen overflow-hidden">
+    <div
+      data-tools-desktop
+      data-drop-target="home-files"
+      className="relative h-[100dvh] w-screen overflow-hidden"
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes("application/x-spacefield-app")) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "move";
+        }
+      }}
+      onDrop={(e) => {
+        const payload = readAppDragPayload(e.dataTransfer);
+        if (!payload) return;
+        // Skip drops that already had a closer drop target (Dock /
+        // Launchpad). Their handlers call preventDefault + stopPropagation
+        // earlier in the bubbling chain — by the time we get here the
+        // event was for the desktop home itself.
+        if (e.defaultPrevented) return;
+        e.preventDefault();
+        // Drop coords relative to the desktop. Center the icon (HOME_APP_TILE_W
+        // is 88) under the cursor so the drop point feels like the icon's
+        // center, not its top-left corner.
+        const HOME_APP_TILE_W = 88;
+        const HOME_APP_ICON_SIZE = 64;
+        const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+        const x = Math.max(8, e.clientX - rect.left - HOME_APP_TILE_W / 2);
+        const y = Math.max(40, e.clientY - rect.top - HOME_APP_ICON_SIZE / 2);
+        moveAppToHome(payload, x, y);
+      }}
+    >
       <DesktopBackground />
 
       <TopBar
@@ -550,6 +622,17 @@ function DesktopApp() {
       {windowsHydrated && onboarded && (
         <div className="hidden sm:contents">
           <Widgets onOpenTool={handleOpenTool} />
+          {/* Home app shortcuts — free-positioned, dragged in from
+           * Launchpad / Dock or repositioned within Home. */}
+          <HomeApps onOpenTool={handleOpenTool} />
+          {/* Home file shortcuts — pinned via Files Manager drag-drop. */}
+          <HomeFiles
+            onOpenFile={(fileId, params) => {
+              const slug = params.editorSlug ?? "files-manager";
+              const tool = toolBySlug(slug);
+              handleOpenTool(slug, tool?.title ?? "Files", { fileId });
+            }}
+          />
         </div>
       )}
 
@@ -596,6 +679,7 @@ function DesktopApp() {
         onUninstall={handleUninstall}
         onStore={openStore}
         items={installedTools}
+        onAppDroppedOnLaunchpad={moveAppToLaunchpad}
       />
 
       {/* App Store — browse all, install / uninstall */}
@@ -617,6 +701,7 @@ function DesktopApp() {
         onOpenTool={handleOpenTool}
         onFocusWindow={focus}
         onUninstall={handleUninstall}
+        onAppDroppedOnDock={moveAppToDock}
       />
 
       {/* Dock Customizer — reorder + pin/unpin */}

@@ -12,6 +12,11 @@ import {
 import type { IconStyleId } from "./icon-styles";
 import { useIconStyle } from "./useIconStyle";
 import AppIcon, { hasAppIcon } from "./AppIcon";
+import {
+  setAppDragPayload,
+  readAppDragPayload,
+  type AppDragPayload,
+} from "./appDrag";
 
 interface Props {
   open: boolean;
@@ -20,6 +25,10 @@ interface Props {
   onUninstall?: (slug: string) => void;
   onStore?: () => void;
   items?: ToolItem[]; // if provided, restrict to these tools (installed set)
+  /* Called when an app is dropped onto Launchpad from another zone — the
+   * orchestrator removes it from Dock or Home (the app stays installed,
+   * so it reappears in Launchpad's grid automatically). */
+  onAppDroppedOnLaunchpad?: (payload: AppDragPayload) => void;
 }
 
 /* Launchpad tiles — the default ("hairline") look is one neutral glass tone;
@@ -56,6 +65,7 @@ export default function Launchpad({
   onUninstall,
   onStore,
   items,
+  onAppDroppedOnLaunchpad,
 }: Props) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<ToolCategoryKey | "all">("all");
@@ -189,12 +199,40 @@ export default function Launchpad({
               ))}
             </div>
 
-            {/* Grid */}
-            <div className="mt-10 flex-1 overflow-y-auto px-2">
+            {/* Grid — also a drop target so dragging an app from Dock or
+             * Home into Launchpad "removes" the shortcut (the install state
+             * is unchanged, so the app simply reappears here in the grid). */}
+            <div
+              className="mt-10 flex-1 overflow-y-auto px-2"
+              onDragOver={(e) => {
+                if (!onAppDroppedOnLaunchpad) return;
+                if (e.dataTransfer.types.includes("application/x-spacefield-app")) {
+                  e.preventDefault();
+                  e.dataTransfer.dropEffect = "move";
+                }
+              }}
+              onDrop={(e) => {
+                if (!onAppDroppedOnLaunchpad) return;
+                const payload = readAppDragPayload(e.dataTransfer);
+                if (!payload) return;
+                e.preventDefault();
+                onAppDroppedOnLaunchpad(payload);
+              }}
+            >
               <div className="grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
                 {tools.map((t, i) => (
-                  <motion.button
+                  <div
                     key={t.slug}
+                    draggable
+                    onDragStart={(e) => {
+                      setAppDragPayload(e.dataTransfer, {
+                        type: "spacefield-app",
+                        slug: t.slug,
+                        fromZone: "launchpad",
+                      });
+                    }}
+                  >
+                  <motion.button
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.25, delay: Math.min(i * 0.015, 0.4) }}
@@ -213,7 +251,7 @@ export default function Launchpad({
                         y: rect.top + rect.height + 6,
                       });
                     }}
-                    className="group flex flex-col items-center gap-2"
+                    className="group flex w-full flex-col items-center gap-2"
                   >
                     {hasAppIcon(t.slug) ? (
                       <AppIcon
@@ -242,6 +280,7 @@ export default function Launchpad({
                       {t.title}
                     </span>
                   </motion.button>
+                  </div>
                 ))}
                 {tools.length === 0 && (
                   <div className="col-span-full py-12 text-center text-sm text-white/70">

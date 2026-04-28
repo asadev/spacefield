@@ -2896,6 +2896,8 @@ function DragDropOverlay({
         if (!raw) return;
         const payload = JSON.parse(raw) as {
           fileId?: string;
+          name?: string;
+          contentType?: string;
           editorSlug?: "documents" | "sheets" | null;
         };
         // Walk up the DOM looking for an opt-in drop target.
@@ -2925,6 +2927,33 @@ function DragDropOverlay({
           }).catch(() => {
             /* noop — silent for v1 */
           });
+          return;
+        }
+        // Drop on the desktop home → pin as a free-positioned shortcut.
+        // Forwards payload + drop coords via a custom event so the home
+        // zone (HomeFiles.tsx) owns the state mutation. The actual file
+        // bytes stay where they were — this is a pointer, not a copy.
+        if (dropSlug === "home-files" && payload.fileId) {
+          const TILE_W = 88;
+          const ICON_SIZE = 64;
+          const desktopEl = document.querySelector<HTMLElement>(
+            "[data-tools-desktop]"
+          );
+          const rect = desktopEl?.getBoundingClientRect();
+          const x = Math.max(8, e.clientX - (rect?.left ?? 0) - TILE_W / 2);
+          const y = Math.max(40, e.clientY - (rect?.top ?? 0) - ICON_SIZE / 2);
+          window.dispatchEvent(
+            new CustomEvent("spacefield:home-file-drop", {
+              detail: {
+                fileId: payload.fileId,
+                name: payload.name ?? "File",
+                contentType: payload.contentType ?? "",
+                editorSlug: payload.editorSlug ?? null,
+                x,
+                y,
+              },
+            })
+          );
           return;
         }
         if (dropSlug && payload.fileId) {

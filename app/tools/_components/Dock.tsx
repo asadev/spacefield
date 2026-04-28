@@ -15,6 +15,11 @@ import type { IconStyleId } from "./icon-styles";
 import { useDockBadges } from "./useDockBadges";
 import { useIconStyle } from "./useIconStyle";
 import AppIcon, { hasAppIcon } from "./AppIcon";
+import {
+  setAppDragPayload,
+  readAppDragPayload,
+  type AppDragPayload,
+} from "./appDrag";
 
 /* Dock icons fall back to the legacy outline-path glyph when the tool
  * doesn't have a launcher SVG (e.g. Documents/Sheets, added after the
@@ -36,6 +41,11 @@ interface Props {
   onOpenTool: (slug: string, title: string) => void;
   onFocusWindow: (id: string) => void;
   onUninstall: (slug: string) => void;
+  /* Cross-zone drop: an app dragged from Launchpad/Home was released on
+   * the dock. The orchestrator pins it (and removes from Home if that's
+   * the source). atIndex is the insertion point within pinnedSlugs;
+   * undefined = append. */
+  onAppDroppedOnDock?: (payload: AppDragPayload, atIndex?: number) => void;
 }
 
 /* macOS-style magnify — item scales with proximity to cursor */
@@ -215,6 +225,7 @@ export default function Dock({
   onOpenTool,
   onFocusWindow,
   onUninstall,
+  onAppDroppedOnDock,
 }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mouseX = useMotionValue(Infinity);
@@ -274,6 +285,38 @@ export default function Dock({
           data-dock
           onPointerMove={(e) => mouseX.set(e.clientX)}
           onPointerLeave={() => mouseX.set(Infinity)}
+          onDragOver={(e) => {
+            if (!onAppDroppedOnDock) return;
+            if (e.dataTransfer.types.includes("application/x-spacefield-app")) {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = "move";
+            }
+          }}
+          onDrop={(e) => {
+            if (!onAppDroppedOnDock) return;
+            const payload = readAppDragPayload(e.dataTransfer);
+            if (!payload) return;
+            e.preventDefault();
+            // Compute insertion index from the cursor's x position relative
+            // to each pinned tile's center — drop on the left half inserts
+            // before, right half inserts after. Falls back to "append" when
+            // dropped past the last tile.
+            const dockEl = containerRef.current;
+            let atIndex: number | undefined;
+            if (dockEl) {
+              const tiles = dockEl.querySelectorAll<HTMLElement>(
+                "[data-dock-pinned]"
+              );
+              for (let i = 0; i < tiles.length; i++) {
+                const r = tiles[i].getBoundingClientRect();
+                if (e.clientX < r.left + r.width / 2) {
+                  atIndex = i;
+                  break;
+                }
+              }
+            }
+            onAppDroppedOnDock(payload, atIndex);
+          }}
           className="pointer-events-auto flex items-end gap-2 rounded-2xl border border-app bg-app-elevated/80 px-3 py-2 shadow-2xl backdrop-blur-xl"
         >
           {/* Launchpad — 9-dot mark, deliberately not a 4-pane Windows start
@@ -305,28 +348,46 @@ export default function Dock({
 
           <div className="h-11 w-px bg-app" />
 
-          {/* Pinned tools */}
-          {pinned.map((t) => {
+          {/* Pinned tools — each wrapped in a draggable shell so users
+           * can pull them out to Launchpad or Home, or reorder within the
+           * dock by dropping onto another pinned tile. The wrapper is
+           * `display: contents` so the dock's flex magnify math is
+           * unchanged. */}
+          {pinned.map((t, idx) => {
             const openWindow = windows.find((w) => w.slug === t.slug);
             return (
-              <DockIcon
+              <div
                 key={t.slug}
-                mouseX={mouseX}
-                containerRef={containerRef}
-                onClick={() =>
-                  openWindow
-                    ? onFocusWindow(openWindow.id)
-                    : onOpenTool(t.slug, t.title)
-                }
-                onContextMenu={(e) => openUninstallMenu(e, t.slug, t.title)}
-                ariaLabel={t.title}
-                active={!!openWindow}
-                minimized={openWindow?.minimized}
-                iconStyle={iconStyle}
-                badge={getCount(t.slug)}
+                data-dock-pinned
+                draggable
+                onDragStart={(e) => {
+                  setAppDragPayload(e.dataTransfer, {
+                    type: "spacefield-app",
+                    slug: t.slug,
+                    fromZone: "dock",
+                    fromIndex: idx,
+                  });
+                }}
+                style={{ display: "contents" }}
               >
-                <ToolGlyph slug={t.slug} style={iconStyle} />
-              </DockIcon>
+                <DockIcon
+                  mouseX={mouseX}
+                  containerRef={containerRef}
+                  onClick={() =>
+                    openWindow
+                      ? onFocusWindow(openWindow.id)
+                      : onOpenTool(t.slug, t.title)
+                  }
+                  onContextMenu={(e) => openUninstallMenu(e, t.slug, t.title)}
+                  ariaLabel={t.title}
+                  active={!!openWindow}
+                  minimized={openWindow?.minimized}
+                  iconStyle={iconStyle}
+                  badge={getCount(t.slug)}
+                >
+                  <ToolGlyph slug={t.slug} style={iconStyle} />
+                </DockIcon>
+              </div>
             );
           })}
 
