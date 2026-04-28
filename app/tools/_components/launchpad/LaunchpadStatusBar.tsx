@@ -65,7 +65,7 @@ export default function LaunchpadStatusBar({
 
   const free = stats ? Math.max(0, stats.cap - stats.used) : null;
   return (
-    <div className="grid h-6 grid-cols-3 items-center border-t border-app bg-app-elevated px-3 text-[11px] text-muted">
+    <div className="grid h-6 grid-cols-3 items-center border-t border-app/50 bg-app-elevated/60 px-3 text-[11px] text-muted backdrop-blur-2xl">
       <span className="justify-self-start truncate">
         {focusedName ? "" : ""}
       </span>

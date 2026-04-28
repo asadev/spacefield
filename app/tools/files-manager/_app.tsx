@@ -927,6 +927,83 @@ export default function FilesManagerApp({
     onAction?: () => void;
   } | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /** Set of file ids the current user has starred in this workspace.
+   *  Powers the row-level Star button and the Launchpad sidebar's
+   *  Favorites section. Loaded once per workspace on mount. */
+  const [starredIds, setStarredIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!activeId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch(
+          `/api/files/favorites?workspace_id=${encodeURIComponent(activeId)}`,
+          { cache: "no-store" }
+        );
+        if (!r.ok) return;
+        const j = (await r.json()) as { items?: Array<{ id: string }> };
+        if (cancelled) return;
+        const ids = new Set<string>();
+        for (const it of j.items ?? []) {
+          if (it && typeof it.id === "string") ids.add(it.id);
+        }
+        setStarredIds(ids);
+      } catch {
+        /* network — silently treat as no stars */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeId]);
+
+  const handleToggleStar = useCallback(
+    async (fileId: string) => {
+      if (!activeId) return;
+      const wasStarred = starredIds.has(fileId);
+      // Optimistic update.
+      setStarredIds((prev) => {
+        const next = new Set(prev);
+        if (wasStarred) next.delete(fileId);
+        else next.add(fileId);
+        return next;
+      });
+      try {
+        if (wasStarred) {
+          await fetch(
+            `/api/files/favorites?file_id=${encodeURIComponent(fileId)}`,
+            { method: "DELETE" }
+          );
+        } else {
+          await fetch("/api/files/favorites", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              file_id: fileId,
+              workspace_id: activeId,
+            }),
+          });
+        }
+        // Invalidate the launchpad's swr cache so its sidebar repaints.
+        try {
+          const mod = await import("@/lib/cache/swr");
+          mod.invalidate({ prefix: "/api/files/favorites" });
+        } catch {
+          /* cache module unavailable — non-fatal */
+        }
+      } catch {
+        // Roll back on transport failure.
+        setStarredIds((prev) => {
+          const next = new Set(prev);
+          if (wasStarred) next.add(fileId);
+          else next.delete(fileId);
+          return next;
+        });
+      }
+    },
+    [activeId, starredIds]
+  );
   const showToast = useCallback(
     (next: NonNullable<typeof toast>) => {
       if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
@@ -2079,6 +2156,8 @@ export default function FilesManagerApp({
                     onSelect={() => setSelectedId(file.id)}
                     selected={selectedId === file.id}
                     active={previewId === file.id}
+                    isStarred={starredIds.has(file.id)}
+                    onToggleStar={() => void handleToggleStar(file.id)}
                   />
                 );
               })}
@@ -2324,6 +2403,8 @@ function FileCard({
   onSelect,
   selected,
   active,
+  isStarred,
+  onToggleStar,
 }: {
   file: WorkspaceFile;
   editorSlug: "documents" | "sheets" | null;
@@ -2340,6 +2421,8 @@ function FileCard({
   onSelect: () => void;
   selected: boolean;
   active: boolean;
+  isStarred: boolean;
+  onToggleStar: () => void;
 }) {
   const kind = classifyFile(file.content_type, file.name);
   const previewable = isPreviewable(kind);
@@ -2618,6 +2701,33 @@ function FileCard({
                 <path d="M12 4v12" />
                 <path d="M6 14l6 6 6-6" />
                 <path d="M4 22h16" />
+              </svg>
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onToggleStar();
+              }}
+              title={isStarred ? "Remove from Favorites" : "Add to Favorites"}
+              aria-label={isStarred ? "Unstar" : "Star"}
+              aria-pressed={isStarred}
+              className={
+                "flex h-7 w-7 items-center justify-center rounded-md border bg-app " +
+                (isStarred
+                  ? "border-amber-500/50 text-amber-500"
+                  : "border-app text-secondary hover:border-amber-500/40 hover:text-amber-500")
+              }
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-3.5 w-3.5"
+                fill={isStarred ? "currentColor" : "none"}
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M12 3l2.9 6 6.6.8-4.8 4.6 1.2 6.6L12 17.8 6.1 21l1.2-6.6L2.5 9.8 9.1 9z" />
               </svg>
             </button>
             <button

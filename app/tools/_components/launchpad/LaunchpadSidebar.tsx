@@ -2,77 +2,115 @@
 
 /* LaunchpadSidebar — Finder-style left rail.
  *
- * Sections:
- *   Favorites   → Recents, Shared, Applications, Downloads, Documents,
- *                 Desktop. Every row is wired to a real location handler
- *                 in the parent.
- *   Locations   → workspaces (one row per team workspace).
- *   Tags        → CRM tags fetched from /api/crm/tags. Hidden when none
- *                 exist (or the call fails) so users never see a dead
- *                 placeholder list.
+ * Sections (matches Asad's 2026-04-29 spec):
+ *
+ *   Workspace   → a single non-clickable header showing the active
+ *                 workspace's name + colour dot. Hovering surfaces a
+ *                 "Switch" affordance when the user has more than one
+ *                 workspace; clicking it fires `onConnect`.
+ *
+ *   Locations   → Recents · Shared · Home · Applications.
+ *
+ *   Favorites   → Downloads · Documents · then one row per starred
+ *                 file (up to 10). When the user has more than 10
+ *                 starred files we show a "Show all favorites" link
+ *                 that opens the dedicated `favorites` location.
+ *
+ * The Tags section from the previous version is gone. Every row in
+ * here is wired to a real handler in the parent — no "Coming soon"
+ * stubs.
+ *
+ * Liquid Glass styling: the sidebar has a translucent background +
+ * heavy backdrop-blur so the desktop wallpaper bleeds through, plus a
+ * 1px specular highlight on the top edge and a soft inner shadow on
+ * the right edge for depth.
  */
 
-import { useEffect, useMemo, useState } from "react";
-import { cachedFetch } from "@/lib/cache/swr";
+import { useMemo } from "react";
 import {
   type LaunchpadLocation,
   locationKey,
 } from "./useLaunchpadView";
 import type { Workspace } from "../useWorkspaces";
-
-interface CrmTag {
-  id: string;
-  name: string;
-  color: string;
-}
+import {
+  fileKind,
+  type LaunchpadFile,
+  type LaunchpadFileKind,
+} from "./launchpadFiles";
 
 interface Props {
   current: LaunchpadLocation;
   onSelect: (loc: LaunchpadLocation) => void;
   workspaces: Workspace[];
   activeWorkspaceId: string;
+  /** Opens the workspace switcher — shown via the hover "Switch" pill
+   *  on the workspace header when the user has multiple workspaces. */
+  onSwitchWorkspace?: () => void;
+  /** Starred files for the current workspace. Sorted newest-first by
+   *  the parent. */
+  favorites: LaunchpadFile[];
+  /** Right-click handler for a starred-file row — same shape as the
+   *  main pane's. */
+  onFavoriteContext: (e: React.MouseEvent, file: LaunchpadFile) => void;
+  /** Click handler for a starred-file row — opens via the parent. */
+  onFavoriteOpen: (file: LaunchpadFile) => void;
 }
+
+const FAVORITES_INLINE_LIMIT = 10;
 
 export default function LaunchpadSidebar({
   current,
   onSelect,
   workspaces,
   activeWorkspaceId,
+  onSwitchWorkspace,
+  favorites,
+  onFavoriteContext,
+  onFavoriteOpen,
 }: Props) {
   const currentKey = useMemo(() => locationKey(current), [current]);
-  const [tags, setTags] = useState<CrmTag[] | null>(null);
+  const activeWorkspace = useMemo(
+    () => workspaces.find((w) => w.id === activeWorkspaceId) ?? null,
+    [workspaces, activeWorkspaceId]
+  );
 
-  useEffect(() => {
-    if (!activeWorkspaceId) {
-      setTags([]);
-      return;
-    }
-    let cancelled = false;
-    void (async () => {
-      try {
-        const j = await cachedFetch<{ items: CrmTag[] }>(
-          `/api/crm/tags?workspace_id=${encodeURIComponent(activeWorkspaceId)}`
-        );
-        if (cancelled) return;
-        setTags(Array.isArray(j.items) ? j.items : []);
-      } catch {
-        if (cancelled) return;
-        setTags([]);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, [activeWorkspaceId]);
-
-  const showTags = !!tags && tags.length > 0;
+  const inlineFavorites = favorites.slice(0, FAVORITES_INLINE_LIMIT);
+  const hasMoreFavorites = favorites.length > FAVORITES_INLINE_LIMIT;
 
   return (
     <nav
       aria-label="Launchpad sidebar"
-      className="flex h-full w-56 shrink-0 flex-col gap-3 overflow-y-auto border-r border-app bg-app py-3 text-sm"
+      // Liquid Glass — translucent so the wallpaper bleeds through.
+      // Specular highlight is added via the ::before pseudo on the
+      // wrapper div below; soft inner shadow on the right edge gives
+      // the sidebar a sense of depth.
+      className="relative flex h-full w-56 shrink-0 flex-col gap-3 overflow-y-auto border-r border-app/40 bg-app/40 py-3 text-sm backdrop-blur-xl"
+      style={{
+        boxShadow: "inset -1px 0 0 0 rgb(0 0 0 / 0.04)",
+      }}
     >
-      <Section title="Favorites">
+      {/* Top specular highlight */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px"
+        style={{
+          background:
+            "linear-gradient(90deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.06) 100%)",
+        }}
+      />
+
+      {/* Workspace header — non-navigable. Shows the current workspace
+       *  name + a tiny colour dot derived from the workspace id. The
+       *  hover-only "Switch" button reuses the parent's onConnect. */}
+      <Section title="Workspace">
+        <WorkspaceHeader
+          workspace={activeWorkspace}
+          showSwitch={workspaces.length > 1 && Boolean(onSwitchWorkspace)}
+          onSwitch={onSwitchWorkspace}
+        />
+      </Section>
+
+      <Section title="Locations">
         <Row
           icon={<ClockIcon />}
           label="Recents"
@@ -86,11 +124,20 @@ export default function LaunchpadSidebar({
           onClick={() => onSelect({ kind: "shared" })}
         />
         <Row
+          icon={<HomeIcon />}
+          label="Home"
+          selected={currentKey === "home"}
+          onClick={() => onSelect({ kind: "home" })}
+        />
+        <Row
           icon={<GridIcon />}
           label="Applications"
           selected={currentKey === "applications"}
           onClick={() => onSelect({ kind: "applications" })}
         />
+      </Section>
+
+      <Section title="Favorites">
         <Row
           icon={<DownloadIcon />}
           label="Downloads"
@@ -103,58 +150,113 @@ export default function LaunchpadSidebar({
           selected={currentKey === "documents"}
           onClick={() => onSelect({ kind: "documents" })}
         />
-        <Row
-          icon={<DesktopIcon />}
-          label="Desktop"
-          selected={currentKey === "desktop"}
-          onClick={() => onSelect({ kind: "desktop" })}
-        />
-      </Section>
 
-      <Section title="Locations">
-        {workspaces.length === 0 ? (
-          <div className="px-3 py-1 text-xs text-muted">No workspaces</div>
-        ) : (
-          workspaces.map((w) => (
-            <Row
-              key={w.id}
-              icon={<DiskIcon />}
-              label={w.name}
-              selected={currentKey === `workspace:${w.id}`}
-              badge={w.id === activeWorkspaceId ? "Active" : undefined}
-              onClick={() => onSelect({ kind: "workspace", id: w.id })}
-            />
-          ))
+        {inlineFavorites.map((f) => (
+          <Row
+            key={f.id}
+            icon={<KindMiniGlyph kind={fileKind(f)} />}
+            label={f.name}
+            selected={currentKey === `favorite-file:${f.id}`}
+            onClick={() => onFavoriteOpen(f)}
+            onContextMenu={(e) => onFavoriteContext(e, f)}
+          />
+        ))}
+
+        {hasMoreFavorites && (
+          <button
+            type="button"
+            onClick={() => onSelect({ kind: "favorites" })}
+            className={
+              "mx-1 flex items-center gap-2 rounded-md px-2 py-1 text-left text-[12px] transition-colors " +
+              (currentKey === "favorites"
+                ? "bg-tool-accent text-white"
+                : "text-secondary hover:bg-surface hover:text-app")
+            }
+          >
+            <span className="flex h-4 w-4 items-center justify-center">
+              <StarIcon />
+            </span>
+            <span className="truncate flex-1">Show all favorites</span>
+            <span className="text-[10px] text-muted [.bg-tool-accent_&]:text-white/80">
+              {favorites.length}
+            </span>
+          </button>
         )}
       </Section>
-
-      {showTags && (
-        <Section title="Tags">
-          {tags!.map((t) => (
-            <Row
-              key={t.id}
-              icon={
-                <span
-                  aria-hidden="true"
-                  className="block h-3 w-3 rounded-full ring-1 ring-inset ring-black/10"
-                  style={{ background: t.color || "#8e8e93" }}
-                />
-              }
-              label={t.name}
-              selected={currentKey === `tag:${t.id}`}
-              onClick={() => onSelect({ kind: "tag", id: t.id })}
-            />
-          ))}
-        </Section>
-      )}
     </nav>
   );
 }
 
+/* --- Workspace header ---------------------------------------------- */
+
+function workspaceColor(id: string): string {
+  // Hash the id to a hue; saturation/light kept gentle so the dot fits
+  // the rest of the chrome. Stable across loads because it's pure.
+  let h = 0;
+  for (let i = 0; i < id.length; i++) {
+    h = (h * 31 + id.charCodeAt(i)) | 0;
+  }
+  const hue = Math.abs(h) % 360;
+  return `hsl(${hue} 60% 55%)`;
+}
+
+function WorkspaceHeader({
+  workspace,
+  showSwitch,
+  onSwitch,
+}: {
+  workspace: Workspace | null;
+  showSwitch: boolean;
+  onSwitch?: () => void;
+}) {
+  if (!workspace) {
+    return (
+      <div className="mx-1 px-2 py-1 text-[12px] text-muted">No workspace</div>
+    );
+  }
+  const dot = workspaceColor(workspace.id);
+  return (
+    <div
+      className="group relative mx-1 flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-[13px] text-app"
+      style={{
+        background:
+          "linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.02) 100%)",
+        boxShadow: "inset 0 1px 0 0 rgba(255,255,255,0.06)",
+      }}
+    >
+      <span
+        aria-hidden="true"
+        className="block h-2.5 w-2.5 shrink-0 rounded-full ring-1 ring-inset ring-black/10"
+        style={{ background: dot }}
+      />
+      <span className="truncate flex-1 font-medium">{workspace.name}</span>
+      {showSwitch && onSwitch && (
+        <button
+          type="button"
+          onClick={onSwitch}
+          title="Switch workspace"
+          className="rounded bg-surface px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-secondary opacity-0 transition-opacity hover:text-app group-hover:opacity-100 focus:opacity-100"
+        >
+          Switch
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* --- Section + Row primitives -------------------------------------- */
+
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div>
-      <div className="px-3 pb-1 text-[10px] font-semibold uppercase tracking-wider text-muted">
+      <div
+        className="mx-1 mb-1 rounded px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-muted"
+        style={{
+          // Tiny inset glass tint — visible only over a wallpaper.
+          background:
+            "linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 100%)",
+        }}
+      >
         {title}
       </div>
       <div className="flex flex-col">{children}</div>
@@ -168,17 +270,20 @@ function Row({
   selected,
   badge,
   onClick,
+  onContextMenu,
 }: {
   icon: React.ReactNode;
   label: string;
   selected: boolean;
   badge?: string;
   onClick: () => void;
+  onContextMenu?: (e: React.MouseEvent) => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
+      onContextMenu={onContextMenu}
       className={
         "mx-1 flex items-center gap-2 rounded-md px-2 py-1 text-left text-[13px] transition-colors " +
         (selected
@@ -199,8 +304,7 @@ function Row({
   );
 }
 
-/* Icons — tiny inline SVGs so we don't drag in another dep. Stroked, 16px,
- * `currentColor` so the selected-row white text propagates. */
+/* --- Icons ---------------------------------------------------------- */
 
 function ClockIcon() {
   return (
@@ -217,6 +321,15 @@ function UsersIcon() {
       <path d="M3 20c0-3 3-5 6-5s6 2 6 5" />
       <circle cx="17" cy="9" r="2.5" />
       <path d="M15 20c0-2.4 2-4 4-4" />
+    </svg>
+  );
+}
+function HomeIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 11l9-7 9 7" />
+      <path d="M5 10v10h14V10" />
+      <path d="M10 20v-6h4v6" />
     </svg>
   );
 }
@@ -247,20 +360,33 @@ function DocIcon() {
     </svg>
   );
 }
-function DesktopIcon() {
+function StarIcon() {
   return (
     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <rect x="3" y="4" width="18" height="13" rx="2" />
-      <path d="M9 21h6M12 17v4" />
+      <path d="M12 3l2.9 6 6.6.8-4.8 4.6 1.2 6.6L12 17.8 6.1 21l1.2-6.6L2.5 9.8 9.1 9z" />
     </svg>
   );
 }
-function DiskIcon() {
+
+/* Small per-kind glyph used by the inline favorite rows. */
+function KindMiniGlyph({ kind }: { kind: LaunchpadFileKind }) {
+  const path =
+    kind === "document"
+      ? "M7 3h7l4 4v14H7z"
+      : kind === "sheet"
+        ? "M4 5h16v14H4z M4 10h16 M4 15h16 M9 5v14 M14 5v14"
+        : kind === "image"
+          ? "M4 5h16v14H4z M4 16l4-4 3 3 5-5 4 4"
+          : kind === "video"
+            ? "M4 5h12v14H4z M16 9l4-2v10l-4-2z"
+            : kind === "audio"
+              ? "M9 18V6l10-2v12"
+              : kind === "archive"
+                ? "M4 5h16v14H4z M12 5v14"
+                : "M7 3h10l3 3v15H7z";
   return (
-    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <ellipse cx="12" cy="6" rx="8" ry="2.5" />
-      <path d="M4 6v12c0 1.4 3.6 2.5 8 2.5s8-1.1 8-2.5V6" />
-      <path d="M4 12c0 1.4 3.6 2.5 8 2.5s8-1.1 8-2.5" />
+    <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d={path} />
     </svg>
   );
 }

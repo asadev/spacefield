@@ -27,9 +27,12 @@ export type LaunchpadLocation =
   | { kind: "applications" }
   | { kind: "recents" }
   | { kind: "shared" }
+  | { kind: "home" }
   | { kind: "downloads" }
   | { kind: "documents" }
   | { kind: "desktop" }
+  | { kind: "favorites" }
+  | { kind: "favorite-file"; id: string }
   | { kind: "workspace"; id: string }
   | { kind: "tag"; id: string }
   | { kind: "category"; id: string };
@@ -42,6 +45,8 @@ export function locationKey(loc: LaunchpadLocation): string {
       return `tag:${loc.id}`;
     case "category":
       return `category:${loc.id}`;
+    case "favorite-file":
+      return `favorite-file:${loc.id}`;
     default:
       return loc.kind;
   }
@@ -55,12 +60,18 @@ export function locationTitle(loc: LaunchpadLocation): string {
       return "Recents";
     case "shared":
       return "Shared";
+    case "home":
+      return "Home";
     case "downloads":
       return "Downloads";
     case "documents":
       return "Documents";
     case "desktop":
       return "Desktop";
+    case "favorites":
+      return "Favorites";
+    case "favorite-file":
+      return "Favorite";
     case "workspace":
       return "Workspace";
     case "tag":

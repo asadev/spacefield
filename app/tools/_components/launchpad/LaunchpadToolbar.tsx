@@ -67,8 +67,19 @@ export default function LaunchpadToolbar({
   return (
     <div
       data-no-drag
-      className="relative flex h-12 items-center gap-2 border-b border-app bg-app-elevated px-3"
+      // Liquid Glass — slightly more opaque than the body so buttons
+      // stay legible while wallpaper still bleeds through.
+      className="relative flex h-12 items-center gap-2 border-b border-app/50 bg-app-elevated/70 px-3 backdrop-blur-2xl"
     >
+      {/* Specular highlight on the toolbar's top edge */}
+      <div
+        aria-hidden="true"
+        className="pointer-events-none absolute inset-x-0 top-0 h-px"
+        style={{
+          background:
+            "linear-gradient(90deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.06) 100%)",
+        }}
+      />
       {/* Back / Forward */}
       <div className="flex items-center gap-0.5">
         <ToolbarBtn aria-label="Back" disabled={!canBack} onClick={onBack}>

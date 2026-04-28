@@ -48,6 +48,11 @@ import LaunchpadActionMenu from "./launchpad/LaunchpadActionMenu";
 import LaunchpadGroupMenu from "./launchpad/LaunchpadGroupMenu";
 import LaunchpadAboutDialog from "./launchpad/LaunchpadAboutDialog";
 import LaunchpadFilesPane from "./launchpad/LaunchpadFilesPane";
+import LaunchpadHomeView from "./launchpad/LaunchpadHomeView";
+import {
+  useLaunchpadFavorites,
+  FAVORITES_PREFIX,
+} from "./launchpad/LaunchpadFavorites";
 import {
   appForFile,
   fileKind,
@@ -157,6 +162,7 @@ export default function Launchpad({
   const { workspaces, activeId, switchWorkspace } = useWorkspaces();
   const { recents } = useRecents();
   const launchpadView = useLaunchpadView();
+  const favoritesState = useLaunchpadFavorites(activeId);
 
   const [bounds, setBounds] = useState<Bounds>(defaultBounds);
   const [maximized, setMaximized] = useState(false);
@@ -289,17 +295,6 @@ export default function Launchpad({
     return items ?? TOOLS;
   }, [items]);
 
-  /* For the "Shared" location we surface the workspace's communication
-   * apps. The categories enum doesn't have a literal "communication"
-   * key, so we keep it loose: anything whose category matches that
-   * string (forwards-compat) plus the chat slug. */
-  const communicationTools = useMemo<ToolItem[]>(() => {
-    return sourceTools.filter(
-      (t) =>
-        (t.category as string) === "communication" || t.slug === "chat"
-    );
-  }, [sourceTools]);
-
   const locationItems = useMemo<ToolItem[]>(() => {
     const loc = launchpadView.location;
     switch (loc.kind) {
@@ -317,7 +312,8 @@ export default function Launchpad({
           .filter((t): t is ToolItem => Boolean(t));
       }
       case "shared":
-        return communicationTools;
+        // Shared shows a placeholder empty-state in v1; no tool rows.
+        return [];
       case "workspace":
         // Workspace rows are jump targets, not item lists. The click
         // handler swaps the active workspace and resets to Applications.
@@ -330,13 +326,16 @@ export default function Launchpad({
         // the items here, but the parent passes us only the id so we
         // store name lookups in `tagNameRef`.
         return sourceTools;
+      case "home":
+      case "favorites":
+      case "favorite-file":
       case "downloads":
       case "documents":
       case "desktop":
       default:
         return [];
     }
-  }, [launchpadView.location, sourceTools, recents, communicationTools]);
+  }, [launchpadView.location, sourceTools, recents]);
 
   /* Tag filter — when location is `tag`, look up its name from the
    * sidebar's CRM tag list (also fetched here so it survives navigation
@@ -722,10 +721,12 @@ export default function Launchpad({
 
   const handleRefresh = useCallback(() => {
     invalidate({ prefix: FILE_LIST_PREFIX });
+    invalidate({ prefix: FAVORITES_PREFIX });
     invalidate({ prefix: "/api/crm/tags" });
+    favoritesState.refresh();
     setRefreshTick((n) => n + 1);
     showToast("Refreshed");
-  }, [showToast]);
+  }, [showToast, favoritesState]);
 
   const handleResetWindow = useCallback(() => {
     setMaximized(false);
@@ -770,7 +771,9 @@ export default function Launchpad({
   const showsFilePane =
     launchpadView.location.kind === "downloads" ||
     launchpadView.location.kind === "documents" ||
-    launchpadView.location.kind === "shared";
+    launchpadView.location.kind === "shared" ||
+    launchpadView.location.kind === "home" ||
+    launchpadView.location.kind === "favorites";
 
   return (
     <AnimatePresence>
@@ -791,8 +794,14 @@ export default function Launchpad({
             zIndex: 75,
             borderRadius: maximized ? 0 : undefined,
           }}
+          // Liquid Glass — translucent body so the desktop wallpaper
+          // bleeds through; backdrop-blur adds the frosted feel; the
+          // soft outer drop shadow + rounded corners give the window
+          // its native macOS depth. The animation perf optimisations
+          // from 8fe67d7 (will-change: transform on the motion root +
+          // tab-hidden pause) stay intact.
           className={
-            "overflow-hidden border border-app bg-app-elevated shadow-2xl " +
+            "overflow-hidden border border-app/40 bg-app-elevated/70 shadow-2xl backdrop-blur-2xl " +
             (maximized ? "" : "rounded-xl")
           }
           onPointerDown={(e) => {
@@ -800,13 +809,21 @@ export default function Launchpad({
             e.stopPropagation();
           }}
         >
-          {/* Title bar */}
+          {/* Title bar — Liquid Glass: translucent + specular highlight */}
           <div
             onPointerDown={onTitleDrag}
             onDoubleClick={toggleMaximize}
-            className="flex h-9 select-none items-center gap-2 border-b border-app bg-app-elevated px-3"
+            className="relative flex h-9 select-none items-center gap-2 border-b border-app/50 bg-app-elevated/60 px-3 backdrop-blur-2xl"
             style={{ cursor: maximized ? "default" : "grab" }}
           >
+            <div
+              aria-hidden="true"
+              className="pointer-events-none absolute inset-x-0 top-0 h-px"
+              style={{
+                background:
+                  "linear-gradient(90deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.06) 100%)",
+              }}
+            />
             <div className="flex items-center gap-1.5" data-no-drag>
               <button
                 type="button"
@@ -906,9 +923,11 @@ export default function Launchpad({
             onResetLaunchpad={handleResetLaunchpad}
           />
 
-          {/* Body — sidebar + main pane (+ optional preview). */}
+          {/* Body — sidebar + main pane (+ optional preview).
+           *  Translucent so wallpaper bleeds through; the inner panes
+           *  layer their own opacities on top. */}
           <div
-            className="flex bg-app"
+            className="flex bg-app/30"
             style={{ height: bounds.h - 36 - 48 - 24 }}
             onDragOver={(e) => {
               if (!onAppDroppedOnLaunchpad) return;
@@ -930,6 +949,18 @@ export default function Launchpad({
               onSelect={handleSelectLocation}
               workspaces={workspaces}
               activeWorkspaceId={activeId}
+              onSwitchWorkspace={onConnect}
+              favorites={favoritesState.favorites}
+              onFavoriteOpen={(file) => {
+                cacheFile(file);
+                setFocusedFileId(file.id);
+                handleOpenFile(file);
+              }}
+              onFavoriteContext={(e, file) => {
+                cacheFile(file);
+                setFocusedFileId(file.id);
+                handleFileContext(e, file);
+              }}
             />
 
             <div className="flex flex-1 overflow-hidden">
@@ -952,7 +983,6 @@ export default function Launchpad({
                   onClose={onClose}
                   workspaceId={activeId}
                   refreshTick={refreshTick}
-                  communicationTools={communicationTools}
                   onOpenFile={(file) => {
                     cacheFile(file);
                     setFocusedFileId(file.id);
@@ -991,15 +1021,11 @@ export default function Launchpad({
           {/* Status bar */}
           <LaunchpadStatusBar
             itemCount={
-              // File-listing locations don't lift their row count here;
-              // when on those, fall back to the communication-apps count
-              // (Shared) or 0 (Downloads/Documents) and let the GB
-              // indicator carry the rest.
-              launchpadView.location.kind === "shared"
-                ? communicationTools.length
-                : showsFilePane
-                  ? 0
-                  : visibleTools.length
+              // File-listing locations don't surface their row count
+              // here — the file panes manage their own state. We hand
+              // the status bar 0 in that case and let the GB indicator
+              // carry the rest.
+              showsFilePane ? 0 : visibleTools.length
             }
             workspaceId={activeId}
             focusedName={focusedNameForStatus}
@@ -1056,6 +1082,7 @@ export default function Launchpad({
           {menu && menu.kind === "file" && (
             <FileContextMenu
               file={menu.file}
+              isStarred={favoritesState.isStarred(menu.file.id)}
               x={menu.x}
               y={menu.y}
               onClose={() => setMenu(null)}
@@ -1063,6 +1090,10 @@ export default function Launchpad({
               onReveal={() => {
                 onOpenTool("files-manager", "Files", { fileId: menu.file.id });
                 onClose();
+              }}
+              onToggleStar={async () => {
+                const nowStarred = await favoritesState.toggle(menu.file);
+                showToast(nowStarred ? "Added to Favorites" : "Removed from Favorites");
               }}
               onDelete={async () => {
                 try {
@@ -1074,6 +1105,8 @@ export default function Launchpad({
                   /* swallow — we still show toast + refresh below */
                 }
                 invalidate({ prefix: FILE_LIST_PREFIX });
+                invalidate({ prefix: FAVORITES_PREFIX });
+                favoritesState.refresh();
                 setRefreshTick((n) => n + 1);
                 showToast("Deleted");
               }}
@@ -1115,7 +1148,6 @@ interface MainPaneProps {
   onClose: () => void;
   workspaceId: string;
   refreshTick: number;
-  communicationTools: ToolItem[];
   onOpenFile: (file: LaunchpadFile) => void;
   onFileContext: (e: React.MouseEvent, file: LaunchpadFile) => void;
   onFileFocus: (file: LaunchpadFile) => void;
@@ -1136,7 +1168,6 @@ function MainPane({
   onClose,
   workspaceId,
   refreshTick,
-  communicationTools,
   onOpenFile,
   onFileContext,
 }: MainPaneProps) {
@@ -1168,15 +1199,26 @@ function MainPane({
     );
   }
 
-  // Downloads / Documents / Shared all show the file list.
+  // Home: workspace's full drive — folder tree + files.
+  if (location.kind === "home") {
+    return (
+      <LaunchpadHomeView
+        workspaceId={workspaceId}
+        refreshTick={refreshTick}
+        onOpenFile={onOpenFile}
+        onContextMenu={onFileContext}
+      />
+    );
+  }
+  // Downloads — every workspace file, newest first.
   if (location.kind === "downloads") {
     return (
       <LaunchpadFilesPane
         workspaceId={workspaceId}
-        limit={30}
+        limit={100}
         refreshTick={refreshTick}
         emptyTitle="No files yet"
-        emptyHint="Files you upload will show up here."
+        emptyHint="Files you save to this workspace will show up here."
         onOpenFile={onOpenFile}
         onContextMenu={onFileContext}
       />
@@ -1186,7 +1228,7 @@ function MainPane({
     return (
       <LaunchpadFilesPane
         workspaceId={workspaceId}
-        limit={30}
+        limit={100}
         kinds="document,sheet"
         filterKinds={["document", "sheet"] as LaunchpadFileKind[]}
         refreshTick={refreshTick}
@@ -1197,93 +1239,197 @@ function MainPane({
       />
     );
   }
-  if (location.kind === "shared") {
-    const header =
-      communicationTools.length > 0 ? (
-        <div className="border-b border-app bg-app-elevated">
-          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
-            Communication
-          </div>
-          <div className="flex flex-wrap gap-3 px-3 pb-3">
-            {communicationTools.map((t) => (
-              <button
-                key={t.slug}
-                type="button"
-                onClick={() => onOpen(t)}
-                onContextMenu={(e) => onContextMenu(e, t)}
-                className="flex items-center gap-2 rounded-md border border-app bg-app px-3 py-1.5 text-[12px] text-app transition-colors hover:bg-surface"
-              >
-                {hasAppIcon(t.slug) ? (
-                  <AppIcon slug={t.slug} size={20} cornerPct={22} flatShadow />
-                ) : (
-                  <span className="h-5 w-5 rounded bg-surface" />
-                )}
-                <span>{t.title}</span>
-              </button>
-            ))}
-          </div>
-        </div>
-      ) : null;
+  if (location.kind === "favorites") {
     return (
-      <LaunchpadFilesPane
+      <LaunchpadFavoritesPane
         workspaceId={workspaceId}
-        limit={20}
-        shared
         refreshTick={refreshTick}
-        emptyTitle="Nothing shared yet"
-        emptyHint="Files shared with this workspace will appear here."
         onOpenFile={onOpenFile}
         onContextMenu={onFileContext}
-        header={header}
       />
     );
   }
-
-  switch (view) {
-    case "list":
-      return (
-        <LaunchpadListView
-          tools={tools}
-          groups={toolGroups}
-          focusedSlug={focusedSlug}
-          onFocus={onFocus}
-          onOpen={onOpen}
-          onContextMenu={onContextMenu}
-        />
-      );
-    case "column":
-      return (
-        <LaunchpadColumnView
-          tools={tools}
-          focusedSlug={focusedSlug}
-          onFocus={onFocus}
-          onOpen={onOpen}
-          onContextMenu={onContextMenu}
-        />
-      );
-    case "gallery":
-      return (
-        <LaunchpadGalleryView
-          tools={tools}
-          focusedSlug={focusedSlug}
-          onFocus={onFocus}
-          onOpen={onOpen}
-          onContextMenu={onContextMenu}
-        />
-      );
-    case "icon":
-    default:
-      return (
-        <LaunchpadIconView
-          tools={tools}
-          groups={toolGroups}
-          focusedSlug={focusedSlug}
-          onFocus={onFocus}
-          onOpen={onOpen}
-          onContextMenu={onContextMenu}
-        />
-      );
+  if (location.kind === "shared") {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-2 px-8 py-12 text-center">
+        <div className="text-sm font-medium text-app">Nothing shared yet</div>
+        <div className="max-w-sm text-xs text-muted">
+          Files shared with this workspace will appear here. Cross-workspace
+          sharing is coming soon.
+        </div>
+      </div>
+    );
   }
+
+  // Applications view gets an "App Store" tile pinned to the top.
+  const appStoreHeader =
+    location.kind === "applications" && onOpenStore ? (
+      <div className="border-b border-app/40 bg-app/30 px-4 py-3 backdrop-blur-md">
+        <button
+          type="button"
+          onClick={() => {
+            onClose();
+            onOpenStore();
+          }}
+          className="flex items-center gap-3 rounded-lg border border-app/40 bg-app-elevated/70 px-3 py-2 text-left text-[13px] text-app transition-colors hover:bg-surface"
+        >
+          <span
+            aria-hidden="true"
+            className="flex h-9 w-9 items-center justify-center rounded-lg text-white"
+            style={{
+              background:
+                "linear-gradient(135deg, var(--tool-accent) 0%, color-mix(in oklab, var(--tool-accent) 70%, black) 100%)",
+            }}
+          >
+            <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M5 7h14l-1.4 11a2 2 0 0 1-2 1.8H8.4a2 2 0 0 1-2-1.8z" />
+              <path d="M9 7a3 3 0 1 1 6 0" />
+            </svg>
+          </span>
+          <span className="flex flex-col">
+            <span className="font-semibold">App Store</span>
+            <span className="text-[11px] text-muted">
+              Browse and install more tools
+            </span>
+          </span>
+        </button>
+      </div>
+    ) : null;
+
+  const renderToolView = () => {
+    switch (view) {
+      case "list":
+        return (
+          <LaunchpadListView
+            tools={tools}
+            groups={toolGroups}
+            focusedSlug={focusedSlug}
+            onFocus={onFocus}
+            onOpen={onOpen}
+            onContextMenu={onContextMenu}
+          />
+        );
+      case "column":
+        return (
+          <LaunchpadColumnView
+            tools={tools}
+            focusedSlug={focusedSlug}
+            onFocus={onFocus}
+            onOpen={onOpen}
+            onContextMenu={onContextMenu}
+          />
+        );
+      case "gallery":
+        return (
+          <LaunchpadGalleryView
+            tools={tools}
+            focusedSlug={focusedSlug}
+            onFocus={onFocus}
+            onOpen={onOpen}
+            onContextMenu={onContextMenu}
+          />
+        );
+      case "icon":
+      default:
+        return (
+          <LaunchpadIconView
+            tools={tools}
+            groups={toolGroups}
+            focusedSlug={focusedSlug}
+            onFocus={onFocus}
+            onOpen={onOpen}
+            onContextMenu={onContextMenu}
+          />
+        );
+    }
+  };
+
+  if (appStoreHeader) {
+    return (
+      <div className="flex h-full flex-col">
+        {appStoreHeader}
+        <div className="flex-1 overflow-auto">{renderToolView()}</div>
+      </div>
+    );
+  }
+  return renderToolView();
+}
+
+/* Pane that lists the user's starred files for the active workspace.
+ * Mirrors LaunchpadFilesPane's row layout so the look matches Downloads
+ * / Documents. */
+function LaunchpadFavoritesPane({
+  workspaceId,
+  refreshTick,
+  onOpenFile,
+  onContextMenu,
+}: {
+  workspaceId: string;
+  refreshTick: number;
+  onOpenFile: (file: LaunchpadFile) => void;
+  onContextMenu: (e: React.MouseEvent, file: LaunchpadFile) => void;
+}) {
+  const fav = useLaunchpadFavorites(workspaceId);
+  // Re-fetch when the parent's refresh tick bumps.
+  useEffect(() => {
+    if (refreshTick > 0) fav.refresh();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTick]);
+
+  if (fav.loading) {
+    return (
+      <div className="flex h-full items-center justify-center text-sm text-muted">
+        Loading…
+      </div>
+    );
+  }
+  if (fav.favorites.length === 0) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-1 px-6 py-12 text-center">
+        <div className="text-sm font-medium text-app">No favorites yet</div>
+        <div className="text-xs text-muted">
+          Star a file in the Files Manager to pin it here.
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="flex h-full flex-col overflow-y-auto">
+      <div className="grid grid-cols-[2fr_1fr_1fr_1fr] gap-2 border-b border-app bg-app/40 px-3 py-1.5 text-[11px] font-medium uppercase tracking-wider text-muted backdrop-blur-md">
+        <span>Name</span>
+        <span>Date</span>
+        <span>Size</span>
+        <span>Kind</span>
+      </div>
+      <div>
+        {fav.favorites.map((f) => {
+          const k = fileKind(f);
+          return (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => onOpenFile(f)}
+              onContextMenu={(e) => onContextMenu(e, f)}
+              className="grid w-full grid-cols-[2fr_1fr_1fr_1fr] gap-2 border-b border-app/60 px-3 py-1.5 text-left text-[12px] text-app transition-colors hover:bg-surface"
+            >
+              <span className="flex items-center gap-2 truncate">
+                <span className="text-amber-500">★</span>
+                <span className="truncate">{f.name}</span>
+              </span>
+              <span className="truncate text-secondary">
+                {new Date(f.created_at).toLocaleDateString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                })}
+              </span>
+              <span className="truncate text-secondary">{fmtSize(f.size_bytes)}</span>
+              <span className="truncate text-secondary">{k}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 /* Right-side preview pane — shown when the toolbar's Preview toggle is on.
@@ -1460,28 +1606,32 @@ function ToolContextMenu({
 
 interface FileContextMenuProps {
   file: LaunchpadFile;
+  isStarred: boolean;
   x: number;
   y: number;
   onClose: () => void;
   onOpen: () => void;
   onReveal: () => void;
+  onToggleStar: () => void | Promise<void>;
   onDelete: () => void | Promise<void>;
 }
 
 function FileContextMenu({
   file,
+  isStarred,
   x,
   y,
   onClose,
   onOpen,
   onReveal,
+  onToggleStar,
   onDelete,
 }: FileContextMenuProps) {
   return (
     <div
       role="menu"
       onPointerDown={(e) => e.stopPropagation()}
-      className="pointer-events-auto fixed z-[90] w-60 rounded-lg border border-app bg-app-elevated p-1 shadow-xl"
+      className="pointer-events-auto fixed z-[90] w-60 rounded-lg border border-app/50 bg-app-elevated/85 p-1 shadow-xl backdrop-blur-2xl"
       style={{ left: x, top: y }}
     >
       <div className="truncate px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-muted">
@@ -1491,6 +1641,13 @@ function FileContextMenu({
         label="Open"
         onClick={() => {
           onOpen();
+          onClose();
+        }}
+      />
+      <MenuItem
+        label={isStarred ? "Unstar" : "Star"}
+        onClick={() => {
+          void onToggleStar();
           onClose();
         }}
       />

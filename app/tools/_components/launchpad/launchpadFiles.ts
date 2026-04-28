@@ -145,3 +145,47 @@ export async function fetchLaunchpadFiles(opts: {
 }
 
 export const FILE_LIST_PREFIX = "/api/files/list";
+
+/* Path-tree helpers for the Home view. v1 derives the folder structure
+ * from the file's `name` — if the name contains a slash, everything
+ * before the first slash is treated as the folder. Loose files (no
+ * slash in the name) are bucketed under a synthetic "Loose files"
+ * folder so the tree is never empty when there are files. */
+
+export const LOOSE_FOLDER = "Loose files";
+
+export interface FolderGroup {
+  name: string;
+  files: LaunchpadFile[];
+}
+
+export function groupFilesByFolder(files: LaunchpadFile[]): FolderGroup[] {
+  const map = new Map<string, LaunchpadFile[]>();
+  for (const f of files) {
+    const slash = f.name.indexOf("/");
+    const folder = slash > 0 ? f.name.slice(0, slash) : LOOSE_FOLDER;
+    const list = map.get(folder) ?? [];
+    list.push(f);
+    map.set(folder, list);
+  }
+  const groups: FolderGroup[] = [];
+  for (const [name, fs] of map.entries()) {
+    groups.push({ name, files: fs });
+  }
+  // Loose files goes last; everything else alphabetical.
+  groups.sort((a, b) => {
+    if (a.name === LOOSE_FOLDER) return 1;
+    if (b.name === LOOSE_FOLDER) return -1;
+    return a.name.localeCompare(b.name);
+  });
+  return groups;
+}
+
+/* Strip the folder prefix off a file name so the right pane shows the
+ * leaf name only (e.g. "docs/spec.md" → "spec.md"). Loose files keep
+ * their full name. */
+export function leafName(file: LaunchpadFile): string {
+  const slash = file.name.indexOf("/");
+  if (slash <= 0) return file.name;
+  return file.name.slice(slash + 1) || file.name;
+}
