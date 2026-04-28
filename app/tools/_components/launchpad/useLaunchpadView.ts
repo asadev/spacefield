@@ -32,6 +32,7 @@ export type LaunchpadLocation =
   | { kind: "documents" }
   | { kind: "desktop" }
   | { kind: "favorites" }
+  | { kind: "trash" }
   | { kind: "favorite-file"; id: string }
   | { kind: "workspace"; id: string }
   | { kind: "tag"; id: string }
@@ -70,6 +71,8 @@ export function locationTitle(loc: LaunchpadLocation): string {
       return "Desktop";
     case "favorites":
       return "Favorites";
+    case "trash":
+      return "Trash";
     case "favorite-file":
       return "Favorite";
     case "workspace":

@@ -34,6 +34,10 @@ interface Props {
   previewOpen: boolean;
   onTogglePreview: () => void;
   onConnect: () => void;
+  /** Optional Upload button — shown when a workspace pane (Home /
+   * Downloads / Documents / Favorites) is active. Hidden when no
+   * workspace context exists or the active location is Applications. */
+  onUpload?: () => void;
 
   group: LaunchpadGroupMode;
   groupMenuOpen: boolean;
@@ -57,6 +61,7 @@ export default function LaunchpadToolbar({
   previewOpen,
   onTogglePreview,
   onConnect,
+  onUpload,
   group,
   groupMenuOpen,
   onToggleGroupMenu,
@@ -120,6 +125,27 @@ export default function LaunchpadToolbar({
           <path d="M9 12h6" />
         </svg>
       </ToolbarBtn>
+
+      {/* Upload — only available when a workspace file pane is active */}
+      {onUpload && (
+        <ToolbarBtn aria-label="Upload" title="Upload files" onClick={onUpload}>
+          <svg
+            viewBox="0 0 24 24"
+            width="14"
+            height="14"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.7"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M12 19V5" />
+            <path d="M5 12l7-7 7 7" />
+            <path d="M5 21h14" />
+          </svg>
+        </ToolbarBtn>
+      )}
 
       {/* View pill — 4 segments */}
       <div

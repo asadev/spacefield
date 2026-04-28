@@ -54,6 +54,9 @@ interface Props {
   onFavoriteContext: (e: React.MouseEvent, file: LaunchpadFile) => void;
   /** Click handler for a starred-file row — opens via the parent. */
   onFavoriteOpen: (file: LaunchpadFile) => void;
+  /** Optional footer slot — used for the storage usage bar. Lives at
+   *  the bottom of the sidebar, sticky-anchored. */
+  footer?: React.ReactNode;
 }
 
 const FAVORITES_INLINE_LIMIT = 10;
@@ -67,6 +70,7 @@ export default function LaunchpadSidebar({
   favorites,
   onFavoriteContext,
   onFavoriteOpen,
+  footer,
 }: Props) {
   const currentKey = useMemo(() => locationKey(current), [current]);
   const activeWorkspace = useMemo(
@@ -84,7 +88,7 @@ export default function LaunchpadSidebar({
       // Specular highlight is added via the ::before pseudo on the
       // wrapper div below; soft inner shadow on the right edge gives
       // the sidebar a sense of depth.
-      className="relative flex h-full w-56 shrink-0 flex-col gap-3 overflow-y-auto border-r border-app/40 bg-app/40 py-3 text-sm backdrop-blur-xl"
+      className="relative flex h-full w-56 shrink-0 flex-col border-r border-app/40 bg-app/40 text-sm backdrop-blur-xl"
       style={{
         boxShadow: "inset -1px 0 0 0 rgb(0 0 0 / 0.04)",
       }}
@@ -98,6 +102,7 @@ export default function LaunchpadSidebar({
             "linear-gradient(90deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.06) 100%)",
         }}
       />
+      <div className="flex flex-1 flex-col gap-3 overflow-y-auto py-3">
 
       {/* Workspace header — non-navigable. Shows the current workspace
        *  name + a tiny colour dot derived from the workspace id. The
@@ -122,6 +127,12 @@ export default function LaunchpadSidebar({
           label="Shared"
           selected={currentKey === "shared"}
           onClick={() => onSelect({ kind: "shared" })}
+        />
+        <Row
+          icon={<TrashIcon />}
+          label="Trash"
+          selected={currentKey === "trash"}
+          onClick={() => onSelect({ kind: "trash" })}
         />
         <Row
           icon={<HomeIcon />}
@@ -183,6 +194,8 @@ export default function LaunchpadSidebar({
           </button>
         )}
       </Section>
+      </div>
+      {footer && <div className="shrink-0">{footer}</div>}
     </nav>
   );
 }
@@ -357,6 +370,16 @@ function DocIcon() {
     <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d="M7 3h7l4 4v14H7z" />
       <path d="M14 3v4h4" />
+    </svg>
+  );
+}
+function TrashIcon() {
+  return (
+    <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M3 6h18" />
+      <path d="M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2" />
+      <path d="M6 6l1 14a2 2 0 002 2h6a2 2 0 002-2l1-14" />
+      <path d="M10 11v6M14 11v6" />
     </svg>
   );
 }

@@ -29,6 +29,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { getSupabase } from "@/lib/supabase/client";
 import type { NativeAppProps } from "../_data/tools-list";
 import ShareDialog from "./ShareDialog";
+import { useFileUploads } from "../_components/launchpad/useFileUploads";
 
 const ease: [number, number, number, number] = [0.25, 0.46, 0.45, 0.94];
 
@@ -218,17 +219,8 @@ function markEnsuredThisSession(workspaceId: string): void {
   }
 }
 
-interface UploadJob {
-  id: string; // local job id
-  fileId: string | null; // assigned by /upload
-  name: string;
-  size: number;
-  contentType: string;
-  progress: number; // 0..100
-  status: "queued" | "uploading" | "finalizing" | "done" | "error" | "cancelled" | "skipped";
-  error?: string;
-  controller?: AbortController;
-}
+/* The UploadJob shape lives in `useFileUploads` and is shared with the
+ * Launchpad's upload toast — Files Manager just consumes the hook. */
 
 type SortMode = "newest" | "oldest" | "largest" | "name" | "tag";
 
@@ -1058,8 +1050,33 @@ export default function FilesManagerApp({
     setToast(null);
   }, []);
 
-  // Upload jobs
-  const [jobs, setJobs] = useState<UploadJob[]>([]);
+  // Upload jobs — owned by the shared useFileUploads hook so the
+  // Launchpad's upload toast can ride the same protocol. The hook
+  // hands us back the job list + start/cancel helpers; finalize
+  // success calls `onUploaded` so we can prepend the row + bump cap.
+  const {
+    jobs,
+    startUploads,
+    cancelJob,
+    removeJob,
+  } = useFileUploads({
+    workspaceId: activeId,
+    ensured,
+    cap,
+    used,
+    onUploaded: (row) => {
+      setFiles((prev) => {
+        if (prev.some((f) => f.id === row.id)) return prev;
+        return [row as WorkspaceFile, ...prev];
+      });
+      invalidateFilesCache(activeId);
+    },
+    onAfterUploadDelta: (delta) => {
+      setUsed((u) => u + delta);
+    },
+    onQuotaExceeded: () => setQuotaBanner(true),
+    invalidatePrefix: "/api/files/list",
+  });
 
   // Layout columns
   const cols = width >= 1100 ? 3 : width >= 700 ? 2 : 1;
@@ -1127,196 +1144,6 @@ export default function FilesManagerApp({
     // re-list on re-open via openApp()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeId, initialParamsKey]);
-
-  // -----------------------------------------------------------------------
-  // Upload pipeline
-  // -----------------------------------------------------------------------
-  const updateJob = useCallback(
-    (jobId: string, patch: Partial<UploadJob>) => {
-      setJobs((prev) => prev.map((j) => (j.id === jobId ? { ...j, ...patch } : j)));
-    },
-    []
-  );
-
-  const removeJob = useCallback((jobId: string) => {
-    setJobs((prev) => prev.filter((j) => j.id !== jobId));
-  }, []);
-
-  const startUploads = useCallback(
-    async (incoming: File[]) => {
-      if (!activeId) return;
-      // Block uploads if the workspace hasn't been materialized in DB
-      // yet (or materialization failed). Without this, every file would
-      // 403 with "not a member of that workspace" and we'd waste
-      // presigned-URL requests against R2.
-      if (!ensured) return;
-      // Local pre-flight: project remaining cap, skip files that overflow.
-      let projected = used;
-      // Sum existing pending jobs' sizes that haven't completed yet
-      for (const j of jobs) {
-        if (j.status === "uploading" || j.status === "queued" || j.status === "finalizing") {
-          projected += j.size;
-        }
-      }
-
-      const newJobs: UploadJob[] = [];
-      for (const f of incoming) {
-        const id = crypto.randomUUID();
-        if (cap > 0 && projected + f.size > cap) {
-          newJobs.push({
-            id,
-            fileId: null,
-            name: f.name,
-            size: f.size,
-            contentType: f.type || "application/octet-stream",
-            progress: 0,
-            status: "skipped",
-            error: "Would exceed your storage quota",
-          });
-          continue;
-        }
-        projected += f.size;
-        newJobs.push({
-          id,
-          fileId: null,
-          name: f.name,
-          size: f.size,
-          contentType: f.type || "application/octet-stream",
-          progress: 0,
-          status: "queued",
-        });
-      }
-
-      setJobs((prev) => [...newJobs, ...prev]);
-
-      // Process queued jobs in parallel — backend will reject if quota
-      // recovers a race between us and another tab.
-      await Promise.all(
-        newJobs.map(async (job, idx) => {
-          if (job.status !== "queued") return;
-          const file = incoming[idx];
-          try {
-            updateJob(job.id, { status: "uploading", progress: 0 });
-
-            // 1) Reserve fileId + presigned URL
-            const reserveRes = await fetch("/api/files/upload", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                workspaceId: activeId,
-                name: job.name,
-                contentType: job.contentType,
-                sizeBytes: job.size,
-              }),
-            });
-            if (!reserveRes.ok) {
-              const errBody = (await reserveRes.json().catch(() => ({}))) as {
-                error?: string;
-              };
-              if (errBody?.error === "storage_quota_exceeded") {
-                setQuotaBanner(true);
-              }
-              updateJob(job.id, {
-                status: "error",
-                error: errBody?.error ?? `Upload reserve failed (${reserveRes.status})`,
-              });
-              return;
-            }
-            const { url, key, fileId } = (await reserveRes.json()) as {
-              url: string;
-              key: string;
-              fileId: string;
-            };
-            updateJob(job.id, { fileId });
-
-            // 2) PUT to R2 with XHR (progress + abort)
-            const controller = new AbortController();
-            updateJob(job.id, { controller });
-            await new Promise<void>((resolve, reject) => {
-              const xhr = new XMLHttpRequest();
-              xhr.open("PUT", url);
-              xhr.setRequestHeader("Content-Type", job.contentType);
-              xhr.upload.onprogress = (ev) => {
-                if (ev.lengthComputable) {
-                  const p = Math.round((ev.loaded / ev.total) * 100);
-                  updateJob(job.id, { progress: p });
-                }
-              };
-              xhr.onload = () => {
-                if (xhr.status >= 200 && xhr.status < 300) resolve();
-                else reject(new Error(`PUT failed (${xhr.status})`));
-              };
-              xhr.onerror = () => reject(new Error("Network error"));
-              xhr.onabort = () => reject(new Error("aborted"));
-              controller.signal.addEventListener("abort", () => xhr.abort());
-              xhr.send(file);
-            });
-
-            updateJob(job.id, { status: "finalizing", progress: 100 });
-
-            // 3) Finalize → DB row
-            const finRes = await fetch("/api/files/finalize", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({
-                workspaceId: activeId,
-                fileId,
-                key,
-                name: job.name,
-                contentType: job.contentType,
-                sizeBytes: job.size,
-              }),
-            });
-            if (!finRes.ok) {
-              const errBody = (await finRes.json().catch(() => ({}))) as {
-                error?: string;
-              };
-              updateJob(job.id, {
-                status: "error",
-                error: errBody?.error ?? `Finalize failed (${finRes.status})`,
-              });
-              return;
-            }
-            const { file: row } = (await finRes.json()) as {
-              file: WorkspaceFile;
-            };
-
-            // Optimistic prepend
-            setFiles((prev) => {
-              if (prev.some((f) => f.id === row.id)) return prev;
-              return [row, ...prev];
-            });
-            setUsed((u) => u + job.size);
-            invalidateFilesCache(activeId);
-
-            updateJob(job.id, { status: "done" });
-
-            // Auto-dismiss successful job after 1.5s
-            setTimeout(() => removeJob(job.id), 1500);
-          } catch (err) {
-            const msg = err instanceof Error ? err.message : "Unknown error";
-            if (msg === "aborted") {
-              updateJob(job.id, { status: "cancelled", error: "Cancelled" });
-            } else {
-              updateJob(job.id, { status: "error", error: msg });
-            }
-          }
-        })
-      );
-    },
-    [activeId, used, cap, jobs, updateJob, removeJob]
-  );
-
-  const cancelJob = useCallback(
-    (jobId: string) => {
-      setJobs((prev) => {
-        const j = prev.find((x) => x.id === jobId);
-        j?.controller?.abort();
-        return prev;
-      });
-    },
-    []
-  );
 
   // -----------------------------------------------------------------------
   // File chooser + drag-drop

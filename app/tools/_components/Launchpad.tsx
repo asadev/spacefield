@@ -49,6 +49,17 @@ import LaunchpadGroupMenu from "./launchpad/LaunchpadGroupMenu";
 import LaunchpadAboutDialog from "./launchpad/LaunchpadAboutDialog";
 import LaunchpadFilesPane from "./launchpad/LaunchpadFilesPane";
 import LaunchpadSharedPane from "./launchpad/LaunchpadSharedPane";
+import LaunchpadTrashView from "./launchpad/LaunchpadTrashView";
+import LaunchpadStorageBar from "./launchpad/LaunchpadStorageBar";
+import LaunchpadUploadToast from "./launchpad/LaunchpadUploadToast";
+import LaunchpadPreviewOverlay from "./launchpad/LaunchpadPreviewOverlay";
+import LaunchpadRenameDialog from "./launchpad/LaunchpadRenameDialog";
+import LaunchpadTagEditor, {
+  type FileTag,
+} from "./launchpad/LaunchpadTagEditor";
+import LaunchpadShareDialog from "./launchpad/ShareDialog";
+import { useFileUploads } from "./launchpad/useFileUploads";
+import { cachedFetch } from "@/lib/cache/swr";
 import {
   SHARES_PREFIX,
   type LaunchpadShareMeta,
@@ -199,6 +210,96 @@ export default function Launchpad({
   const fileCacheRef = useRef<Map<string, LaunchpadFile>>(new Map());
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /* Upload + preview + per-file dialog state. The preview overlay,
+   * rename dialog, tag editor, and share dialog all key off a single
+   * file id at a time. The fileInputRef drives the toolbar's "+ Upload"
+   * button and is wired to the same useFileUploads hook the Files
+   * Manager runs on. */
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [dragOver, setDragOver] = useState(false);
+  const dragDepthRef = useRef(0);
+  const [previewFileId, setPreviewFileId] = useState<string | null>(null);
+  const [renameFileId, setRenameFileId] = useState<string | null>(null);
+  const [tagFileId, setTagFileId] = useState<string | null>(null);
+  const [shareFileId, setShareFileId] = useState<string | null>(null);
+
+  /* Storage cap/used — read once via cachedFetch and bumped after each
+   * successful upload. The shared upload hook needs both to enforce the
+   * client-side pre-flight against quota. */
+  const [cap, setCap] = useState<number>(0);
+  const [used, setUsed] = useState<number>(0);
+  useEffect(() => {
+    if (!activeId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const j = await cachedFetch<{
+          cap?: { cap_bytes?: number; used_bytes?: number } | null;
+        }>(
+          `/api/workspaces/storage-stats?workspaceId=${encodeURIComponent(
+            activeId
+          )}`
+        );
+        if (cancelled) return;
+        setCap(Number(j.cap?.cap_bytes ?? 0));
+        setUsed(Number(j.cap?.used_bytes ?? 0));
+      } catch {
+        /* leave at 0 — uploads will still run, but the local
+         * pre-flight against quota is skipped. The server-side check
+         * still fires. */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeId, refreshTick]);
+
+  /* Upload pipeline — shared with Files Manager via useFileUploads. We
+   * key it off the active workspace id and treat it as "ensured" once
+   * the workspace exists in our local list (the server still re-checks
+   * membership on every request). */
+  const ensured = Boolean(activeId);
+  const uploads = useFileUploads({
+    workspaceId: activeId || null,
+    ensured,
+    cap,
+    used,
+    onUploaded: () => {
+      setRefreshTick((n) => n + 1);
+    },
+    onAfterUploadDelta: (delta) => {
+      setUsed((u) => u + delta);
+    },
+    invalidatePrefix: FILE_LIST_PREFIX,
+  });
+
+  const onPickFiles = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const onFilesChosen = useCallback(
+    (e: React.ChangeEvent<HTMLInputElement>) => {
+      const list = Array.from(e.target.files ?? []);
+      e.target.value = "";
+      if (list.length > 0) void uploads.startUploads(list);
+    },
+    [uploads]
+  );
+
+  /* The Quick Look preview overlay listens for arrow-key navigation
+   * via a custom event so it doesn't need to know about the surrounding
+   * component tree. We host the focus-change handler here and bridge it
+   * back into our local previewFileId state. */
+  useEffect(() => {
+    const onPreviewSet = (e: Event) => {
+      const ce = e as CustomEvent<string>;
+      if (typeof ce.detail === "string") setPreviewFileId(ce.detail);
+    };
+    window.addEventListener("launchpad:preview-set", onPreviewSet);
+    return () =>
+      window.removeEventListener("launchpad:preview-set", onPreviewSet);
+  }, []);
 
   // Hydrate persisted bounds.
   useEffect(() => {
@@ -810,7 +911,104 @@ export default function Launchpad({
     launchpadView.location.kind === "documents" ||
     launchpadView.location.kind === "shared" ||
     launchpadView.location.kind === "home" ||
-    launchpadView.location.kind === "favorites";
+    launchpadView.location.kind === "favorites" ||
+    launchpadView.location.kind === "trash";
+
+  /* Upload affordance is shown only when a workspace pane is the
+   * active location — Applications / Recents don't accept uploads. */
+  const uploadEnabled =
+    Boolean(activeId) &&
+    (launchpadView.location.kind === "home" ||
+      launchpadView.location.kind === "downloads" ||
+      launchpadView.location.kind === "documents" ||
+      launchpadView.location.kind === "favorites");
+
+  const handleUploadClick = useCallback(() => {
+    if (!uploadEnabled) return;
+    onPickFiles();
+  }, [uploadEnabled, onPickFiles]);
+
+  /* Workspace name for the drop overlay copy. */
+  const activeWorkspaceName = useMemo(
+    () => workspaces.find((w) => w.id === activeId)?.name ?? "this workspace",
+    [workspaces, activeId]
+  );
+
+  /* Files visible in the current pane — used by the Quick Look overlay
+   * for arrow-key navigation. We snapshot from the cache; the ref is
+   * populated whenever a pane mounts a row. */
+  const previewFiles = useMemo<LaunchpadFile[]>(() => {
+    return Array.from(fileCacheRef.current.values());
+    // refreshTick + previewFileId so the snapshot rebuilds each time
+    // the user opens or navigates the overlay.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshTick, previewFileId]);
+
+  /* Resolve the file objects for our pop-out dialogs. The cache only
+   * has whatever the user has scrolled past — for a freshly clicked
+   * row this is always populated. We use memoized lookups so the
+   * dialogs receive a stable reference between renders. */
+  const renameFile = useMemo(
+    () => (renameFileId ? fileCacheRef.current.get(renameFileId) ?? null : null),
+    [renameFileId]
+  );
+  const tagFile = useMemo(
+    () => (tagFileId ? fileCacheRef.current.get(tagFileId) ?? null : null),
+    [tagFileId]
+  );
+  const shareFile = useMemo(
+    () => (shareFileId ? fileCacheRef.current.get(shareFileId) ?? null : null),
+    [shareFileId]
+  );
+
+  /* Drag-and-drop targets the main pane area. Shared with the Files
+   * Manager protocol via the same useFileUploads hook. */
+  const onMainDragEnter = useCallback(
+    (e: React.DragEvent) => {
+      if (!uploadEnabled) return;
+      if (
+        !e.dataTransfer.types.includes("Files") &&
+        !Array.from(e.dataTransfer.types).some((t) => t === "Files")
+      ) {
+        return;
+      }
+      e.preventDefault();
+      dragDepthRef.current += 1;
+      setDragOver(true);
+    },
+    [uploadEnabled]
+  );
+  const onMainDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    dragDepthRef.current -= 1;
+    if (dragDepthRef.current <= 0) {
+      dragDepthRef.current = 0;
+      setDragOver(false);
+    }
+  }, []);
+  const onMainDragOver = useCallback(
+    (e: React.DragEvent) => {
+      if (!uploadEnabled) return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "copy";
+    },
+    [uploadEnabled]
+  );
+  const onMainDrop = useCallback(
+    (e: React.DragEvent) => {
+      if (!uploadEnabled) return;
+      e.preventDefault();
+      dragDepthRef.current = 0;
+      setDragOver(false);
+      const list = Array.from(e.dataTransfer.files ?? []);
+      if (list.length > 0) void uploads.startUploads(list);
+    },
+    [uploadEnabled, uploads]
+  );
+
+  const handleOpenStorageSettings = useCallback(() => {
+    if (onConnect) onConnect();
+  }, [onConnect]);
 
   return (
     <AnimatePresence>
@@ -930,6 +1128,7 @@ export default function Launchpad({
             onConnect={() => {
               if (onConnect) onConnect();
             }}
+            onUpload={uploadEnabled ? handleUploadClick : undefined}
             group={launchpadView.group}
             groupMenuOpen={groupMenuOpen}
             onToggleGroupMenu={() => {
@@ -998,9 +1197,24 @@ export default function Launchpad({
                 setFocusedFileId(file.id);
                 handleFileContext(e, file);
               }}
+              footer={
+                activeId ? (
+                  <LaunchpadStorageBar
+                    workspaceId={activeId}
+                    refreshTick={refreshTick}
+                    onOpenStorageSettings={handleOpenStorageSettings}
+                  />
+                ) : null
+              }
             />
 
-            <div className="flex flex-1 overflow-hidden">
+            <div
+              className="relative flex flex-1 overflow-hidden"
+              onDragEnter={onMainDragEnter}
+              onDragLeave={onMainDragLeave}
+              onDragOver={onMainDragOver}
+              onDrop={onMainDrop}
+            >
               <div className="flex-1 overflow-auto">
                 <MainPane
                   view={launchpadView.view}
@@ -1055,6 +1269,19 @@ export default function Launchpad({
                   }
                   onOpen={(f) => handleOpenFile(f)}
                 />
+              )}
+
+              {/* Drop overlay — shown while a native file drag is over
+                  the main pane and the active location accepts uploads. */}
+              {dragOver && uploadEnabled && (
+                <div
+                  aria-hidden="true"
+                  className="pointer-events-none absolute inset-2 z-[60] flex items-center justify-center rounded-lg border-2 border-dashed border-tool-accent bg-tool-accent-soft/40 backdrop-blur-md"
+                >
+                  <div className="rounded-lg bg-app-elevated/80 px-4 py-2 text-[13px] font-semibold text-app shadow">
+                    Drop files to upload to {activeWorkspaceName}
+                  </div>
+                </div>
               )}
             </div>
           </div>
@@ -1128,10 +1355,21 @@ export default function Launchpad({
               y={menu.y}
               onClose={() => setMenu(null)}
               onOpen={() => handleOpenFile(menu.file)}
-              onReveal={() => {
-                onOpenTool("files-manager", "Files", { fileId: menu.file.id });
-                onClose();
+              onPreview={() => {
+                cacheFile(menu.file);
+                setPreviewFileId(menu.file.id);
               }}
+              onReveal={() => {
+                // Reveal — navigate the Launchpad to Home and focus the
+                // file rather than punting to the Files Manager. The
+                // file pane reads `focusedFileId` to scroll-into-view.
+                cacheFile(menu.file);
+                setFocusedFileId(menu.file.id);
+                launchpadView.setLocation({ kind: "home" });
+              }}
+              onRename={() => setRenameFileId(menu.file.id)}
+              onEditTags={() => setTagFileId(menu.file.id)}
+              onShare={() => setShareFileId(menu.file.id)}
               onToggleStar={async () => {
                 const nowStarred = await favoritesState.toggle(menu.file);
                 showToast(nowStarred ? "Added to Favorites" : "Removed from Favorites");
@@ -1164,6 +1402,19 @@ export default function Launchpad({
               onClose={() => setMenu(null)}
               onOpen={() => handleOpenFile(menu.file)}
               onReveal={() => {
+                // For shared files, "Reveal" jumps back to Home in the
+                // owning workspace if it's the active one, otherwise we
+                // fall back to the Files Manager which still understands
+                // cross-workspace shared file ids.
+                const owns = workspaces.some(
+                  (w) => w.id === menu.share.source_workspace_id
+                );
+                if (owns && menu.share.source_workspace_id === activeId) {
+                  cacheFile(menu.file);
+                  setFocusedFileId(menu.file.id);
+                  launchpadView.setLocation({ kind: "home" });
+                  return;
+                }
                 onOpenTool("files-manager", "Files", { fileId: menu.file.id });
                 onClose();
               }}
@@ -1204,6 +1455,86 @@ export default function Launchpad({
             onClose={() => setAboutOpen(false)}
           />
 
+          {/* Hidden file input — driven by the toolbar's "+ Upload"
+              button. Lives at the modal scope so the same input is
+              available regardless of which pane is active. */}
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={onFilesChosen}
+          />
+
+          {/* Per-file upload progress toast (bottom-right). */}
+          <LaunchpadUploadToast
+            jobs={uploads.jobs}
+            onCancel={uploads.cancelJob}
+            onDismiss={uploads.removeJob}
+            onClearDone={uploads.clearDone}
+          />
+
+          {/* Per-file dialogs. Each keys off a single file id at a
+              time and closes via setting the id back to null. */}
+          <AnimatePresence>
+            {renameFile && (
+              <LaunchpadRenameDialog
+                file={renameFile}
+                onClose={() => setRenameFileId(null)}
+                onRenamed={() => {
+                  setRefreshTick((n) => n + 1);
+                  showToast("Renamed");
+                }}
+              />
+            )}
+          </AnimatePresence>
+          <AnimatePresence>
+            {tagFile && (
+              <LaunchpadTagEditor
+                file={{
+                  id: tagFile.id,
+                  name: tagFile.name,
+                  tags: hasTags(tagFile) ? tagFile.tags : [],
+                }}
+                onClose={() => setTagFileId(null)}
+                onSaved={() => {
+                  setRefreshTick((n) => n + 1);
+                  showToast("Tags updated");
+                }}
+              />
+            )}
+          </AnimatePresence>
+          <AnimatePresence>
+            {shareFile && activeId && (
+              <LaunchpadShareDialog
+                file={{ id: shareFile.id, name: shareFile.name }}
+                sourceWorkspaceId={activeId}
+                candidateWorkspaces={workspaces
+                  .filter((w) => w.id !== activeId)
+                  .map((w) => ({ id: w.id, name: w.name }))}
+                onClose={() => setShareFileId(null)}
+              />
+            )}
+          </AnimatePresence>
+
+          {/* Quick Look preview overlay — covers the whole shell. */}
+          {previewFileId && (
+            <LaunchpadPreviewOverlay
+              files={previewFiles}
+              fileId={previewFileId}
+              onClose={() => setPreviewFileId(null)}
+              onOpenInTool={(slug, fileId) => {
+                onOpenTool(
+                  slug,
+                  slug === "documents" ? "Documents" : "Sheets",
+                  { fileId }
+                );
+                setPreviewFileId(null);
+                onClose();
+              }}
+            />
+          )}
+
           {toast && (
             <div
               role="status"
@@ -1217,6 +1548,16 @@ export default function Launchpad({
       )}
     </AnimatePresence>
   );
+}
+
+/* Some Launchpad file rows carry tag arrays in their cached state but
+ * the LaunchpadFile interface is the lean shape that doesn't include
+ * them. This narrow helper coerces safely without forcing the broader
+ * pane components to widen. */
+function hasTags(
+  file: LaunchpadFile & { tags?: FileTag[] }
+): file is LaunchpadFile & { tags: FileTag[] } {
+  return Array.isArray(file.tags);
 }
 
 interface MainPaneProps {
@@ -1291,6 +1632,16 @@ function MainPane({
     );
   }
 
+  // Trash: soft-deleted files with restore + delete-forever actions.
+  if (location.kind === "trash") {
+    return (
+      <LaunchpadTrashView
+        workspaceId={workspaceId}
+        refreshTick={refreshTick}
+        onContextMenu={onFileContext}
+      />
+    );
+  }
   // Home: workspace's full drive — folder tree + files.
   if (location.kind === "home") {
     return (
@@ -1702,7 +2053,11 @@ interface FileContextMenuProps {
   y: number;
   onClose: () => void;
   onOpen: () => void;
+  onPreview: () => void;
   onReveal: () => void;
+  onRename: () => void;
+  onEditTags: () => void;
+  onShare: () => void;
   onToggleStar: () => void | Promise<void>;
   onDelete: () => void | Promise<void>;
 }
@@ -1714,7 +2069,11 @@ function FileContextMenu({
   y,
   onClose,
   onOpen,
+  onPreview,
   onReveal,
+  onRename,
+  onEditTags,
+  onShare,
   onToggleStar,
   onDelete,
 }: FileContextMenuProps) {
@@ -1736,6 +2095,13 @@ function FileContextMenu({
         }}
       />
       <MenuItem
+        label="Quick Look"
+        onClick={() => {
+          onPreview();
+          onClose();
+        }}
+      />
+      <MenuItem
         label={isStarred ? "Unstar" : "Star"}
         onClick={() => {
           void onToggleStar();
@@ -1743,9 +2109,31 @@ function FileContextMenu({
         }}
       />
       <MenuItem
-        label="Reveal in Files Manager"
+        label="Reveal"
         onClick={() => {
           onReveal();
+          onClose();
+        }}
+      />
+      <div aria-hidden="true" className="my-1 h-px bg-app/60" />
+      <MenuItem
+        label="Rename…"
+        onClick={() => {
+          onRename();
+          onClose();
+        }}
+      />
+      <MenuItem
+        label="Edit tags…"
+        onClick={() => {
+          onEditTags();
+          onClose();
+        }}
+      />
+      <MenuItem
+        label="Share to workspace…"
+        onClick={() => {
+          onShare();
           onClose();
         }}
       />
@@ -1804,7 +2192,7 @@ function SharedFileContextMenu({
       />
       {canRevoke && (
         <MenuItem
-          label="Reveal in Files Manager"
+          label="Reveal"
           onClick={() => {
             onReveal();
             onClose();
