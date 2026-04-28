@@ -151,60 +151,23 @@ function WorkspaceRequired({
   section: CrmSection;
   signedIn: boolean;
 }) {
-  const { workspaces, setCurrent, loading } = useWorkspace();
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
+  const { loading } = useWorkspace();
 
-  /* Inline create-and-switch flow. Bypasses the desktop's
-   * CreateWorkspaceDialog because that dialog only writes the desktop's
-   * local-workspace selection, not the lib/workspaces team selection
-   * that the CRM gates on. The endpoint /api/workspaces/ensure adds the
-   * user as owner, so the next CRM API call inherits the correct
-   * membership. */
-  const createInline = async () => {
-    if (creating) return;
-    setCreating(true);
-    setCreateError(null);
-    try {
-      // Generate a UUID v4 — crypto.randomUUID is available in all
-      // browsers we support.
-      const id = crypto.randomUUID();
-      const name = "My CRM workspace";
-      const r = await fetch("/api/workspaces/ensure", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ id, name }),
-      });
-      if (!r.ok) {
-        const j = (await r.json().catch(() => null)) as
-          | { error?: string; message?: string }
-          | null;
-        throw new Error(
-          j?.message ?? j?.error ?? `Could not create workspace (${r.status})`
-        );
-      }
-      const j = (await r.json()) as {
-        workspace: { id: string; name: string };
-      };
-      setCurrent({
-        kind: "team",
-        id: j.workspace.id,
-        // slug is a display-only field for our local selection — the
-        // server uses workspace_members membership for auth, not the
-        // slug. The id-as-slug fallback survives until the workspaces
-        // list reloads with the canonical slug from a future migration.
-        slug: j.workspace.id,
-        name: j.workspace.name,
-        role: "owner",
-      });
-    } catch (e) {
-      setCreateError(
-        e instanceof Error ? e.message : "Could not create workspace"
-      );
-    } finally {
-      setCreating(false);
-    }
-  };
+  /* The lib's useWorkspace auto-promotes the desktop's active workspace
+   * to a team selection on load, so this gate only fires for two narrow
+   * cases:
+   *   1. Auth is still resolving (signed-out check or list still
+   *      loading) — show a quiet placeholder.
+   *   2. The user is signed out — show the sign-in prompt. */
+  if (loading) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-app p-6">
+        <div className="font-mono text-[0.65rem] uppercase tracking-[0.18em] text-faint">
+          loading workspace…
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex h-full w-full items-center justify-center bg-app p-6">
@@ -213,63 +176,13 @@ function WorkspaceRequired({
           crm.{section}
         </div>
         <h2 className="mt-2 text-lg font-semibold text-app">
-          {signedIn ? "Pick a workspace for the CRM" : "Sign in to use the CRM"}
+          {signedIn ? "Workspace not ready" : "Sign in to use the CRM"}
         </h2>
         <p className="mt-2 text-sm text-secondary">
           {signedIn
-            ? "CRM records sync to a team workspace. Pick one of yours below — or create one if you haven't yet."
-            : "Personal mode is local-only. Sign in to load or create a team workspace."}
+            ? "We couldn't load your workspace. Try refreshing the page — if it persists, your account may have lost membership on this workspace."
+            : "Sign in to load this workspace's CRM records."}
         </p>
-
-        {signedIn && !loading && workspaces.length > 0 && (
-          <div className="mt-5 flex flex-col gap-2">
-            {workspaces.map((w) => (
-              <button
-                key={w.id}
-                type="button"
-                onClick={() =>
-                  setCurrent({
-                    kind: "team",
-                    id: w.id,
-                    slug: w.slug,
-                    name: w.name,
-                    role: w.role,
-                  })
-                }
-                className="flex items-center justify-between rounded-lg border border-app bg-app px-3 py-2.5 text-left transition-colors hover:bg-surface-hover"
-              >
-                <span className="flex flex-col">
-                  <span className="text-sm font-semibold text-app">{w.name}</span>
-                  <span className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-faint">
-                    {w.slug} · {w.role}
-                  </span>
-                </span>
-                <span className="rounded-md bg-tool-accent px-2 py-1 font-mono text-[0.55rem] font-semibold uppercase tracking-[0.14em] text-white">
-                  Use
-                </span>
-              </button>
-            ))}
-          </div>
-        )}
-
-        {signedIn && !loading && workspaces.length === 0 && (
-          <div className="mt-5">
-            <button
-              type="button"
-              onClick={createInline}
-              disabled={creating}
-              className="inline-flex items-center gap-2 rounded-lg bg-tool-accent px-4 py-2 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90 disabled:opacity-60"
-            >
-              {creating ? "Creating…" : "Create your first workspace"}
-            </button>
-            {createError && (
-              <p className="mt-3 text-[0.7rem] text-rose-500">{createError}</p>
-            )}
-            <p className="mt-3 text-[0.7rem] text-faint">
-              You can rename it later from Settings → Workspaces.
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -346,7 +259,7 @@ export default function Shell({ width, initialParams, openApp }: NativeAppProps)
 
   const { current, signedIn } = useWorkspace();
   const workspaceLabel =
-    current.kind === "team" ? current.slug : "personal";
+    current.kind === "team" ? current.name : "loading…";
 
   const compact = width < MOBILE_BREAKPOINT;
 

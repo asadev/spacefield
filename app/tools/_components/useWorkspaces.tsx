@@ -261,6 +261,16 @@ export function WorkspaceProvider({ children }: ProviderProps) {
     setHydrated(true);
   }, []);
 
+  /* Whenever the desktop's active workspace changes, dispatch a custom
+   * event so other parts of the app (lib/workspaces' useWorkspace hook
+   * in particular) can re-resolve their state. The native `storage`
+   * event only fires across tabs, so without this same-tab consumers
+   * miss the change. */
+  useEffect(() => {
+    if (!hydrated || typeof window === "undefined") return;
+    window.dispatchEvent(new CustomEvent("workspace:change"));
+  }, [activeId, hydrated]);
+
   const createWorkspace = useCallback(
     (name: string, applyAfter?: (id: string) => void) => {
       const trimmed = name.trim() || `Workspace ${Date.now()}`;

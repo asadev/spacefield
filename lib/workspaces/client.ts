@@ -11,14 +11,33 @@ import { WORKSPACE_STORAGE_KEY } from "./types";
 
 // ---------- current workspace (localStorage-backed) ----------
 
+/* The desktop's currently-active workspace id. We look at this first so
+ * tools (CRM, Files, etc.) automatically operate on whatever workspace
+ * the user is "in" on the desktop, instead of forcing them to pick a
+ * separate selection per-tool. The id is materialized in Supabase by
+ * the desktop's createWorkspace() flow via /api/workspaces/ensure, so
+ * it's always a valid workspace_id when present. */
+const DESKTOP_ACTIVE_WORKSPACE_KEY = "workspaces:active:v1";
+
+function readDesktopActiveId(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const v = localStorage.getItem(DESKTOP_ACTIVE_WORKSPACE_KEY);
+    return v && typeof v === "string" ? v : null;
+  } catch {
+    return null;
+  }
+}
+
 export function readSelectedWorkspace(): SelectedWorkspace {
   if (typeof window === "undefined") return { kind: "personal" };
   try {
     const raw = localStorage.getItem(WORKSPACE_STORAGE_KEY);
-    if (!raw) return { kind: "personal" };
-    const parsed = JSON.parse(raw);
-    if (parsed && parsed.kind === "team" && parsed.id && parsed.slug) {
-      return parsed as SelectedWorkspace;
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (parsed && parsed.kind === "team" && parsed.id && parsed.slug) {
+        return parsed as SelectedWorkspace;
+      }
     }
     return { kind: "personal" };
   } catch {
@@ -54,10 +73,26 @@ export function useWorkspace(): {
   useEffect(() => {
     setCurrentState(readSelectedWorkspace());
     const onChange = () => setCurrentState(readSelectedWorkspace());
+    /* When the desktop switches workspaces, reset our team selection
+     * and let the next load pass auto-promote the new desktop active
+     * workspace. The desktop emits "workspace:change" via
+     * useWorkspaces.tsx whenever activeId mutates. */
+    const onDesktopSwitch = () => {
+      const desktopId = readDesktopActiveId();
+      const sel = readSelectedWorkspace();
+      if (sel.kind === "team" && desktopId && desktopId !== sel.id) {
+        // Drop the stale selection. The next reload pass will pick up
+        // the new desktop active id and promote it to team.
+        writeSelectedWorkspace({ kind: "personal" });
+        setCurrentState({ kind: "personal" });
+      }
+    };
     window.addEventListener("workspace:change", onChange);
+    window.addEventListener("workspace:change", onDesktopSwitch);
     window.addEventListener("storage", onChange);
     return () => {
       window.removeEventListener("workspace:change", onChange);
+      window.removeEventListener("workspace:change", onDesktopSwitch);
       window.removeEventListener("storage", onChange);
     };
   }, []);
@@ -117,15 +152,59 @@ export function useWorkspace(): {
         list.sort((a, b) => a.name.localeCompare(b.name));
         setWorkspaces(list);
 
-        // If current selection refers to a workspace we no longer belong to,
-        // fall back to personal.
+        // Auto-resolve `current` against the desktop's active workspace.
+        // Personal vs team is no longer a meaningful distinction for
+        // tools — every workspace the user is "in" on the desktop is a
+        // valid Supabase row they own. We promote the desktop's active
+        // id to a team selection automatically so tools never sit on a
+        // dead-end "pick a workspace" screen.
         const sel = readSelectedWorkspace();
-        if (
-          sel.kind === "team" &&
-          !list.some((w) => w.id === sel.id)
-        ) {
-          writeSelectedWorkspace({ kind: "personal" });
-          setCurrentState({ kind: "personal" });
+        if (sel.kind === "team") {
+          if (!list.some((w) => w.id === sel.id)) {
+            // Stale selection (workspace deleted / left). Try the desktop's
+            // active id; if that also isn't in our list, fall back to the
+            // first workspace we belong to (or personal if there are none).
+            const desktopId = readDesktopActiveId();
+            const target =
+              (desktopId && list.find((w) => w.id === desktopId)) ||
+              list[0] ||
+              null;
+            if (target) {
+              const next: SelectedWorkspace = {
+                kind: "team",
+                id: target.id,
+                slug: target.slug,
+                name: target.name,
+                role: target.role,
+              };
+              writeSelectedWorkspace(next);
+              setCurrentState(next);
+            } else {
+              writeSelectedWorkspace({ kind: "personal" });
+              setCurrentState({ kind: "personal" });
+            }
+          }
+        } else {
+          // No team selected. Promote the desktop's active workspace if
+          // it's one we belong to; otherwise the first workspace in the
+          // list. This is the path that fixes the CRM's old "Pick a
+          // workspace" dead-end for solo users.
+          const desktopId = readDesktopActiveId();
+          const target =
+            (desktopId && list.find((w) => w.id === desktopId)) ||
+            list[0] ||
+            null;
+          if (target) {
+            const next: SelectedWorkspace = {
+              kind: "team",
+              id: target.id,
+              slug: target.slug,
+              name: target.name,
+              role: target.role,
+            };
+            writeSelectedWorkspace(next);
+            setCurrentState(next);
+          }
         }
       } catch {
         if (!cancelled) {
