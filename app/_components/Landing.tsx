@@ -28,6 +28,7 @@ import Link from "next/link";
 import { useEffect, useState } from "react";
 import { TOOLS, TOOL_ICONS } from "../tools/_data/tools-list";
 import { AuthProvider } from "../tools/_components/useAuth";
+import SpacefieldLogo from "./SpacefieldLogo";
 import SignInDialog from "../tools/_components/SignInDialog";
 
 export default function Landing() {
@@ -128,18 +129,8 @@ function TopNav({
       }`}
     >
       <nav className="mx-auto flex h-14 max-w-6xl items-center gap-6 px-5">
-        <Link href="/" className="flex items-center gap-2">
-          <span
-            aria-hidden="true"
-            className="inline-block h-5 w-5 rounded-md"
-            style={{
-              background:
-                "linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 50%, #06b6d4))",
-            }}
-          />
-          <span className="text-sm font-semibold tracking-tight text-app">
-            Space Field
-          </span>
+        <Link href="/" className="flex items-center">
+          <SpacefieldLogo size="sm" />
         </Link>
 
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
@@ -822,19 +813,7 @@ function Footer() {
       <div className="mx-auto max-w-6xl px-5 py-14">
         <div className="grid gap-10 sm:grid-cols-2 md:grid-cols-4">
           <div>
-            <div className="flex items-center gap-2">
-              <span
-                aria-hidden="true"
-                className="inline-block h-5 w-5 rounded-md"
-                style={{
-                  background:
-                    "linear-gradient(135deg, var(--accent), color-mix(in srgb, var(--accent) 50%, #06b6d4))",
-                }}
-              />
-              <span className="text-sm font-semibold text-app">
-                Space Field
-              </span>
-            </div>
+            <SpacefieldLogo size="sm" />
             <p className="mt-3 max-w-xs text-xs text-muted">
               A desktop OS for the web. Local first, yours always.
             </p>
