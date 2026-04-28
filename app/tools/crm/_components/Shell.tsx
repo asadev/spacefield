@@ -220,7 +220,7 @@ function SettingsSurface({
 
 // ── Shell ───────────────────────────────────────────────────────────────
 
-export default function Shell({ width, initialParams }: NativeAppProps) {
+export default function Shell({ width, initialParams, openApp }: NativeAppProps) {
   const initialSection =
     typeof initialParams?.section === "string" &&
     NAV_ITEMS.some((n) => n.key === initialParams.section)
@@ -484,6 +484,7 @@ export default function Shell({ width, initialParams }: NativeAppProps) {
                   workspaceId={workspaceId}
                   workspaceLabel={workspaceLabel}
                   width={width}
+                  openApp={openApp}
                 />
               );
             }
@@ -493,6 +494,7 @@ export default function Shell({ width, initialParams }: NativeAppProps) {
                   workspaceId={workspaceId}
                   workspaceLabel={workspaceLabel}
                   width={width}
+                  openApp={openApp}
                 />
               );
             }
@@ -502,6 +504,7 @@ export default function Shell({ width, initialParams }: NativeAppProps) {
                   workspaceId={workspaceId}
                   workspaceLabel={workspaceLabel}
                   width={width}
+                  openApp={openApp}
                 />
               );
             }

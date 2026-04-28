@@ -42,6 +42,7 @@ import {
   relativeTime,
   renderCustomValue,
 } from "./_records/helpers";
+import IntegrationButtons from "./IntegrationButtons";
 
 type RecordKind = "contact" | "company" | "inventory";
 
@@ -59,6 +60,11 @@ interface RecordDetailProps {
   hostWidth: number;
   /** Open another record by id — used by the Related tab. */
   openRecord?: (kind: RecordKind, id: string) => void;
+  /** Cross-tool launcher — drives the footer "Generate poster / Generate
+   * sales offer" buttons for inventory, plus the generic Save to Files /
+   * Open in Documents / Share to Chat actions. Threaded down from the
+   * CRM tool's NativeAppProps. */
+  openApp?: (slug: string, params?: Record<string, unknown>) => void;
 }
 
 const TABS: { key: TabKey; label: string }[] = [
@@ -84,6 +90,7 @@ export default function RecordDetail({
   onDeleted,
   hostWidth,
   openRecord,
+  openApp,
 }: RecordDetailProps) {
   const [tab, setTab] = useState<TabKey>("overview");
   const [working, setWorking] = useState<DetailRecord>(record);
@@ -397,9 +404,20 @@ export default function RecordDetail({
             Delete
           </button>
           <div className="flex items-center gap-1">
-            <FooterActionStub label="Save to Files" icon="paperclip" />
-            <FooterActionStub label="Open in Documents" icon="external" />
-            <FooterActionStub label="Share to Chat" icon="link" />
+            {kind === "inventory" && openApp ? (
+              <InventoryHandoffButtons
+                record={working as CrmInventoryItem}
+                openApp={openApp}
+              />
+            ) : null}
+            <IntegrationButtons
+              recordType={kind}
+              recordId={working.id}
+              recordName={recordTitle(kind, working) || "(untitled)"}
+              recordSnapshot={working as unknown as Record<string, unknown>}
+              openApp={openApp}
+              compact
+            />
           </div>
         </footer>
       </aside>
@@ -1306,16 +1324,103 @@ function SkeletonList({ rows = 4 }: { rows?: number }) {
   );
 }
 
-function FooterActionStub({ label, icon }: { label: string; icon: string }) {
+function recordTitle(kind: RecordKind, record: DetailRecord): string {
+  if (kind === "contact") return contactDisplayName(record as CrmContact);
+  if (kind === "company") return companyDisplayName(record as CrmCompany);
+  return inventoryDisplayName(record as CrmInventoryItem);
+}
+
+/* Inventory-only handoff buttons: send the current record to
+ * Property Poster Creator or Sales Offer Generator with prefilled fields.
+ * Both target tools accept the prefill via NativeAppProps.initialParams.
+ *
+ * Field mapping is best-effort — CRM inventory has a fixed schema (name,
+ * price, currency, category, sku, description) plus a free-form `custom`
+ * jsonb where users can stash bedrooms / bathrooms / area_sqft / address /
+ * agent name etc. We try common keys first, then fall through silently. */
+function InventoryHandoffButtons({
+  record,
+  openApp,
+}: {
+  record: CrmInventoryItem;
+  openApp: (slug: string, params?: Record<string, unknown>) => void;
+}) {
+  // Read a custom field by trying several casings — CRM users vary.
+  const cf = (...keys: string[]): string => {
+    const c = (record.custom ?? {}) as Record<string, unknown>;
+    for (const k of keys) {
+      const v = c[k];
+      if (v == null) continue;
+      const s = typeof v === "string" ? v : String(v);
+      if (s.trim()) return s;
+    }
+    return "";
+  };
+  const priceStr =
+    typeof record.price === "number" && record.price > 0
+      ? String(record.price)
+      : "";
+
+  const goPoster = () => {
+    openApp("property-poster-creator", {
+      propertyTitle: record.name,
+      price: priceStr,
+      bedrooms: cf("bedrooms", "beds", "bed"),
+      bathrooms: cf("bathrooms", "baths", "bath"),
+      area: cf("area_sqft", "area", "sqft", "size"),
+      location: cf("location", "address", "city", "neighborhood") || record.category || "",
+      propertyType: record.category ?? "",
+      features: cf("features", "amenities"),
+      statusLabel: record.status === "active" ? "For Sale" : "",
+      agentName: cf("agent_name", "agent", "broker"),
+      agentPhone: cf("agent_phone", "phone"),
+      agentEmail: cf("agent_email", "email"),
+      companyName: cf("company", "company_name", "developer"),
+    });
+  };
+
+  const goSalesOffer = () => {
+    openApp("sales-offer-generator", {
+      propertyName: record.name,
+      price: priceStr,
+      bedrooms: cf("bedrooms", "beds", "bed"),
+      size: cf("area_sqft", "area", "sqft", "size"),
+      location: cf("location", "address", "city", "neighborhood") || record.category || "",
+      unitType: cf("unit_type", "type") || record.category || "",
+      developerName: cf("developer", "developer_name", "company"),
+      floor: cf("floor"),
+      paymentPlan: cf("payment_plan", "plan"),
+      serviceCharge: cf("service_charge"),
+      handoverDate: cf("handover_date", "handover"),
+      agentName: cf("agent_name", "agent", "broker"),
+      agentPhone: cf("agent_phone", "phone"),
+      companyName: cf("company", "company_name"),
+      clientName: "",
+    });
+  };
+
   return (
-    <button
-      type="button"
-      title={`${label} — wires in Phase 2C`}
-      disabled
-      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-app bg-app text-faint opacity-50"
-    >
-      <RecIcon name={icon} size={11} />
-    </button>
+    <>
+      <button
+        type="button"
+        onClick={goPoster}
+        title="Generate poster from this inventory item"
+        className="inline-flex h-7 items-center gap-1.5 rounded-md border border-app bg-app px-2 font-mono text-[0.55rem] font-semibold uppercase tracking-[0.14em] text-secondary hover:bg-surface-hover hover:text-app"
+      >
+        <RecIcon name="external" size={11} />
+        Poster
+      </button>
+      <button
+        type="button"
+        onClick={goSalesOffer}
+        title="Generate sales offer from this inventory item"
+        className="inline-flex h-7 items-center gap-1.5 rounded-md border border-app bg-app px-2 font-mono text-[0.55rem] font-semibold uppercase tracking-[0.14em] text-secondary hover:bg-surface-hover hover:text-app"
+      >
+        <RecIcon name="external" size={11} />
+        Sales offer
+      </button>
+      <span aria-hidden="true" className="mx-1 h-4 w-px bg-app" />
+    </>
   );
 }
 

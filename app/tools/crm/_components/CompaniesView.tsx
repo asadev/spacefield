@@ -27,12 +27,14 @@ interface Props {
   workspaceId: string;
   workspaceLabel: string;
   width: number;
+  openApp?: (slug: string, params?: Record<string, unknown>) => void;
 }
 
 export default function CompaniesView({
   workspaceId,
   workspaceLabel,
   width,
+  openApp,
 }: Props) {
   const [rows, setRows] = useState<CrmCompany[]>([]);
   const [loading, setLoading] = useState(true);
@@ -397,6 +399,7 @@ export default function CompaniesView({
           workspaceId={workspaceId}
           customFields={customFields}
           hostWidth={width}
+          openApp={openApp}
           onClose={() => setActiveId(null)}
           onUpdated={(next) => {
             setRows((prev) =>

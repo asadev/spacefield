@@ -1011,7 +1011,11 @@ function PosterMobileFlow({
    MAIN NATIVE APP
    ═══════════════════════════════════════════ */
 
-export default function PropertyPosterCreatorApp({ width }: NativeAppProps) {
+export default function PropertyPosterCreatorApp({
+  width,
+  initialParams,
+  initialParamsKey,
+}: NativeAppProps) {
   const { prefs } = useUserPreferences();
   const posterRef = useRef<HTMLDivElement>(null);
   const storyRef = useRef<HTMLDivElement>(null);
@@ -1079,6 +1083,47 @@ export default function PropertyPosterCreatorApp({ width }: NativeAppProps) {
       companyName: prev.companyName || prefs.companyName || "",
     }));
   }, [prefs.agentName, prefs.agentPhone, prefs.companyName]);
+
+  /* Prefill from openApp() params — used when launched from CRM
+   * inventory's "Poster" handoff button. Only string text fields are
+   * accepted (images come from the user's upload flow). The
+   * `initialParamsKey` bumps every time the host re-launches with new
+   * params, so re-clicking the button on a different inventory item
+   * actually re-prefills the form even if the window stays mounted. */
+  useEffect(() => {
+    if (!initialParams || typeof initialParams !== "object") return;
+    const p = initialParams as Record<string, unknown>;
+    const text = (k: string): string | undefined => {
+      const v = p[k];
+      return typeof v === "string" && v.trim() ? v : undefined;
+    };
+    setData((prev) => {
+      const next: PosterData = { ...prev };
+      const keys: (keyof PosterData)[] = [
+        "propertyTitle",
+        "propertyType",
+        "location",
+        "price",
+        "bedrooms",
+        "bathrooms",
+        "area",
+        "features",
+        "statusLabel",
+        "agentName",
+        "agentPhone",
+        "agentEmail",
+        "companyName",
+      ];
+      for (const k of keys) {
+        const v = text(k as string);
+        if (v !== undefined) {
+          (next[k] as string) = v;
+        }
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialParamsKey]);
 
   useEffect(() => {
     saveAgentDetailsToLS(data);

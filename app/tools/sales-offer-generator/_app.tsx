@@ -251,7 +251,7 @@ function FinanceRow({
 
 /* ---------- Main Native App ---------- */
 export default function SalesOfferGeneratorApp(props: NativeAppProps) {
-  const { width } = props;
+  const { width, initialParams, initialParamsKey } = props;
 
   // Width-driven breakpoints — single column below 900px, ultra-compact
   // header below 600px, image grid 2-up below 480px.
@@ -292,6 +292,43 @@ export default function SalesOfferGeneratorApp(props: NativeAppProps) {
       }));
     }
   }, [prefsLoading, prefs]);
+
+  /* Prefill from openApp() params — used when launched from CRM
+   * inventory's "Sales offer" handoff button. `initialParamsKey` bumps
+   * each launch so re-clicking the button on a different inventory item
+   * re-prefills even if the window stays mounted. */
+  useEffect(() => {
+    if (!initialParams || typeof initialParams !== "object") return;
+    const p = initialParams as Record<string, unknown>;
+    setForm((prev) => {
+      const next = { ...prev };
+      const keys: (keyof FormData)[] = [
+        "clientName",
+        "propertyName",
+        "developerName",
+        "location",
+        "unitType",
+        "bedrooms",
+        "size",
+        "floor",
+        "price",
+        "paymentPlan",
+        "serviceCharge",
+        "handoverDate",
+        "agentName",
+        "agentPhone",
+        "companyName",
+      ];
+      for (const k of keys) {
+        const v = p[k as string];
+        if (typeof v === "string" && v.trim()) {
+          next[k] = v;
+        }
+      }
+      return next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialParamsKey]);
 
   const [images, setImages] = useState<ImageSlot[]>([
     { label: "Property Photo", key: "propertyPhoto", data: null },
