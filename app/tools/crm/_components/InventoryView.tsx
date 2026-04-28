@@ -15,6 +15,7 @@ import type {
 import { cachedFetch, invalidate } from "@/lib/cache/swr";
 import RecordDetail from "./RecordDetail";
 import { RecordTable, type RecordColumn } from "./RecordTable";
+import { useSectionLabel } from "./useSectionLabel";
 import { InventoryStatusPill } from "./_records/Chips";
 import {
   formatCurrency,
@@ -39,6 +40,12 @@ export default function InventoryView({
   width,
   openApp,
 }: Props) {
+  // Resolves to "Properties" when the real-estate template is applied;
+  // otherwise the default "Inventory". Plural form derived from the same
+  // override so the count subtitle reads naturally.
+  const sectionLabel = useSectionLabel("inventory", "Inventory");
+  const itemNoun = sectionLabel.toLowerCase() === "properties" ? "property" : "item";
+  const itemNounPlural = sectionLabel.toLowerCase() === "properties" ? "properties" : "items";
   const [rows, setRows] = useState<CrmInventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -363,8 +370,8 @@ export default function InventoryView({
         columns={columns}
         loading={loading}
         workspaceLabel={workspaceLabel}
-        title="Inventory"
-        subtitle={`${rows.length} ${rows.length === 1 ? "item" : "items"}`}
+        title={sectionLabel}
+        subtitle={`${rows.length} ${rows.length === 1 ? itemNoun : itemNounPlural}`}
         newLabel="New item"
         onNew={() => setQaName("New item")}
         search={search}

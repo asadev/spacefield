@@ -15,6 +15,7 @@ import type {
 import { cachedFetch, invalidate } from "@/lib/cache/swr";
 import RecordDetail from "./RecordDetail";
 import { RecordTable, type RecordColumn } from "./RecordTable";
+import { useSectionLabel } from "./useSectionLabel";
 import { Avatar, CountPill } from "./_records/Chips";
 import {
   companyDisplayName,
@@ -37,6 +38,12 @@ export default function CompaniesView({
   width,
   openApp,
 }: Props) {
+  // Resolves to "Developers" when the real-estate template is applied,
+  // otherwise the default "Companies". Singular/plural derived inline so
+  // the count subtitle still reads naturally under the override.
+  const sectionLabel = useSectionLabel("companies", "Companies");
+  const itemNoun = sectionLabel.toLowerCase() === "developers" ? "developer" : "company";
+  const itemNounPlural = sectionLabel.toLowerCase();
   const [rows, setRows] = useState<CrmCompany[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -330,8 +337,8 @@ export default function CompaniesView({
         columns={columns}
         loading={loading}
         workspaceLabel={workspaceLabel}
-        title="Companies"
-        subtitle={`${rows.length} ${rows.length === 1 ? "company" : "companies"}`}
+        title={sectionLabel}
+        subtitle={`${rows.length} ${rows.length === 1 ? itemNoun : itemNounPlural}`}
         newLabel="New company"
         onNew={() => setQaName("New company")}
         search={search}

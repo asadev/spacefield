@@ -42,6 +42,9 @@ import ReportsView from "./ReportsView";
 import CustomFieldsAdmin from "./CustomFieldsAdmin";
 import PermissionsAdmin from "./PermissionsAdmin";
 import SavedViewsManager from "./SavedViewsManager";
+import TemplatePicker from "./TemplatePicker";
+import { useCrmTemplate } from "./useCrmTemplate";
+import { CRM_TEMPLATES } from "../_templates/registry";
 
 const NAV_ITEMS: CrmSectionMeta[] = [
   { key: "pipeline", label: "Pipeline", icon: "kanban" },
@@ -68,7 +71,7 @@ const SIDEBAR_WIDTH = 220;
 const SIDEBAR_COLLAPSED = 56;
 const MOBILE_BREAKPOINT = 720;
 
-type SettingsSub = "custom-fields" | "permissions" | "saved-views";
+type SettingsSub = "template" | "custom-fields" | "permissions" | "saved-views";
 
 // Tiny inline icon set — same SVG path family as TOOL_ICONS so the shell
 // renders without a separate icon registry import. Keeps Phase 1 surface
@@ -199,6 +202,7 @@ function SettingsSurface({
   width: number;
 }) {
   const tabs: { key: SettingsSub; label: string }[] = [
+    { key: "template", label: "Template" },
     { key: "custom-fields", label: "Custom fields" },
     { key: "permissions", label: "Permissions" },
     { key: "saved-views", label: "Saved views" },
@@ -229,6 +233,7 @@ function SettingsSurface({
         })}
       </nav>
       <div className="min-h-0 flex-1">
+        {sub === "template" && <TemplatePicker />}
         {sub === "custom-fields" && <CustomFieldsAdmin />}
         {sub === "permissions" && <PermissionsAdmin />}
         {sub === "saved-views" && <SavedViewsManager />}
@@ -251,10 +256,15 @@ export default function Shell({ width, initialParams, openApp }: NativeAppProps)
   const [search, setSearch] = useState("");
   const [settingsSub, setSettingsSub] = useState<SettingsSub>(() => {
     const sub = initialParams?.settings;
-    if (sub === "custom-fields" || sub === "permissions" || sub === "saved-views") {
+    if (
+      sub === "template" ||
+      sub === "custom-fields" ||
+      sub === "permissions" ||
+      sub === "saved-views"
+    ) {
       return sub;
     }
-    return "custom-fields";
+    return "template";
   });
   const createRef = useRef<HTMLDivElement | null>(null);
 
@@ -262,6 +272,18 @@ export default function Shell({ width, initialParams, openApp }: NativeAppProps)
   const workspaceLabel =
     current.kind === "team" ? current.name : "loading…";
   const wsId = current.kind === "team" ? current.id : "";
+
+  /* Section-label overrides driven by the active CRM template. The hook
+   * reads `workspace_state[crm:template-id]` and resolves to a sectionLabels
+   * map (or undefined when no template is applied). Sidebar nav + view
+   * titles read from this so a real-estate workspace shows "Properties"
+   * instead of "Inventory" without changing the underlying section keys. */
+  const { current: activeTemplateId } = useCrmTemplate(wsId);
+  const sectionLabels = activeTemplateId
+    ? CRM_TEMPLATES[activeTemplateId]?.sectionLabels ?? null
+    : null;
+  const labelFor = (key: CrmSection, fallback: string): string =>
+    sectionLabels?.[key] ?? fallback;
 
   /* Pre-warm the cache for a section's main GET endpoint when the user
    * hovers its sidebar nav item. By the time the click fires, the
@@ -346,6 +368,7 @@ export default function Shell({ width, initialParams, openApp }: NativeAppProps)
         <ul className="flex-1 space-y-0.5 overflow-y-auto p-2">
           {NAV_ITEMS.map((item) => {
             const active = item.key === section;
+            const renderedLabel = labelFor(item.key, item.label);
             return (
               <li key={item.key}>
                 <button
@@ -362,11 +385,11 @@ export default function Shell({ width, initialParams, openApp }: NativeAppProps)
                       ? "border border-tool-accent bg-tool-accent-soft text-tool-accent"
                       : "border border-transparent text-secondary hover:bg-surface hover:text-app"
                   }`}
-                  title={item.label}
+                  title={renderedLabel}
                 >
                   <Icon name={item.icon} size={16} />
                   {!showCollapsedSidebar && (
-                    <span className="truncate">{item.label}</span>
+                    <span className="truncate">{renderedLabel}</span>
                   )}
                 </button>
               </li>
@@ -378,7 +401,14 @@ export default function Shell({ width, initialParams, openApp }: NativeAppProps)
         </div>
       </nav>
     ),
-    [section, compact, showCollapsedSidebar, effectiveSidebarWidth, wsId]
+    [
+      section,
+      compact,
+      showCollapsedSidebar,
+      effectiveSidebarWidth,
+      wsId,
+      sectionLabels,
+    ]
   );
 
   return (

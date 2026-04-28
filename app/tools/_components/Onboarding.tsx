@@ -2,6 +2,7 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useMemo, useState } from "react";
+import { useWorkspace } from "@/lib/workspaces/client";
 import {
   TOOL_CATEGORIES,
   TOOL_ICONS,
@@ -17,10 +18,46 @@ import {
   DEFAULT_INDUSTRY,
   type IndustryKey,
 } from "../_data/industries";
+import { templateForProfession } from "../crm/_templates/registry";
 
 interface Props {
   open: boolean;
   onComplete: (profession: ProfessionKey, installed: string[]) => void;
+}
+
+/* Fire-and-forget: if the chosen profession matches a CRM template and
+ * the workspace doesn't already have a template applied, POST the apply.
+ * Any failure (no workspace, network, RLS) is swallowed so onboarding
+ * never blocks on this. The picker in Settings → Template is always
+ * available as a manual fallback. */
+async function maybeAutoApplyTemplate(
+  workspaceId: string,
+  profession: string
+): Promise<void> {
+  if (!workspaceId) return;
+  const tpl = templateForProfession(profession);
+  if (!tpl) return;
+  try {
+    const r = await fetch(
+      `/api/crm/templates/current?workspace_id=${workspaceId}`,
+      { credentials: "include" }
+    );
+    if (r.ok) {
+      const j = (await r.json()) as { template_id: string | null };
+      if (j.template_id) return; // already applied — respect prior choice
+    }
+    await fetch("/api/crm/templates/apply", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({
+        workspace_id: workspaceId,
+        template_id: tpl.id,
+      }),
+    });
+  } catch {
+    // Silent — picker is the manual fallback.
+  }
 }
 
 type Step = "welcome" | "industry" | "profession" | "tools" | "done";
@@ -32,6 +69,10 @@ export default function Onboarding({ open, onComplete }: Props) {
   const [industry, setIndustry] = useState<IndustryKey>(DEFAULT_INDUSTRY);
   const [profession, setProfession] = useState<ProfessionKey | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  // Active team workspace id, used to fire the CRM template auto-apply
+  // after the user finishes onboarding. Personal workspaces don't get a
+  // template (the apply API rejects non-team workspaces with no member row).
+  const { current: activeWorkspace } = useWorkspace();
 
   const handlePickIndustry = (key: IndustryKey) => {
     setIndustry(key);
@@ -60,8 +101,13 @@ export default function Onboarding({ open, onComplete }: Props) {
 
   const finish = () => {
     setStep("done");
+    const finalProfession: ProfessionKey = profession ?? "everything";
+    // Fire the auto-apply in the background — never block the UI on it.
+    if (activeWorkspace.kind === "team") {
+      void maybeAutoApplyTemplate(activeWorkspace.id, finalProfession);
+    }
     setTimeout(() => {
-      onComplete(profession ?? "everything", Array.from(selected));
+      onComplete(finalProfession, Array.from(selected));
     }, 900);
   };
 
