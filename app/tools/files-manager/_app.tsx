@@ -28,6 +28,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { getSupabase } from "@/lib/supabase/client";
 import type { NativeAppProps } from "../_data/tools-list";
+import ShareDialog from "./ShareDialog";
 
 const ease: [number, number, number, number] = [0.25, 0.46, 0.45, 0.94];
 
@@ -746,6 +747,42 @@ export default function FilesManagerApp({
   const [activeId] = useState<string | null>(initialWorkspace.id);
   const [activeName] = useState<string>(initialWorkspace.name);
 
+  // All workspaces the user belongs to — used to populate the Share
+  // dialog's target dropdown. Read from the same localStorage list the
+  // WorkspaceProvider hydrates from. We avoid the useWorkspaces hook
+  // here because Files Manager also renders standalone via /tools/
+  // files-manager/page.tsx, which isn't wrapped in <WorkspaceProvider>.
+  const [allWorkspaces, setAllWorkspaces] = useState<
+    Array<{ id: string; name: string }>
+  >([]);
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const read = () => {
+      try {
+        const raw = window.localStorage.getItem("workspaces:list:v1");
+        if (!raw) return [];
+        const parsed = JSON.parse(raw) as Array<{
+          id?: unknown;
+          name?: unknown;
+        }>;
+        return parsed
+          .filter(
+            (w): w is { id: string; name: string } =>
+              typeof w?.id === "string" && typeof w?.name === "string"
+          )
+          .map((w) => ({ id: w.id, name: w.name }));
+      } catch {
+        return [];
+      }
+    };
+    setAllWorkspaces(read());
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === "workspaces:list:v1") setAllWorkspaces(read());
+    };
+    window.addEventListener("storage", onStorage);
+    return () => window.removeEventListener("storage", onStorage);
+  }, []);
+
   // Hydrate the cache snapshot synchronously too — used as the seed for
   // files/cap/used so we render real content before any network call.
   const initialCache = useMemo(
@@ -920,6 +957,9 @@ export default function FilesManagerApp({
   const [filterTag, setFilterTag] = useState<string | null>(null);
   /** Tag editor popover state — file id whose tags are being edited. */
   const [tagEditorId, setTagEditorId] = useState<string | null>(null);
+  /** Share-dialog state — file id whose cross-workspace shares are
+   *  being managed. Null when the dialog is closed. */
+  const [shareDialogId, setShareDialogId] = useState<string | null>(null);
   /** Lightweight toast — used for the "Moved to Trash · Undo" notice. */
   const [toast, setToast] = useState<{
     message: string;
@@ -2147,6 +2187,7 @@ export default function FilesManagerApp({
                       setRenameDraft(file.name);
                     }}
                     onAskDelete={() => setConfirmDeleteId(file.id)}
+                    onAskShare={() => setShareDialogId(file.id)}
                     onAskTag={() => setTagEditorId(file.id)}
                     onTagClick={(name) => setFilterTag(name)}
                     onRestore={() => handleRestore(file.id)}
@@ -2269,6 +2310,24 @@ export default function FilesManagerApp({
               if (id) handleSaveTags(id, tags);
               setTagEditorId(null);
             }}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Share-with-another-workspace dialog */}
+      <AnimatePresence>
+        {shareDialogId && activeId && (
+          <ShareDialog
+            file={(() => {
+              const f = files.find((x) => x.id === shareDialogId);
+              if (!f) return null;
+              return { id: f.id, name: f.name };
+            })()}
+            sourceWorkspaceId={activeId}
+            candidateWorkspaces={allWorkspaces
+              .filter((w) => w.id !== activeId)
+              .map((w) => ({ id: w.id, name: w.name }))}
+            onClose={() => setShareDialogId(null)}
           />
         )}
       </AnimatePresence>
@@ -2396,6 +2455,7 @@ function FileCard({
   onDownload,
   onAskRename,
   onAskDelete,
+  onAskShare,
   onAskTag,
   onTagClick,
   onRestore,
@@ -2414,6 +2474,7 @@ function FileCard({
   onDownload: () => void;
   onAskRename: () => void;
   onAskDelete: () => void;
+  onAskShare: () => void;
   onAskTag: () => void;
   onTagClick: (name: string) => void;
   onRestore: () => void;
@@ -2750,6 +2811,31 @@ function FileCard({
               >
                 <path d="M20.59 13.41L13.42 20.58a2 2 0 01-2.83 0L2 12V2h10l8.59 8.59a2 2 0 010 2.82z" />
                 <circle cx="7" cy="7" r="1.4" />
+              </svg>
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onAskShare();
+              }}
+              title="Share with another workspace"
+              aria-label="Share"
+              className="flex h-7 w-7 items-center justify-center rounded-md border border-app bg-app text-secondary hover:border-tool-accent/40 hover:text-tool-accent"
+            >
+              <svg
+                viewBox="0 0 24 24"
+                className="h-3.5 w-3.5"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <circle cx="6" cy="12" r="2.4" />
+                <circle cx="18" cy="6" r="2.4" />
+                <circle cx="18" cy="18" r="2.4" />
+                <path d="M8 11l8-4" />
+                <path d="M8 13l8 4" />
               </svg>
             </button>
             <button

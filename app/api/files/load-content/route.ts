@@ -46,6 +46,9 @@ export async function GET(req: NextRequest) {
   }
 
   // Membership / ownership check + self-heal — same shape as /upload.
+  // Cross-workspace shares: a caller who is NOT a member of the file's
+  // owning workspace is still allowed if there's a workspace_file_shares
+  // row pointing at one of the caller's workspaces.
   const { data: member } = await admin
     .from("workspace_members")
     .select("role")
@@ -69,10 +72,34 @@ export async function GET(req: NextRequest) {
         { onConflict: "workspace_id,user_id", ignoreDuplicates: false }
       );
     } else {
-      return NextResponse.json(
-        { error: "not a member of that workspace" },
-        { status: 403 }
-      );
+      // No direct membership — accept the call if a share row points
+      // at any workspace the caller belongs to.
+      const sharesRes = await admin
+        .from("workspace_file_shares")
+        .select("target_workspace_id")
+        .eq("file_id", row.id);
+      const targetIds = (sharesRes.data ?? [])
+        .map(
+          (r) => (r as { target_workspace_id: string }).target_workspace_id
+        )
+        .filter((v): v is string => Boolean(v));
+      let allowedViaShare = false;
+      if (targetIds.length > 0) {
+        const memberCheck = await admin
+          .from("workspace_members")
+          .select("workspace_id")
+          .eq("user_id", user.id)
+          .in("workspace_id", targetIds);
+        allowedViaShare = Boolean(
+          memberCheck.data && memberCheck.data.length > 0
+        );
+      }
+      if (!allowedViaShare) {
+        return NextResponse.json(
+          { error: "not a member of that workspace" },
+          { status: 403 }
+        );
+      }
     }
   }
 

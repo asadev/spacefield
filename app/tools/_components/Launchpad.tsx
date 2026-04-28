@@ -48,6 +48,11 @@ import LaunchpadActionMenu from "./launchpad/LaunchpadActionMenu";
 import LaunchpadGroupMenu from "./launchpad/LaunchpadGroupMenu";
 import LaunchpadAboutDialog from "./launchpad/LaunchpadAboutDialog";
 import LaunchpadFilesPane from "./launchpad/LaunchpadFilesPane";
+import LaunchpadSharedPane from "./launchpad/LaunchpadSharedPane";
+import {
+  SHARES_PREFIX,
+  type LaunchpadShareMeta,
+} from "./launchpad/launchpadShares";
 import LaunchpadHomeView from "./launchpad/LaunchpadHomeView";
 import {
   useLaunchpadFavorites,
@@ -124,7 +129,19 @@ interface FileContextMenu {
   y: number;
 }
 
-type ContextMenuState = ItemContextMenu | FileContextMenu | null;
+interface SharedFileContextMenu {
+  kind: "shared-file";
+  file: LaunchpadFile;
+  share: LaunchpadShareMeta;
+  x: number;
+  y: number;
+}
+
+type ContextMenuState =
+  | ItemContextMenu
+  | FileContextMenu
+  | SharedFileContextMenu
+  | null;
 
 function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(v, hi));
@@ -549,6 +566,26 @@ export default function Launchpad({
       setMenu({
         kind: "file",
         file,
+        x: rect.left,
+        y: rect.top + rect.height + 6,
+      });
+    },
+    [cacheFile]
+  );
+
+  const handleSharedContext = useCallback(
+    (
+      e: React.MouseEvent,
+      file: LaunchpadFile,
+      share: LaunchpadShareMeta
+    ) => {
+      e.preventDefault();
+      cacheFile(file);
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      setMenu({
+        kind: "shared-file",
+        file,
+        share,
         x: rect.left,
         y: rect.top + rect.height + 6,
       });
@@ -992,6 +1029,10 @@ export default function Launchpad({
                     setFocusedFileId(file.id);
                     handleFileContext(e, file);
                   }}
+                  onSharedContext={(e, file, share) => {
+                    setFocusedFileId(file.id);
+                    handleSharedContext(e, file, share);
+                  }}
                   onFileFocus={(file) => {
                     cacheFile(file);
                     setFocusedFileId(file.id);
@@ -1112,6 +1153,51 @@ export default function Launchpad({
               }}
             />
           )}
+          {menu && menu.kind === "shared-file" && (
+            <SharedFileContextMenu
+              file={menu.file}
+              x={menu.x}
+              y={menu.y}
+              canRevoke={workspaces.some(
+                (w) => w.id === menu.share.source_workspace_id
+              )}
+              onClose={() => setMenu(null)}
+              onOpen={() => handleOpenFile(menu.file)}
+              onReveal={() => {
+                onOpenTool("files-manager", "Files", { fileId: menu.file.id });
+                onClose();
+              }}
+              onCopyLink={async () => {
+                const link = `${window.location.origin}/tools?file=${encodeURIComponent(menu.file.id)}`;
+                try {
+                  if (
+                    navigator.clipboard &&
+                    typeof navigator.clipboard.writeText === "function"
+                  ) {
+                    await navigator.clipboard.writeText(link);
+                    showToast("Share link copied");
+                  } else {
+                    showToast("Clipboard unavailable");
+                  }
+                } catch {
+                  showToast("Couldn’t copy link");
+                }
+              }}
+              onRevoke={async () => {
+                try {
+                  await fetch(
+                    `/api/files/shares/${encodeURIComponent(menu.share.id)}`,
+                    { method: "DELETE" }
+                  );
+                } catch {
+                  /* swallow */
+                }
+                invalidate({ prefix: SHARES_PREFIX });
+                setRefreshTick((n) => n + 1);
+                showToast("Removed share");
+              }}
+            />
+          )}
 
           <LaunchpadAboutDialog
             open={aboutOpen}
@@ -1150,6 +1236,11 @@ interface MainPaneProps {
   refreshTick: number;
   onOpenFile: (file: LaunchpadFile) => void;
   onFileContext: (e: React.MouseEvent, file: LaunchpadFile) => void;
+  onSharedContext: (
+    e: React.MouseEvent,
+    file: LaunchpadFile,
+    share: LaunchpadShareMeta
+  ) => void;
   onFileFocus: (file: LaunchpadFile) => void;
 }
 
@@ -1170,6 +1261,7 @@ function MainPane({
   refreshTick,
   onOpenFile,
   onFileContext,
+  onSharedContext,
 }: MainPaneProps) {
   // First-launch helper: surface a prominent "Open the Store" CTA when
   // the user has no installed tools at all (matches the previous
@@ -1251,13 +1343,12 @@ function MainPane({
   }
   if (location.kind === "shared") {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-2 px-8 py-12 text-center">
-        <div className="text-sm font-medium text-app">Nothing shared yet</div>
-        <div className="max-w-sm text-xs text-muted">
-          Files shared with this workspace will appear here. Cross-workspace
-          sharing is coming soon.
-        </div>
-      </div>
+      <LaunchpadSharedPane
+        workspaceId={workspaceId}
+        refreshTick={refreshTick}
+        onOpenFile={onOpenFile}
+        onContextMenu={onSharedContext}
+      />
     );
   }
 
@@ -1667,6 +1758,79 @@ function FileContextMenu({
           onClose();
         }}
       />
+    </div>
+  );
+}
+
+interface SharedFileContextMenuProps {
+  file: LaunchpadFile;
+  x: number;
+  y: number;
+  canRevoke: boolean;
+  onClose: () => void;
+  onOpen: () => void;
+  onReveal: () => void;
+  onCopyLink: () => void | Promise<void>;
+  onRevoke: () => void | Promise<void>;
+}
+
+function SharedFileContextMenu({
+  file,
+  x,
+  y,
+  canRevoke,
+  onClose,
+  onOpen,
+  onReveal,
+  onCopyLink,
+  onRevoke,
+}: SharedFileContextMenuProps) {
+  return (
+    <div
+      role="menu"
+      onPointerDown={(e) => e.stopPropagation()}
+      className="pointer-events-auto fixed z-[90] w-60 rounded-lg border border-app/50 bg-app-elevated/85 p-1 shadow-xl backdrop-blur-2xl"
+      style={{ left: x, top: y }}
+    >
+      <div className="truncate px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-muted">
+        {file.name}
+      </div>
+      <MenuItem
+        label="Open"
+        onClick={() => {
+          onOpen();
+          onClose();
+        }}
+      />
+      {canRevoke && (
+        <MenuItem
+          label="Reveal in Files Manager"
+          onClick={() => {
+            onReveal();
+            onClose();
+          }}
+        />
+      )}
+      <MenuItem
+        label="Copy share link"
+        onClick={() => {
+          void onCopyLink();
+          onClose();
+        }}
+      />
+      {canRevoke && (
+        <>
+          <div aria-hidden="true" className="my-1 h-px bg-app/60" />
+          <MenuItem
+            label="Remove from this workspace"
+            destructive
+            onClick={() => {
+              void onRevoke();
+              onClose();
+            }}
+          />
+        </>
+      )}
     </div>
   );
 }
