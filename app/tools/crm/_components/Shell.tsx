@@ -21,6 +21,9 @@
  *
  * Mobile (width < 720px): sidebar collapses behind a hamburger drawer;
  * search collapses behind a search button.
+ *
+ * Phase 2C wires the remaining sections (activities, reports, settings)
+ * and adds a Settings sub-router (custom-fields / permissions / saved-views).
  * ───────────────────────────────────────────────────────────────────── */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -30,6 +33,14 @@ import type { NativeAppProps } from "../../_data/tools-list";
 import PipelineView from "./PipelineView";
 import DealsListView from "./DealsListView";
 import LeadsView from "./LeadsView";
+import ContactsView from "./ContactsView";
+import CompaniesView from "./CompaniesView";
+import InventoryView from "./InventoryView";
+import ActivitiesView from "./ActivitiesView";
+import ReportsView from "./ReportsView";
+import CustomFieldsAdmin from "./CustomFieldsAdmin";
+import PermissionsAdmin from "./PermissionsAdmin";
+import SavedViewsManager from "./SavedViewsManager";
 
 const NAV_ITEMS: CrmSectionMeta[] = [
   { key: "pipeline", label: "Pipeline", icon: "kanban" },
@@ -55,6 +66,8 @@ const QUICK_CREATE: { key: string; label: string; section: CrmSection }[] = [
 const SIDEBAR_WIDTH = 220;
 const SIDEBAR_COLLAPSED = 56;
 const MOBILE_BREAKPOINT = 720;
+
+type SettingsSub = "custom-fields" | "permissions" | "saved-views";
 
 // Tiny inline icon set — same SVG path family as TOOL_ICONS so the shell
 // renders without a separate icon registry import. Keeps Phase 1 surface
@@ -100,8 +113,6 @@ function Icon({ name, size = 16 }: { name: string; size?: number }) {
   );
 }
 
-// ── Empty-state placeholder shown for every section in Phase 1 ──────────
-
 function EmptyState({
   section,
   width,
@@ -109,48 +120,7 @@ function EmptyState({
   section: CrmSection;
   width: number;
 }) {
-  const COPY: Record<CrmSection, { title: string; body: string }> = {
-    pipeline: {
-      title: "Pipeline coming next",
-      body: "Kanban board with weighted forecast, drag-to-stage, conversion funnel.",
-    },
-    deals: {
-      title: "Deals coming next",
-      body: "Table + saved views for every deal in the workspace, filterable by stage, owner, amount, and custom fields.",
-    },
-    leads: {
-      title: "Leads coming next",
-      body: "Inbound pipeline view with one-click conversion into a contact + deal.",
-    },
-    contacts: {
-      title: "Contacts coming next",
-      body: "Searchable people directory tied to companies, with full activity timeline per contact.",
-    },
-    companies: {
-      title: "Companies coming next",
-      body: "Organization records with linked contacts, deals, and inventory.",
-    },
-    inventory: {
-      title: "Inventory coming next",
-      body: "Generic catalog of anything the business sells or tracks — products, listings, services.",
-    },
-    activities: {
-      title: "Activities coming next",
-      body: "Tasks, calls, meetings, emails, notes, and SMS — chronological log with attachments.",
-    },
-    reports: {
-      title: "Reports coming next",
-      body: "Forecast, win/loss, leaderboards, and pipeline velocity.",
-    },
-    settings: {
-      title: "Settings coming next",
-      body: "Pipelines and stages, custom fields per record type, tags, member permissions.",
-    },
-  };
-
-  const meta = COPY[section];
   const compact = width < MOBILE_BREAKPOINT;
-
   return (
     <div
       className="flex h-full w-full items-center justify-center bg-app p-6"
@@ -163,14 +133,86 @@ function EmptyState({
         <div className="font-mono text-[0.6rem] uppercase tracking-[0.2em] text-tool-accent">
           crm.{section}
         </div>
-        <h2 className="mt-2 text-lg font-semibold text-app">{meta.title}</h2>
-        <p className="mt-2 text-sm text-secondary">{meta.body}</p>
-        <div className="mt-4 rounded-md border border-dashed border-app bg-app p-3 text-xs text-muted">
-          Phase 2 will replace this surface. The Shell&apos;s nav state is the
-          contract — Phase 2 reads <code className="text-tool-accent">section</code>{" "}
-          from URL params (or this component&apos;s React state when run inside
-          a desktop window) and renders the corresponding view.
+        <h2 className="mt-2 text-lg font-semibold text-app">
+          Section not wired
+        </h2>
+        <p className="mt-2 text-sm text-secondary">
+          This section has no implementation yet.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function WorkspaceRequired({
+  section,
+  signedIn,
+}: {
+  section: CrmSection;
+  signedIn: boolean;
+}) {
+  return (
+    <div className="flex h-full w-full items-center justify-center bg-app p-6">
+      <div className="w-full max-w-md rounded-xl border border-dashed border-app bg-app-elevated p-6 text-center">
+        <div className="font-mono text-[0.6rem] uppercase tracking-[0.2em] text-tool-accent">
+          crm.{section}
         </div>
+        <h2 className="mt-2 text-lg font-semibold text-app">
+          {signedIn ? "Pick a team workspace" : "Sign in to use the CRM"}
+        </h2>
+        <p className="mt-2 text-sm text-secondary">
+          {signedIn
+            ? "Records live inside team workspaces. Switch to one from the workspace switcher to load this section."
+            : "Personal mode is local-only. Sign in and join or create a team workspace to use CRM records."}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function SettingsSurface({
+  sub,
+  onSub,
+  width,
+}: {
+  sub: SettingsSub;
+  onSub: (s: SettingsSub) => void;
+  width: number;
+}) {
+  const tabs: { key: SettingsSub; label: string }[] = [
+    { key: "custom-fields", label: "Custom fields" },
+    { key: "permissions", label: "Permissions" },
+    { key: "saved-views", label: "Saved views" },
+  ];
+  const compact = width < MOBILE_BREAKPOINT;
+  return (
+    <div className="flex h-full flex-col bg-app">
+      <nav
+        aria-label="Settings sub-sections"
+        className="flex shrink-0 gap-1 overflow-x-auto border-b border-app bg-app-elevated px-2 py-1.5"
+      >
+        {tabs.map((t) => {
+          const active = t.key === sub;
+          return (
+            <button
+              key={t.key}
+              type="button"
+              onClick={() => onSub(t.key)}
+              className={`rounded-md border px-2.5 py-1 font-mono text-[0.6rem] uppercase tracking-[0.16em] transition-colors ${
+                active
+                  ? "border-tool-accent bg-tool-accent-soft text-tool-accent"
+                  : "border-transparent text-secondary hover:bg-surface hover:text-app"
+              }`}
+            >
+              {compact ? t.label.split(" ")[0] : t.label}
+            </button>
+          );
+        })}
+      </nav>
+      <div className="min-h-0 flex-1">
+        {sub === "custom-fields" && <CustomFieldsAdmin />}
+        {sub === "permissions" && <PermissionsAdmin />}
+        {sub === "saved-views" && <SavedViewsManager />}
       </div>
     </div>
   );
@@ -188,6 +230,13 @@ export default function Shell({ width, initialParams }: NativeAppProps) {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [createOpen, setCreateOpen] = useState(false);
   const [search, setSearch] = useState("");
+  const [settingsSub, setSettingsSub] = useState<SettingsSub>(() => {
+    const sub = initialParams?.settings;
+    if (sub === "custom-fields" || sub === "permissions" || sub === "saved-views") {
+      return sub;
+    }
+    return "custom-fields";
+  });
   const createRef = useRef<HTMLDivElement | null>(null);
 
   const { current, signedIn } = useWorkspace();
@@ -268,7 +317,7 @@ export default function Shell({ width, initialParams }: NativeAppProps) {
           })}
         </ul>
         <div className="border-t border-app px-3 py-2 font-mono text-[0.55rem] uppercase tracking-[0.18em] text-faint">
-          {!showCollapsedSidebar && <span>Phase 1 · foundation</span>}
+          {!showCollapsedSidebar && <span>Phase 2C · meta layer</span>}
         </div>
       </nav>
     ),
@@ -392,28 +441,85 @@ export default function Shell({ width, initialParams }: NativeAppProps) {
           className="relative flex-1 overflow-hidden"
           style={{ minWidth: 0 }}
         >
-          {section === "pipeline" ? (
-            <PipelineView
-              width={width}
-              search={search}
-              onSearchChange={setSearch}
-            />
-          ) : section === "deals" ? (
-            <DealsListView
-              width={width}
-              search={search}
-              onSearchChange={setSearch}
-              goToPipeline={() => setSection("pipeline")}
-            />
-          ) : section === "leads" ? (
-            <LeadsView
-              width={width}
-              search={search}
-              onSearchChange={setSearch}
-            />
-          ) : (
-            <EmptyState section={section} width={width} />
-          )}
+          {(() => {
+            const workspaceId = current.kind === "team" ? current.id : "";
+            const needsWorkspace =
+              section === "contacts" ||
+              section === "companies" ||
+              section === "inventory";
+            if (needsWorkspace && (!signedIn || !workspaceId)) {
+              return <WorkspaceRequired section={section} signedIn={signedIn} />;
+            }
+            if (section === "pipeline") {
+              return (
+                <PipelineView
+                  width={width}
+                  search={search}
+                  onSearchChange={setSearch}
+                />
+              );
+            }
+            if (section === "deals") {
+              return (
+                <DealsListView
+                  width={width}
+                  search={search}
+                  onSearchChange={setSearch}
+                  goToPipeline={() => setSection("pipeline")}
+                />
+              );
+            }
+            if (section === "leads") {
+              return (
+                <LeadsView
+                  width={width}
+                  search={search}
+                  onSearchChange={setSearch}
+                />
+              );
+            }
+            if (section === "contacts") {
+              return (
+                <ContactsView
+                  workspaceId={workspaceId}
+                  workspaceLabel={workspaceLabel}
+                  width={width}
+                />
+              );
+            }
+            if (section === "companies") {
+              return (
+                <CompaniesView
+                  workspaceId={workspaceId}
+                  workspaceLabel={workspaceLabel}
+                  width={width}
+                />
+              );
+            }
+            if (section === "inventory") {
+              return (
+                <InventoryView
+                  workspaceId={workspaceId}
+                  workspaceLabel={workspaceLabel}
+                  width={width}
+                />
+              );
+            }
+            if (section === "activities") return <ActivitiesView />;
+            if (section === "reports") {
+              return <ReportsView onJump={(s) => setSection(s)} />;
+            }
+            if (section === "settings") {
+              return (
+                <SettingsSurface
+                  sub={settingsSub}
+                  onSub={setSettingsSub}
+                  width={width}
+                />
+              );
+            }
+            return <EmptyState section={section} width={width} />;
+          })()}
         </main>
       </div>
     </div>
