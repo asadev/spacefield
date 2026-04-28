@@ -1,22 +1,50 @@
 "use client";
 
+/* Launchpad — Finder-style movable window for browsing & launching apps.
+ *
+ * Replaces the previous fullscreen overlay. The window:
+ *   - Renders its own traffic-light title bar + Finder-style toolbar.
+ *   - Is movable (drag the title bar) and resizable (8-way edge handles).
+ *   - Persists its bounds per-workspace at `ws:<id>:launchpad-bounds-v1`.
+ *   - Persists the chosen view per-workspace at `ws:<id>:launchpad-view-v1`.
+ *   - Opens at 1100×640, min 720×420, max full screen.
+ *   - Stays z-stacked beneath modals (z-50) but above regular windows so
+ *     it acts like a system finder rather than a tool window.
+ *
+ * The component still receives an `open` prop so existing callers
+ * (Desktop.tsx) keep working without changes to the window-manager.
+ */
+
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useMemo, useState } from "react";
 import {
-  TOOL_CATEGORIES,
-  TOOL_ICONS,
-  TOOLS,
-  type ToolCategoryKey,
-  type ToolItem,
-} from "../_data/tools-list";
-import type { IconStyleId } from "./icon-styles";
-import { useIconStyle } from "./useIconStyle";
-import AppIcon, { hasAppIcon } from "./AppIcon";
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { TOOL_CATEGORIES, TOOLS, type ToolItem } from "../_data/tools-list";
 import {
   setAppDragPayload,
   readAppDragPayload,
   type AppDragPayload,
 } from "./appDrag";
+import { useRecents } from "./useRecents";
+import { useWorkspaces, useWorkspaceKey } from "./useWorkspaces";
+
+import LaunchpadSidebar from "./launchpad/LaunchpadSidebar";
+import LaunchpadToolbar from "./launchpad/LaunchpadToolbar";
+import LaunchpadStatusBar from "./launchpad/LaunchpadStatusBar";
+import LaunchpadIconView from "./launchpad/LaunchpadIconView";
+import LaunchpadListView from "./launchpad/LaunchpadListView";
+import LaunchpadColumnView from "./launchpad/LaunchpadColumnView";
+import LaunchpadGalleryView from "./launchpad/LaunchpadGalleryView";
+import {
+  useLaunchpadView,
+  type LaunchpadLocation,
+  locationKey,
+  locationTitle,
+} from "./launchpad/useLaunchpadView";
 
 interface Props {
   open: boolean;
@@ -24,38 +52,48 @@ interface Props {
   onOpenTool: (slug: string, title: string) => void;
   onUninstall?: (slug: string) => void;
   onStore?: () => void;
-  items?: ToolItem[]; // if provided, restrict to these tools (installed set)
-  /* Called when an app is dropped onto Launchpad from another zone — the
-   * orchestrator removes it from Dock or Home (the app stays installed,
-   * so it reappears in Launchpad's grid automatically). */
+  /** Restrict to these tools (the installed set). When omitted, all
+   * tools are visible (used by App Store / first-launch). */
+  items?: ToolItem[];
+  /** Cross-zone drop hook (drag from Dock or Home onto Launchpad). */
   onAppDroppedOnLaunchpad?: (payload: AppDragPayload) => void;
+  /** Optional: open the workspace switcher (used by the toolbar's
+   * "Connect" button). */
+  onConnect?: () => void;
 }
 
-/* Launchpad tiles — the default ("hairline") look is one neutral glass tone;
- * the category rainbow read as busy. Category colour is only shown on accent
- * chips inside the Store. The other styles (filled / squircle / rounded-square)
- * mirror the dock variants so the desktop has one cohesive look. */
-const TILE_BASE =
-  "flex h-16 w-16 items-center justify-center transition-all duration-200 group-hover:-translate-y-0.5 group-hover:shadow-2xl";
+const TOPBAR = 32;
+const MIN_W = 720;
+const MIN_H = 420;
+const DEFAULT_W = 1100;
+const DEFAULT_H = 640;
+const BOUNDS_SUFFIX = "launchpad-bounds-v1";
 
-function tileClassFor(style: IconStyleId): string {
-  switch (style) {
-    case "filled":
-      return `${TILE_BASE} rounded-2xl bg-tool-accent text-white shadow-md group-hover:opacity-90`;
-    case "squircle":
-      return `${TILE_BASE} rounded-[28%] bg-tool-accent-soft text-tool-accent shadow-md ring-1 ring-inset ring-tool-accent/25 group-hover:ring-tool-accent/50`;
-    case "rounded-square":
-      return `${TILE_BASE} rounded-lg border border-white/25 bg-white/15 text-white backdrop-blur-xl group-hover:bg-white/25`;
-    case "hairline":
-    default:
-      return `${TILE_BASE} rounded-2xl border border-white/15 bg-white/10 text-white backdrop-blur-xl group-hover:bg-white/25 group-hover:border-white/30`;
+interface Bounds {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+function clamp(v: number, lo: number, hi: number) {
+  return Math.max(lo, Math.min(v, hi));
+}
+
+function defaultBounds(): Bounds {
+  if (typeof window === "undefined") {
+    return { x: 80, y: 80, w: DEFAULT_W, h: DEFAULT_H };
   }
-}
-
-function tileGlyphTone(style: IconStyleId): string {
-  if (style === "filled") return "text-white";
-  if (style === "squircle") return "text-tool-accent";
-  return "text-white";
+  const vw = window.innerWidth;
+  const vh = window.innerHeight;
+  const w = Math.min(DEFAULT_W, vw - 32);
+  const h = Math.min(DEFAULT_H, vh - TOPBAR - 32);
+  return {
+    x: Math.max(16, Math.round((vw - w) / 2)),
+    y: Math.max(TOPBAR + 16, Math.round((vh - h) / 2)),
+    w,
+    h,
+  };
 }
 
 export default function Launchpad({
@@ -66,44 +104,93 @@ export default function Launchpad({
   onStore,
   items,
   onAppDroppedOnLaunchpad,
+  onConnect,
 }: Props) {
-  const [q, setQ] = useState("");
-  const [filter, setFilter] = useState<ToolCategoryKey | "all">("all");
-  const [menu, setMenu] = useState<{ slug: string; title: string; x: number; y: number } | null>(null);
-  const { style: iconStyle } = useIconStyle();
-  const tileCls = tileClassFor(iconStyle);
-  const glyphTone = tileGlyphTone(iconStyle);
+  const BOUNDS_KEY = useWorkspaceKey(BOUNDS_SUFFIX);
+  const { workspaces, activeId, switchWorkspace } = useWorkspaces();
+  const { recents } = useRecents();
+  const launchpadView = useLaunchpadView();
 
+  const [bounds, setBounds] = useState<Bounds>(defaultBounds);
+  const [maximized, setMaximized] = useState(false);
+  const [prevBounds, setPrevBounds] = useState<Bounds | null>(null);
+  const [q, setQ] = useState("");
+  const [focusedSlug, setFocusedSlug] = useState<string | null>(null);
+  const [menu, setMenu] = useState<{
+    slug: string;
+    title: string;
+    x: number;
+    y: number;
+  } | null>(null);
+
+  // Hydrate persisted bounds.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    try {
+      const raw = localStorage.getItem(BOUNDS_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as Partial<Bounds>;
+        if (
+          typeof parsed.x === "number" &&
+          typeof parsed.y === "number" &&
+          typeof parsed.w === "number" &&
+          typeof parsed.h === "number"
+        ) {
+          setBounds({
+            x: parsed.x,
+            y: parsed.y,
+            w: Math.max(MIN_W, parsed.w),
+            h: Math.max(MIN_H, parsed.h),
+          });
+          return;
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+    setBounds(defaultBounds());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Persist bounds (debounced via useEffect deps — small writes are fine).
+  useEffect(() => {
+    if (maximized) return; // don't overwrite saved free bounds
+    try {
+      localStorage.setItem(BOUNDS_KEY, JSON.stringify(bounds));
+    } catch {
+      /* storage quota — ignore */
+    }
+  }, [bounds, maximized, BOUNDS_KEY]);
+
+  // Reset transient UI when the window closes.
   useEffect(() => {
     if (!open) {
       setQ("");
-      setFilter("all");
+      setMenu(null);
     }
   }, [open]);
 
+  // ⌘W closes; Escape closes; ⌘Shift+A toggles (handled by the parent — we
+  // only listen for window-local close keys here).
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key === "Escape") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "w") {
+        e.preventDefault();
+        onClose();
+        return;
+      }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  const tools = useMemo(() => {
-    const source = items ?? TOOLS;
-    let list = filter === "all" ? source : source.filter((t) => t.category === filter);
-    const query = q.trim().toLowerCase();
-    if (query) {
-      list = list.filter(
-        (t) =>
-          t.title.toLowerCase().includes(query) ||
-          t.description.toLowerCase().includes(query)
-      );
-    }
-    return list;
-  }, [q, filter, items]);
-
+  // Dismiss the right-click context menu on any pointer-down outside it.
   useEffect(() => {
     if (!menu) return;
     const onDown = () => setMenu(null);
@@ -111,215 +198,453 @@ export default function Launchpad({
     return () => window.removeEventListener("pointerdown", onDown);
   }, [menu]);
 
+  // Resolve the items shown in the main pane based on the current location.
+  const sourceTools = useMemo<ToolItem[]>(() => {
+    return items ?? TOOLS;
+  }, [items]);
+
+  const locationItems = useMemo<ToolItem[]>(() => {
+    const loc = launchpadView.location;
+    switch (loc.kind) {
+      case "applications":
+        return sourceTools;
+      case "recents": {
+        const order: string[] = [];
+        for (const r of recents) {
+          if (r.kind === "tool") order.push(r.slug);
+          if (order.length >= 8) break;
+        }
+        const bySlug = new Map(sourceTools.map((t) => [t.slug, t]));
+        return order
+          .map((slug) => bySlug.get(slug))
+          .filter((t): t is ToolItem => Boolean(t));
+      }
+      case "shared":
+        // Communication-style apps (chat). Empty if nothing matches —
+        // sidebar tooltip already says "Coming soon".
+        return [];
+      case "workspace":
+        // Workspace rows are jump targets, not item lists. The click
+        // handler swaps the active workspace and resets to Applications.
+        return sourceTools;
+      case "category":
+        return sourceTools.filter((t) => t.category === loc.id);
+      case "tag":
+      case "downloads":
+      case "documents":
+      case "desktop":
+      default:
+        return [];
+    }
+  }, [launchpadView.location, sourceTools, recents]);
+
+  // Filter by search query.
+  const visibleTools = useMemo<ToolItem[]>(() => {
+    const query = q.trim().toLowerCase();
+    if (!query) return locationItems;
+    return locationItems.filter(
+      (t) =>
+        t.title.toLowerCase().includes(query) ||
+        t.description.toLowerCase().includes(query) ||
+        t.category.toLowerCase().includes(query)
+    );
+  }, [locationItems, q]);
+
+  // Keep focused item valid when the visible set shrinks.
+  useEffect(() => {
+    if (!focusedSlug) return;
+    if (!visibleTools.find((t) => t.slug === focusedSlug)) {
+      setFocusedSlug(visibleTools[0]?.slug ?? null);
+    }
+  }, [visibleTools, focusedSlug]);
+
+  // Title shown in title bar + toolbar = current location's friendly name.
+  const currentTitle = useMemo<string>(() => {
+    const loc = launchpadView.location;
+    if (loc.kind === "workspace") {
+      return workspaces.find((w) => w.id === loc.id)?.name ?? "Workspace";
+    }
+    if (loc.kind === "category") {
+      return TOOL_CATEGORIES.find((c) => c.key === loc.id)?.label ?? loc.id;
+    }
+    return locationTitle(loc);
+  }, [launchpadView.location, workspaces]);
+
+  const handleSelectLocation = useCallback(
+    (loc: LaunchpadLocation) => {
+      // Workspace switch: tell the workspace context, then close — the
+      // outer Desktop remounts and reopens the window with fresh state.
+      if (loc.kind === "workspace") {
+        if (loc.id !== activeId) {
+          switchWorkspace(loc.id);
+          onClose();
+        } else {
+          launchpadView.setLocation({ kind: "applications" });
+        }
+        return;
+      }
+      // Desktop: minimize the window like macOS "Show Desktop".
+      if (loc.kind === "desktop") {
+        onClose();
+        return;
+      }
+      // Shared: pretend we open Chat. We don't have a comm slug list to
+      // filter against, so for v1 we just show an empty list (tooltip in
+      // the sidebar already says "Coming soon").
+      launchpadView.setLocation(loc);
+    },
+    [activeId, switchWorkspace, onClose, launchpadView]
+  );
+
+  const handleOpen = useCallback(
+    (tool: ToolItem) => {
+      onOpenTool(tool.slug, tool.title);
+      onClose();
+    },
+    [onOpenTool, onClose]
+  );
+
+  const handleContextMenu = useCallback(
+    (e: React.MouseEvent, tool: ToolItem) => {
+      if (!onUninstall) return;
+      e.preventDefault();
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      setMenu({
+        slug: tool.slug,
+        title: tool.title,
+        x: rect.left,
+        y: rect.top + rect.height + 6,
+      });
+    },
+    [onUninstall]
+  );
+
+  /* Drag-to-move on the title bar */
+  const dragRef = useRef<{ ox: number; oy: number } | null>(null);
+  const onTitleDrag = useCallback(
+    (e: React.PointerEvent) => {
+      if ((e.target as HTMLElement).closest("[data-no-drag]")) return;
+      if (maximized) return;
+      const startX = e.clientX;
+      const startY = e.clientY;
+      const startBx = bounds.x;
+      const startBy = bounds.y;
+      dragRef.current = { ox: startX - startBx, oy: startY - startBy };
+      (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+
+      const move = (ev: PointerEvent) => {
+        const offset = dragRef.current;
+        if (!offset) return;
+        setBounds((b) => ({
+          ...b,
+          x: Math.max(0, ev.clientX - offset.ox),
+          y: Math.max(TOPBAR, ev.clientY - offset.oy),
+        }));
+      };
+      const up = () => {
+        window.removeEventListener("pointermove", move);
+        window.removeEventListener("pointerup", up);
+        dragRef.current = null;
+      };
+      window.addEventListener("pointermove", move);
+      window.addEventListener("pointerup", up);
+    },
+    [bounds.x, bounds.y, maximized]
+  );
+
+  /* 8-way resize, mirroring Window.tsx behavior. */
+  const startResize = useCallback(
+    (edge: "n" | "s" | "e" | "w" | "ne" | "nw" | "se" | "sw") =>
+      (e: React.PointerEvent) => {
+        e.stopPropagation();
+        if (maximized) return;
+        const startMx = e.clientX;
+        const startMy = e.clientY;
+        const startB = { ...bounds };
+
+        const move = (ev: PointerEvent) => {
+          const dx = ev.clientX - startMx;
+          const dy = ev.clientY - startMy;
+          let nx = startB.x;
+          let ny = startB.y;
+          let nw = startB.w;
+          let nh = startB.h;
+          if (edge.includes("e")) nw = Math.max(MIN_W, startB.w + dx);
+          if (edge.includes("w")) {
+            const tryW = startB.w - dx;
+            if (tryW >= MIN_W) {
+              nw = tryW;
+              nx = startB.x + dx;
+            } else {
+              nw = MIN_W;
+              nx = startB.x + (startB.w - MIN_W);
+            }
+          }
+          if (edge.includes("s")) nh = Math.max(MIN_H, startB.h + dy);
+          if (edge.includes("n")) {
+            const tryH = startB.h - dy;
+            if (tryH >= MIN_H) {
+              nh = tryH;
+              ny = Math.max(TOPBAR, startB.y + dy);
+            } else {
+              nh = MIN_H;
+              ny = Math.max(TOPBAR, startB.y + (startB.h - MIN_H));
+            }
+          }
+          setBounds({ x: nx, y: ny, w: nw, h: nh });
+        };
+        const up = () => {
+          window.removeEventListener("pointermove", move);
+          window.removeEventListener("pointerup", up);
+        };
+        window.addEventListener("pointermove", move);
+        window.addEventListener("pointerup", up);
+      },
+    [bounds, maximized]
+  );
+
+  const toggleMaximize = useCallback(() => {
+    if (typeof window === "undefined") return;
+    if (maximized && prevBounds) {
+      setBounds(prevBounds);
+      setPrevBounds(null);
+      setMaximized(false);
+      return;
+    }
+    setPrevBounds(bounds);
+    setBounds({ x: 0, y: 0, w: window.innerWidth, h: window.innerHeight });
+    setMaximized(true);
+  }, [maximized, prevBounds, bounds]);
+
+  // Arrow-key navigation between items in the main pane (icon / list /
+  // column / gallery views all share the same focused-slug state).
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (
+        target instanceof HTMLElement &&
+        (target.tagName === "INPUT" || target.tagName === "TEXTAREA")
+      ) {
+        return;
+      }
+      if (visibleTools.length === 0) return;
+      const idx = focusedSlug
+        ? visibleTools.findIndex((t) => t.slug === focusedSlug)
+        : -1;
+      const cols = launchpadView.view === "icon" ? 6 : 1;
+      if (e.key === "ArrowRight") {
+        e.preventDefault();
+        const next = clamp(Math.max(0, idx) + 1, 0, visibleTools.length - 1);
+        setFocusedSlug(visibleTools[next].slug);
+      } else if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        const next = clamp(Math.max(0, idx) - 1, 0, visibleTools.length - 1);
+        setFocusedSlug(visibleTools[next].slug);
+      } else if (e.key === "ArrowDown") {
+        e.preventDefault();
+        const next = clamp(Math.max(0, idx) + cols, 0, visibleTools.length - 1);
+        setFocusedSlug(visibleTools[next].slug);
+      } else if (e.key === "ArrowUp") {
+        e.preventDefault();
+        const next = clamp(Math.max(0, idx) - cols, 0, visibleTools.length - 1);
+        setFocusedSlug(visibleTools[next].slug);
+      } else if (e.key === "Enter" && focusedSlug) {
+        e.preventDefault();
+        const tool = visibleTools.find((t) => t.slug === focusedSlug);
+        if (tool) handleOpen(tool);
+      }
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open, visibleTools, focusedSlug, launchpadView.view, handleOpen]);
+
   return (
     <AnimatePresence>
       {open && (
         <motion.div
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: 0.15 }}
-          className="fixed inset-0 z-[80]"
           role="dialog"
-          aria-label="All tools"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) onClose();
+          aria-label="Applications"
+          initial={{ opacity: 0, scale: 0.97 }}
+          animate={{ opacity: 1, scale: 1 }}
+          exit={{ opacity: 0, scale: 0.97 }}
+          transition={{ type: "spring", stiffness: 320, damping: 28 }}
+          style={{
+            position: "fixed",
+            left: bounds.x,
+            top: bounds.y,
+            width: bounds.w,
+            height: bounds.h,
+            zIndex: 75,
+            borderRadius: maximized ? 0 : undefined,
+          }}
+          className={
+            "overflow-hidden border border-app bg-app-elevated shadow-2xl " +
+            (maximized ? "" : "rounded-xl")
+          }
+          onPointerDown={(e) => {
+            // Stop bubbling so the desktop's drop handlers don't grab events.
+            e.stopPropagation();
           }}
         >
-          <motion.div
-            initial={{ opacity: 0, scale: 0.96 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.96 }}
-            transition={{ type: "spring", stiffness: 320, damping: 28 }}
-            className="absolute inset-0 backdrop-blur-2xl"
-            style={{ background: "rgba(15, 23, 42, 0.35)" }}
+          {/* Title bar */}
+          <div
+            onPointerDown={onTitleDrag}
+            onDoubleClick={toggleMaximize}
+            className="flex h-9 select-none items-center gap-2 border-b border-app bg-app-elevated px-3"
+            style={{ cursor: maximized ? "default" : "grab" }}
+          >
+            <div className="flex items-center gap-1.5" data-no-drag>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Close"
+                className="group h-3 w-3 rounded-full bg-[#ff5f57] transition-colors"
+              >
+                <svg viewBox="0 0 12 12" className="h-3 w-3 opacity-0 group-hover:opacity-80 text-[#4d0000]" aria-hidden="true">
+                  <path d="M3.5 3.5l5 5M8.5 3.5l-5 5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={onClose}
+                aria-label="Minimize"
+                className="group h-3 w-3 rounded-full bg-[#febc2e] transition-colors"
+              >
+                <svg viewBox="0 0 12 12" className="h-3 w-3 opacity-0 group-hover:opacity-80 text-[#604000]" aria-hidden="true">
+                  <path d="M3 6h6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                </svg>
+              </button>
+              <button
+                type="button"
+                onClick={toggleMaximize}
+                aria-label={maximized ? "Restore" : "Maximize"}
+                className="group h-3 w-3 rounded-full bg-[#28c840] transition-colors"
+              >
+                <svg viewBox="0 0 12 12" className="h-3 w-3 opacity-0 group-hover:opacity-80 text-[#013000]" aria-hidden="true">
+                  <path d="M3.5 6l2.5-2.5L8.5 6M3.5 6l2.5 2.5L8.5 6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                </svg>
+              </button>
+            </div>
+            <div className="flex-1 truncate text-center text-xs font-medium text-app">
+              {currentTitle}
+            </div>
+            <div className="flex items-center gap-1" data-no-drag>
+              {onStore && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onStore();
+                  }}
+                  className="rounded px-2 py-0.5 text-[11px] text-secondary hover:bg-surface hover:text-app transition-colors"
+                  title="Open the Store"
+                >
+                  Store
+                </button>
+              )}
+            </div>
+          </div>
+
+          {/* Toolbar */}
+          <LaunchpadToolbar
+            title={currentTitle}
+            query={q}
+            onQuery={setQ}
+            view={launchpadView.view}
+            onView={launchpadView.setView}
+            canBack={launchpadView.canBack}
+            canForward={launchpadView.canForward}
+            onBack={launchpadView.back}
+            onForward={launchpadView.forward}
+            previewOpen={launchpadView.previewOpen}
+            onTogglePreview={launchpadView.togglePreview}
+            onConnect={() => {
+              if (onConnect) onConnect();
+            }}
           />
 
-          <motion.div
-            initial={{ opacity: 0, scale: 0.92 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.92 }}
-            transition={{ type: "spring", stiffness: 320, damping: 26 }}
-            className="relative mx-auto flex h-full max-w-5xl flex-col px-6 pt-14 pb-20 sm:px-10"
+          {/* Body — sidebar + main pane (+ optional preview). */}
+          <div
+            className="flex bg-app"
+            style={{ height: bounds.h - 36 - 48 - 24 }}
+            onDragOver={(e) => {
+              if (!onAppDroppedOnLaunchpad) return;
+              if (e.dataTransfer.types.includes("application/x-spacefield-app")) {
+                e.preventDefault();
+                e.dataTransfer.dropEffect = "move";
+              }
+            }}
+            onDrop={(e) => {
+              if (!onAppDroppedOnLaunchpad) return;
+              const payload = readAppDragPayload(e.dataTransfer);
+              if (!payload) return;
+              e.preventDefault();
+              onAppDroppedOnLaunchpad(payload);
+            }}
           >
-            {/* Close — explicit exit so users don't feel trapped */}
-            <button
-              type="button"
-              onClick={onClose}
-              aria-label="Close all tools"
-              className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-xl transition-colors hover:bg-white/20 sm:right-6 sm:top-6"
-            >
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M18 6L6 18M6 6l12 12" />
-              </svg>
-            </button>
+            <LaunchpadSidebar
+              current={launchpadView.location}
+              onSelect={handleSelectLocation}
+              workspaces={workspaces}
+              activeWorkspaceId={activeId}
+            />
 
-            {/* Search */}
-            <div className="mx-auto w-full max-w-xl">
-              <div className="relative">
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                  className="pointer-events-none absolute left-5 top-1/2 -translate-y-1/2 text-white/50"
-                >
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="M21 21l-4.3-4.3" />
-                </svg>
-                <input
-                  type="text"
-                  autoFocus
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                  placeholder="Search all tools"
-                  className="w-full rounded-2xl border border-white/20 bg-white/15 py-3 pl-12 pr-5 text-center text-base text-white placeholder:text-white/60 backdrop-blur-xl focus:outline-none focus:border-white/40"
+            <div className="flex flex-1 overflow-hidden">
+              <div className="flex-1 overflow-auto">
+                <MainPane
+                  view={launchpadView.view}
+                  tools={visibleTools}
+                  focusedSlug={focusedSlug}
+                  onFocus={setFocusedSlug}
+                  onOpen={handleOpen}
+                  onContextMenu={handleContextMenu}
+                  itemsHint={items}
+                  locationKey={locationKey(launchpadView.location)}
+                  onOpenStore={onStore}
+                  onClose={onClose}
                 />
               </div>
-            </div>
 
-            {/* Filters */}
-            <div className="mt-4 flex flex-wrap justify-center gap-1.5">
-              <FilterPill active={filter === "all"} onClick={() => setFilter("all")}>
-                All
-              </FilterPill>
-              {TOOL_CATEGORIES.map((c) => (
-                <FilterPill
-                  key={c.key}
-                  active={filter === c.key}
-                  onClick={() => setFilter(c.key)}
-                >
-                  {c.short}
-                </FilterPill>
-              ))}
+              {launchpadView.previewOpen && (
+                <PreviewPane
+                  tool={visibleTools.find((t) => t.slug === focusedSlug) ?? null}
+                  onOpen={handleOpen}
+                />
+              )}
             </div>
+          </div>
 
-            {/* Grid — also a drop target so dragging an app from Dock or
-             * Home into Launchpad "removes" the shortcut (the install state
-             * is unchanged, so the app simply reappears here in the grid). */}
-            <div
-              className="mt-10 flex-1 overflow-y-auto px-2"
-              onDragOver={(e) => {
-                if (!onAppDroppedOnLaunchpad) return;
-                if (e.dataTransfer.types.includes("application/x-spacefield-app")) {
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = "move";
-                }
-              }}
-              onDrop={(e) => {
-                if (!onAppDroppedOnLaunchpad) return;
-                const payload = readAppDragPayload(e.dataTransfer);
-                if (!payload) return;
-                e.preventDefault();
-                onAppDroppedOnLaunchpad(payload);
-              }}
-            >
-              <div className="grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-                {tools.map((t, i) => (
-                  <div
-                    key={t.slug}
-                    draggable
-                    onDragStart={(e) => {
-                      setAppDragPayload(e.dataTransfer, {
-                        type: "spacefield-app",
-                        slug: t.slug,
-                        fromZone: "launchpad",
-                      });
-                    }}
-                  >
-                  <motion.button
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.25, delay: Math.min(i * 0.015, 0.4) }}
-                    onClick={() => {
-                      onOpenTool(t.slug, t.title);
-                      onClose();
-                    }}
-                    onContextMenu={(e) => {
-                      if (!onUninstall) return;
-                      e.preventDefault();
-                      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                      setMenu({
-                        slug: t.slug,
-                        title: t.title,
-                        x: rect.left,
-                        y: rect.top + rect.height + 6,
-                      });
-                    }}
-                    className="group flex w-full flex-col items-center gap-2"
-                  >
-                    {hasAppIcon(t.slug) ? (
-                      <AppIcon
-                        slug={t.slug}
-                        size={64}
-                        cornerPct={24}
-                        mono
-                        label={t.title}
-                        className="transition-transform duration-200 group-hover:-translate-y-0.5"
-                      />
-                    ) : (
-                      <span className={tileCls}>
-                        <svg
-                          width="28"
-                          height="28"
-                          viewBox="0 0 24 24"
-                          fill="currentColor"
-                          aria-hidden="true"
-                          className={glyphTone}
-                        >
-                          <path d={TOOL_ICONS[t.icon] ?? TOOL_ICONS.home} />
-                        </svg>
-                      </span>
-                    )}
-                    <span className="line-clamp-2 max-w-[8rem] text-center text-[0.78rem] font-medium leading-tight tracking-tight text-white/95">
-                      {t.title}
-                    </span>
-                  </motion.button>
-                  </div>
-                ))}
-                {tools.length === 0 && (
-                  <div className="col-span-full py-12 text-center text-sm text-white/70">
-                    {items && items.length === 0
-                      ? "No tools installed yet. Open the Store to add some."
-                      : "No tools match."}
-                    {onStore && items && items.length === 0 && (
-                      <div className="mt-4">
-                        <button
-                          type="button"
-                          onClick={() => {
-                            onClose();
-                            onStore();
-                          }}
-                          className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm text-white backdrop-blur-xl hover:bg-white/20 transition-colors"
-                        >
-                          Open the Tool Store
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-            {/* Esc hint — bottom of the overlay, out of the way of the search */}
-            <div className="pointer-events-none mt-4 text-center text-[11px] text-white/50">
-              Press <kbd className="rounded border border-white/20 bg-white/10 px-1.5 py-0.5 font-sans">Esc</kbd> to return to the desktop
-            </div>
-          </motion.div>
+          {/* Status bar */}
+          <LaunchpadStatusBar
+            itemCount={visibleTools.length}
+            workspaceId={activeId}
+          />
 
-          {/* Context menu — offers uninstall */}
+          {/* Resize handles — only when not maximized. */}
+          {!maximized && (
+            <>
+              <div onPointerDown={startResize("n")} aria-label="Resize top edge" className="absolute left-3 right-3 top-0 h-1.5 cursor-ns-resize" />
+              <div onPointerDown={startResize("s")} aria-label="Resize bottom edge" className="absolute left-3 right-3 bottom-0 h-1.5 cursor-ns-resize" />
+              <div onPointerDown={startResize("w")} aria-label="Resize left edge" className="absolute top-3 bottom-3 left-0 w-1.5 cursor-ew-resize" />
+              <div onPointerDown={startResize("e")} aria-label="Resize right edge" className="absolute top-3 bottom-3 right-0 w-1.5 cursor-ew-resize" />
+              <div onPointerDown={startResize("nw")} aria-label="Resize top-left corner" className="absolute top-0 left-0 h-3 w-3 cursor-nw-resize" />
+              <div onPointerDown={startResize("ne")} aria-label="Resize top-right corner" className="absolute top-0 right-0 h-3 w-3 cursor-ne-resize" />
+              <div onPointerDown={startResize("sw")} aria-label="Resize bottom-left corner" className="absolute bottom-0 left-0 h-3 w-3 cursor-sw-resize" />
+              <div onPointerDown={startResize("se")} aria-label="Resize bottom-right corner" className="absolute bottom-0 right-0 h-4 w-4 cursor-se-resize" />
+            </>
+          )}
+
+          {/* Right-click context menu — preserved from the original
+           * Launchpad. Offers Uninstall for the right-clicked tool. */}
           {menu && onUninstall && (
             <div
               role="menu"
               onPointerDown={(e) => e.stopPropagation()}
-              className="pointer-events-auto absolute z-[60] rounded-lg border border-white/20 bg-white/10 p-1 backdrop-blur-xl"
+              className="pointer-events-auto fixed z-[90] rounded-lg border border-app bg-app-elevated p-1 shadow-xl"
               style={{ left: menu.x, top: menu.y }}
             >
-              <div className="px-2 py-1 text-[0.6rem] uppercase tracking-[0.14em] text-white/60">
+              <div className="px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-muted">
                 {menu.title}
               </div>
               <button
@@ -328,7 +653,7 @@ export default function Launchpad({
                   onUninstall(menu.slug);
                   setMenu(null);
                 }}
-                className="block w-full rounded px-2 py-1.5 text-left text-sm text-white hover:bg-white/20 transition-colors"
+                className="block w-full rounded px-2 py-1.5 text-left text-sm text-app hover:bg-surface transition-colors"
                 role="menuitem"
               >
                 Uninstall
@@ -341,26 +666,153 @@ export default function Launchpad({
   );
 }
 
-function FilterPill({
-  active,
-  onClick,
-  children,
+interface MainPaneProps {
+  view: ReturnType<typeof useLaunchpadView>["view"];
+  tools: ToolItem[];
+  focusedSlug: string | null;
+  onFocus: (slug: string) => void;
+  onOpen: (tool: ToolItem) => void;
+  onContextMenu: (e: React.MouseEvent, tool: ToolItem) => void;
+  itemsHint?: ToolItem[];
+  locationKey: string;
+  onOpenStore?: () => void;
+  onClose: () => void;
+}
+
+function MainPane({
+  view,
+  tools,
+  focusedSlug,
+  onFocus,
+  onOpen,
+  onContextMenu,
+  itemsHint,
+  locationKey: locKey,
+  onOpenStore,
+  onClose,
+}: MainPaneProps) {
+  // First-launch helper: surface a prominent "Open the Store" CTA when
+  // the user has no installed tools at all (matches the previous
+  // overlay's empty-state UX).
+  if (
+    locKey === "applications" &&
+    itemsHint &&
+    itemsHint.length === 0 &&
+    onOpenStore
+  ) {
+    return (
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-8 text-center">
+        <p className="text-sm text-secondary">
+          No tools installed yet. Open the Store to add some.
+        </p>
+        <button
+          type="button"
+          onClick={() => {
+            onClose();
+            onOpenStore();
+          }}
+          className="rounded-md bg-tool-accent px-4 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+        >
+          Open the Tool Store
+        </button>
+      </div>
+    );
+  }
+
+  switch (view) {
+    case "list":
+      return (
+        <LaunchpadListView
+          tools={tools}
+          focusedSlug={focusedSlug}
+          onFocus={onFocus}
+          onOpen={onOpen}
+          onContextMenu={onContextMenu}
+        />
+      );
+    case "column":
+      return (
+        <LaunchpadColumnView
+          tools={tools}
+          focusedSlug={focusedSlug}
+          onFocus={onFocus}
+          onOpen={onOpen}
+          onContextMenu={onContextMenu}
+        />
+      );
+    case "gallery":
+      return (
+        <LaunchpadGalleryView
+          tools={tools}
+          focusedSlug={focusedSlug}
+          onFocus={onFocus}
+          onOpen={onOpen}
+          onContextMenu={onContextMenu}
+        />
+      );
+    case "icon":
+    default:
+      return (
+        <LaunchpadIconView
+          tools={tools}
+          focusedSlug={focusedSlug}
+          onFocus={onFocus}
+          onOpen={onOpen}
+          onContextMenu={onContextMenu}
+        />
+      );
+  }
+}
+
+/* Right-side preview pane — shown when the toolbar's Preview toggle is on.
+ * Mirrors Finder's preview behavior: large icon, name, kind, description,
+ * Open button. */
+function PreviewPane({
+  tool,
+  onOpen,
 }: {
-  active: boolean;
-  onClick: () => void;
-  children: React.ReactNode;
+  tool: ToolItem | null;
+  onOpen: (tool: ToolItem) => void;
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={`rounded-full px-3 py-1 text-xs backdrop-blur-xl transition-colors ${
-        active
-          ? "border border-white/40 bg-white/25 text-white"
-          : "border border-white/10 bg-white/5 text-white/70 hover:bg-white/15 hover:text-white"
-      }`}
-    >
-      {children}
-    </button>
+    <aside className="hidden w-72 shrink-0 flex-col items-center gap-3 overflow-y-auto border-l border-app bg-app-elevated p-5 lg:flex">
+      {tool ? (
+        <>
+          <div className="pt-2">
+            <PreviewIcon slug={tool.slug} title={tool.title} />
+          </div>
+          <div className="text-center text-base font-semibold text-app">
+            {tool.title}
+          </div>
+          <div className="text-[10px] uppercase tracking-wider text-muted">
+            {TOOL_CATEGORIES.find((c) => c.key === tool.category)?.label ??
+              tool.category}
+          </div>
+          <p className="text-center text-[12px] leading-relaxed text-secondary">
+            {tool.description}
+          </p>
+          <button
+            type="button"
+            onClick={() => onOpen(tool)}
+            className="mt-2 rounded-md bg-tool-accent px-4 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90"
+          >
+            Open
+          </button>
+        </>
+      ) : (
+        <div className="pt-12 text-sm text-muted">No item selected</div>
+      )}
+    </aside>
   );
+}
+
+/* Tiny wrapper so PreviewPane can stay framework-agnostic. We re-import
+ * AppIcon here at use-time to avoid lifting it to the file's top scope
+ * twice (also used in the view modules). */
+import AppIcon, { hasAppIcon } from "./AppIcon";
+function PreviewIcon({ slug, title }: { slug: string; title: string }) {
+  if (hasAppIcon(slug)) {
+    return <AppIcon slug={slug} size={120} cornerPct={24} label={title} />;
+  }
+  return <div className="h-[120px] w-[120px] rounded-2xl bg-surface" />;
 }

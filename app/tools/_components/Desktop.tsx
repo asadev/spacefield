@@ -301,9 +301,20 @@ function DesktopApp() {
   }, [authSignOut]);
 
   // ⌘K / Ctrl-K toggles Launchpad. ⌘, opens Settings (macOS standard).
+  // ⌘⇧A also toggles Launchpad — matches the Finder "Applications" jump
+  // shortcut and the spec for the Finder-style window.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        setLaunchpadOpen((v) => !v);
+        return;
+      }
+      if (
+        (e.metaKey || e.ctrlKey) &&
+        e.shiftKey &&
+        e.key.toLowerCase() === "a"
+      ) {
         e.preventDefault();
         setLaunchpadOpen((v) => !v);
         return;
@@ -671,7 +682,7 @@ function DesktopApp() {
         </AnimatePresence>
       </div>
 
-      {/* Launchpad — shows installed tools */}
+      {/* Launchpad — Finder-style movable window */}
       <Launchpad
         open={launchpadOpen}
         onClose={() => setLaunchpadOpen(false)}
@@ -680,6 +691,7 @@ function DesktopApp() {
         onStore={openStore}
         items={installedTools}
         onAppDroppedOnLaunchpad={moveAppToLaunchpad}
+        onConnect={openWorkspacesSection}
       />
 
       {/* App Store — browse all, install / uninstall */}
