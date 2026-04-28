@@ -31,11 +31,29 @@ function load(storageKey: string): InstallState {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object") {
-        return {
+        const installed = Array.isArray(parsed.installed)
+          ? (parsed.installed as unknown[]).filter(
+              (s): s is string => typeof s === "string"
+            )
+          : [];
+        // Files Manager retirement (Round D): the standalone tool is
+        // gone — strip it from any pre-existing workspace install list
+        // on hydrate. Workspaces that had it installed get a silent
+        // upgrade; the Launchpad already serves every file surface.
+        const stripped = installed.filter((s) => s !== "files-manager");
+        const next: InstallState = {
           onboarded: !!parsed.onboarded,
           profession: parsed.profession ?? null,
-          installed: Array.isArray(parsed.installed) ? parsed.installed : [],
+          installed: stripped,
         };
+        if (stripped.length !== installed.length) {
+          // Persist the migration so subsequent loads skip the strip
+          // step. Best-effort — ignore quota errors.
+          try {
+            localStorage.setItem(storageKey, JSON.stringify(next));
+          } catch {}
+        }
+        return next;
       }
     }
   } catch {}

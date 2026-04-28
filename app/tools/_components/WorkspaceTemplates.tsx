@@ -54,7 +54,7 @@ export const WORKSPACE_TEMPLATES: WorkspaceTemplate[] = [
       "property-comparison",
       "sales-offer-generator",
       "property-poster-creator",
-      "files-manager",
+      // (Files Manager retired Round D — Launchpad covers files now.)
       "documents",
     ],
     dock: [
@@ -81,7 +81,7 @@ export const WORKSPACE_TEMPLATES: WorkspaceTemplate[] = [
       "ad-budget-allocator",
       "email-roi",
       "engagement-rate",
-      "files-manager",
+      // (Files Manager retired Round D — Launchpad covers files now.)
       "documents",
       "sheets",
     ],
@@ -107,7 +107,7 @@ export const WORKSPACE_TEMPLATES: WorkspaceTemplate[] = [
       "npv-irr",
       "cash-burn-runway",
       "runway-scenarios",
-      "files-manager",
+      // (Files Manager retired Round D — Launchpad covers files now.)
       "sheets",
       "documents",
     ],
@@ -123,10 +123,11 @@ export const WORKSPACE_TEMPLATES: WorkspaceTemplate[] = [
   {
     key: "personal",
     name: "Personal / Empty",
+    // (Files Manager retired Round D — Launchpad covers files now.)
     description:
-      "Bare workspace — just Files Manager and Documents. Build it your way.",
+      "Bare workspace — just Documents and the Launchpad. Build it your way.",
     defaultWorkspaceName: "Personal",
-    install: ["files-manager", "documents"],
+    install: ["documents"],
     dock: ["documents"],
   },
 ];

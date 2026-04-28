@@ -129,7 +129,7 @@ function SharedFileRow({
       onClick={() => onOpen(file)}
       onContextMenu={onContextMenu}
       className="grid w-full grid-cols-[2fr_1.2fr_1fr_1fr_1fr] gap-2 border-b border-app/60 px-3 py-1.5 text-left text-[12px] text-app transition-colors hover:bg-surface"
-      title={`Open with ${appForFile(file)}`}
+      title={appForFile(file) ? `Open with ${appForFile(file)}` : "Open"}
     >
       <span className="flex items-center gap-2 truncate">
         <KindGlyph kind={k} />

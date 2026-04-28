@@ -23,7 +23,18 @@ function load(storageKey: string): string[] {
     if (raw) {
       const parsed = JSON.parse(raw);
       if (Array.isArray(parsed) && parsed.every((x) => typeof x === "string")) {
-        return parsed as string[];
+        const slugs = parsed as string[];
+        // Files Manager retirement (Round D): strip "files-manager"
+        // from any user's pinned dock list. Pre-retirement default
+        // pin sets never included it, but template installs and old
+        // saved layouts could.
+        const stripped = slugs.filter((s) => s !== "files-manager");
+        if (stripped.length !== slugs.length) {
+          try {
+            localStorage.setItem(storageKey, JSON.stringify(stripped));
+          } catch {}
+        }
+        return stripped;
       }
     }
   } catch {}

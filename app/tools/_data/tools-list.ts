@@ -575,8 +575,9 @@ export const TOOLS: ToolItem[] = [
   // Chat — real-time messaging inside the active workspace.
   { slug: "chat", title: "Chat", description: "Real-time messaging within this workspace. Share files and photos that count against the workspace storage cap.", category: "files", icon: "message", route: "/tools/chat", defaultSize: { w: 960, h: 640 }, minSize: { w: 520, h: 420 }, app: () => import("../chat/_app").then((m) => ({ default: m.default })) },
 
-  // Files Manager — workspace storage, backed by Cloudflare R2.
-  { slug: "files-manager", title: "Files", description: "Upload, organize, and share files inside this workspace. Storage is shared across members. Free workspaces include 100 MB.", category: "files", icon: "document", route: "/tools/files-manager", topRated: true, app: () => import("../files-manager/_app").then((m) => ({ default: m.default })) },
+  // (Files Manager retired Round D — every feature now lives inside the
+  // system Launchpad: upload, trash, rename, tags, share, preview, and
+  // storage bar. The /tools/files-manager route 301s to /.)
 
   // Documents — Word-style rich-text editor that saves into the workspace.
   { slug: "documents", title: "Documents", description: "Write, edit, and save Word-style documents inside your workspace. Real .docx round-trip, autosave, tables, lists, code, links.", category: "files", icon: "document", defaultSize: { w: 880, h: 640 }, minSize: { w: 480, h: 360 }, app: () => import("../documents/_app").then((m) => ({ default: m.default })) },

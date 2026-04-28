@@ -86,6 +86,24 @@ import {
 } from "./launchpad/useLaunchpadView";
 import AppIcon, { hasAppIcon } from "./AppIcon";
 
+/**
+ * Optional opening intent — fed through the desktop's openApp() call when
+ * other tools want to "Reveal" a file inside the Launchpad. We resolve it
+ * once per opening (each new `intentKey` re-applies) so callers can
+ * re-trigger the same intent without re-mounting the component.
+ *
+ *   { kind: "home", fileId } → jump to Home and focus the file
+ *   { kind: "trash" }        → jump to Trash
+ *   { kind: "applications" } → default Applications view (also the no-op)
+ *
+ * Historical note: replaces the standalone Files Manager tool which used
+ * to handle these intents via openApp("files-manager", { fileId }).
+ */
+export type LaunchpadIntent =
+  | { kind: "home"; fileId?: string }
+  | { kind: "trash" }
+  | { kind: "applications" };
+
 interface Props {
   open: boolean;
   onClose: () => void;
@@ -110,6 +128,11 @@ interface Props {
   /** True when the slug is currently pinned to the dock. Used to flip
    * the right-click "Pin to Dock" item to "Unpin from Dock". */
   isPinned?: (slug: string) => boolean;
+  /** Optional initial intent applied when `open` flips true (or `intentKey`
+   * changes). See LaunchpadIntent. */
+  intent?: LaunchpadIntent;
+  /** Bumped by the caller every time it wants to re-apply `intent`. */
+  intentKey?: number;
 }
 
 const TOPBAR = 32;
@@ -185,6 +208,8 @@ export default function Launchpad({
   onConnect,
   onTogglePin,
   isPinned,
+  intent,
+  intentKey,
 }: Props) {
   const BOUNDS_KEY = useWorkspaceKey(BOUNDS_SUFFIX);
   const { workspaces, activeId, switchWorkspace } = useWorkspaces();
@@ -355,6 +380,26 @@ export default function Launchpad({
       }
     }
   }, [open]);
+
+  /* Apply opening intent. Re-runs whenever `open` becomes true OR the
+   * caller bumps `intentKey` (so re-issuing the same intent re-applies).
+   * This is the path retired-Files-Manager call sites flow through:
+   * openApp("launchpad", { fileId }) → desktop sets intent={kind:"home",fileId}
+   * → here we jump the sidebar to Home and focus the file. */
+  useEffect(() => {
+    if (!open || !intent) return;
+    if (intent.kind === "home") {
+      launchpadView.setLocation({ kind: "home" });
+      if (intent.fileId) setFocusedFileId(intent.fileId);
+    } else if (intent.kind === "trash") {
+      launchpadView.setLocation({ kind: "trash" });
+    } else {
+      launchpadView.setLocation({ kind: "applications" });
+    }
+    // launchpadView.setLocation is stable across renders; we intentionally
+    // leave it out so the effect only fires on open/intent transitions.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, intent, intentKey]);
 
   // ⌘W closes; Escape closes; ⌘F focuses the search input.
   useEffect(() => {
@@ -627,23 +672,31 @@ export default function Launchpad({
     [onOpenTool, onClose]
   );
 
+  const cacheFile = useCallback((file: LaunchpadFile) => {
+    fileCacheRef.current.set(file.id, file);
+  }, []);
+
   const handleOpenFile = useCallback(
     (file: LaunchpadFile) => {
       const slug = appForFile(file);
+      // Files Manager retirement (Round D): only `documents` / `sheets`
+      // open in a dedicated tool now — every other kind previews inside
+      // the Launchpad itself via the overlay. Historical fallback to
+      // openApp("files-manager", { fileId }) is gone with the tool.
+      if (slug === null) {
+        cacheFile(file);
+        setPreviewFileId(file.id);
+        return;
+      }
       const titleByApp: Record<string, string> = {
         documents: "Documents",
         sheets: "Sheets",
-        "files-manager": "Files",
       };
       onOpenTool(slug, titleByApp[slug] ?? "Files", { fileId: file.id });
       onClose();
     },
-    [onOpenTool, onClose]
+    [onOpenTool, onClose, cacheFile]
   );
-
-  const cacheFile = useCallback((file: LaunchpadFile) => {
-    fileCacheRef.current.set(file.id, file);
-  }, []);
 
   const handleToolContext = useCallback(
     (e: React.MouseEvent, tool: ToolItem) => {
@@ -1402,10 +1455,14 @@ export default function Launchpad({
               onClose={() => setMenu(null)}
               onOpen={() => handleOpenFile(menu.file)}
               onReveal={() => {
-                // For shared files, "Reveal" jumps back to Home in the
-                // owning workspace if it's the active one, otherwise we
-                // fall back to the Files Manager which still understands
-                // cross-workspace shared file ids.
+                // For shared files, "Reveal" jumps to Home in the owning
+                // workspace if it's the active one. If the owning
+                // workspace isn't active we previously fell back to the
+                // standalone Files Manager — that tool was retired
+                // (Round D), so we now stay inside the Launchpad's
+                // Shared pane and just toast the user the file lives in
+                // a different workspace. Switching workspaces is one
+                // click away in the sidebar.
                 const owns = workspaces.some(
                   (w) => w.id === menu.share.source_workspace_id
                 );
@@ -1415,8 +1472,8 @@ export default function Launchpad({
                   launchpadView.setLocation({ kind: "home" });
                   return;
                 }
-                onOpenTool("files-manager", "Files", { fileId: menu.file.id });
-                onClose();
+                showToast("File lives in another workspace — switch to reveal");
+                setMenu(null);
               }}
               onCopyLink={async () => {
                 const link = `${window.location.origin}/tools?file=${encodeURIComponent(menu.file.id)}`;

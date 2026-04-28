@@ -24,8 +24,10 @@ import { TOOLS, toolBySlug, type ToolItem } from "../_data/tools-list";
 import { useDesktopShell } from "./DesktopShellContext";
 import { useRecents } from "./useRecents";
 
-/** Inline copy of the editorSlugFor helper from files-manager/_app.tsx so we
- * don't reach into a private app's module. Keep behavior identical. */
+/** Inline copy of the editorSlugFor helper that used to live in
+ * files-manager/_app.tsx. The standalone Files Manager tool was retired
+ * (Round D — fully replaced by the Launchpad), so the helper now lives
+ * here as the canonical source. Behavior is unchanged. */
 function editorSlugFor(
   name: string,
   contentType: string | null,
@@ -358,7 +360,9 @@ export default function Spotlight() {
             activate: () => {
               const slug = editorSlugFor(r.name, null);
               if (slug) openApp(slug, { fileId: r.id });
-              else openApp("files-manager", { fileId: r.id });
+              // Files Manager retirement: fall back to the Launchpad on
+              // Home with the file focused.
+              else openApp("launchpad", { fileId: r.id });
               setOpen(false);
             },
           });
@@ -417,11 +421,14 @@ export default function Spotlight() {
           score: s,
           iconPath: ICON_FILE,
           activate: () => {
-            const slug = editorSlugFor(f.name, f.content_type) ?? "files-manager";
-            if (slug === "files-manager") {
-              openApp("files-manager", { fileId: f.id });
-            } else {
+            const slug = editorSlugFor(f.name, f.content_type);
+            if (slug) {
               openApp(slug, { fileId: f.id });
+            } else {
+              // Files Manager retirement: open the Launchpad on Home and
+              // focus the file. Historical fallback was the standalone
+              // Files Manager tool.
+              openApp("launchpad", { fileId: f.id });
             }
             setOpen(false);
           },

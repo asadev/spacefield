@@ -14,6 +14,22 @@ const nextConfig: NextConfig = {
       { protocol: 'https', hostname: 'example.com' },
     ],
   },
+  async redirects() {
+    return [
+      {
+        // (Files Manager retirement, Round D) The standalone tool route
+        // is gone — the Launchpad covers every Files Manager surface
+        // (upload, trash, rename, tags, share, preview, storage bar).
+        // 301 anyone hitting the old /tools/files-manager URL — search
+        // engines, deep links, share targets — to the workspace
+        // desktop, where the Launchpad opens via ⌘K or the dock's
+        // launcher.
+        source: '/tools/files-manager',
+        destination: '/tools',
+        permanent: true,
+      },
+    ];
+  },
   async headers() {
     return [
       {

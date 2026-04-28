@@ -6,10 +6,6 @@
  *
  * Sources we aggregate (each is best-effort — a failure in one source
  * never breaks the others):
- *   - "files-manager" → restorable files in the active workspace's Trash.
- *     There's no trash API yet (Agent 4 owns it), so we default to 0 and
- *     log nothing. When Agent 4 lands a /api/files/trash endpoint we can
- *     wire it here without touching consumers.
  *   - "documents" / "sheets" → unsaved changes in any open editor instance.
  *     Editors broadcast their state via the global event
  *       window.dispatchEvent(new CustomEvent("spacefield:unsaved-changed",
@@ -119,9 +115,11 @@ export function useDockBadges() {
       );
   }, []);
 
-  // Files Manager Trash — no API yet, default to 0. Wired here so when
-  // Agent 4 lands /api/files/trash it's a one-line change.
-  const filesTrashCount = 0;
+  // (Files Manager retirement, Round D) The standalone Files Manager
+  // tool is gone — Trash now lives inside the Launchpad's sidebar, and
+  // the Launchpad itself isn't a dock-pinnable slug, so there's no
+  // badge to attach the count to. Left as a no-op for now; if a future
+  // dock surface for "files" returns we can re-attach a count here.
 
   // Chat unread — aggregate of all per-channel unread counts across the
   // active workspace. We poll /api/chat/unread every 60 s and also on
@@ -180,7 +178,6 @@ export function useDockBadges() {
 
   const badges = useMemo<Record<string, number>>(() => {
     const map: Record<string, number> = {};
-    if (filesTrashCount > 0) map["files-manager"] = filesTrashCount;
     if (pendingInviteCount > 0) map["settings"] = pendingInviteCount;
     if (unreadNotifications > 0) map["notifications"] = unreadNotifications;
     if (chatUnread > 0) map["chat"] = chatUnread;
@@ -190,7 +187,7 @@ export function useDockBadges() {
     return map;
     // unsavedTick forces recompute when the broadcast map mutates.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filesTrashCount, pendingInviteCount, unreadNotifications, chatUnread, unsavedTick]);
+  }, [pendingInviteCount, unreadNotifications, chatUnread, unsavedTick]);
 
   const getCount = useCallback((slug: string) => badges[slug] ?? 0, [badges]);
 

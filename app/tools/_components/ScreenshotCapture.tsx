@@ -6,7 +6,9 @@
  * user's screen. The browser shows its own permission prompt — that's
  * fine, the spec says to expect it. We grab a single video frame, draw
  * to a canvas, optionally crop to a rectangle, then upload as a PNG to
- * Files Manager via the existing `/api/files/save-content` endpoint.
+ * the workspace's file store via `/api/files/save-content`. (Historical
+ * note: this used to land in the standalone Files Manager — that tool
+ * was retired in Round D, the Launchpad now owns every file surface.)
  *
  * Why getDisplayMedia and not html2canvas: the spec asked for the entire
  * visible browser viewport, including OS-level chrome the user sees.
@@ -26,8 +28,13 @@ interface Toast {
   filename: string;
   status: "saving" | "saved" | "error";
   error?: string;
-  /** The slug to open (for the Open button). */
-  openSlug?: "documents" | "files-manager";
+  /** The slug to open (for the Open button). "launchpad" lands the user
+   * on Home with the freshly saved file focused; the historical
+   * "files-manager" value was retired with the standalone tool. */
+  openSlug?: "documents" | "launchpad";
+  /** Saved file's id — used by the Open button so the Launchpad can
+   * jump straight to the freshly captured screenshot. */
+  savedFileId?: string;
 }
 
 function fmtTimestamp(d: Date): string {
@@ -217,9 +224,15 @@ export default function ScreenshotCapture() {
           });
           return;
         }
+        const saved = (await res.json().catch(() => ({}))) as {
+          file?: { id?: string };
+        };
+        const savedFileId =
+          typeof saved.file?.id === "string" ? saved.file.id : undefined;
         updateToast(toastId, {
           status: "saved",
-          openSlug: "files-manager",
+          openSlug: "launchpad",
+          savedFileId,
         });
       } catch (err) {
         updateToast(toastId, {
@@ -320,12 +333,25 @@ export default function ScreenshotCapture() {
     };
   }, [captureFull, startSelection]);
 
-  /** Open Files Manager via the same postMessage convention the desktop
-   * uses for cross-tool launches. Falls back to nothing if the desktop
-   * isn't listening (e.g. inside an iframe). */
-  const openFilesManager = useCallback(() => {
+  /** Open the Launchpad on Home (focused on the freshly saved file when
+   * we have its id) via the same postMessage convention the desktop
+   * uses for cross-tool launches. The Launchpad's `intent` system reads
+   * `params.fileId` and `params.location`. Falls back to nothing if the
+   * desktop isn't listening (e.g. inside an iframe).
+   *
+   * Files Manager retirement: this used to post slug "files-manager"
+   * with no params. The Launchpad now serves the same role.
+   */
+  const openSavedFile = useCallback((fileId?: string) => {
     window.postMessage(
-      { type: "tools-open", slug: "files-manager", title: "Files Manager" },
+      {
+        type: "tools-open",
+        slug: "launchpad",
+        title: "Launchpad",
+        params: fileId
+          ? { location: "home", fileId }
+          : { location: "home" },
+      },
       window.location.origin
     );
   }, []);
@@ -419,7 +445,7 @@ export default function ScreenshotCapture() {
                   <button
                     type="button"
                     onClick={() => {
-                      openFilesManager();
+                      openSavedFile(t.savedFileId);
                       dismissToast(t.id);
                     }}
                     className="mt-1 text-[0.7rem] font-medium text-tool-accent transition-opacity hover:opacity-80"

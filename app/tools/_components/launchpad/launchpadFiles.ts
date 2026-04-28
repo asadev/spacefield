@@ -79,13 +79,20 @@ export function kindLabel(kind: LaunchpadFileKind): string {
   }
 }
 
-/* Pick the best editor app for a given file kind. Falls back to
- * the Files Manager so every file row stays clickable. */
-export function appForFile(file: LaunchpadFile): string {
+/* Pick the best editor app for a given file kind. Returns null for
+ * kinds that have no dedicated tool — callers fall back to the
+ * Launchpad's built-in preview overlay.
+ *
+ * Historical: this used to return "files-manager" as a catch-all, but
+ * the standalone Files Manager was retired (Round D — covered by the
+ * Launchpad). Anything that isn't a document/spreadsheet now previews
+ * in-place. See Launchpad.tsx#handleOpenFile and Spotlight.tsx for the
+ * caller flows. */
+export function appForFile(file: LaunchpadFile): string | null {
   const k = fileKind(file);
   if (k === "document") return "documents";
   if (k === "sheet") return "sheets";
-  return "files-manager";
+  return null;
 }
 
 export function fmtSize(bytes: number): string {

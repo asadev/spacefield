@@ -11,7 +11,7 @@ import ControlCenter from "./ControlCenter";
 import DesktopBackground from "./DesktopBackground";
 import Dock from "./Dock";
 import ScreenshotCapture from "./ScreenshotCapture";
-import Launchpad from "./Launchpad";
+import Launchpad, { type LaunchpadIntent } from "./Launchpad";
 import MissionControl from "./MissionControl";
 import MobileShell from "./MobileShell";
 import NotificationCenter from "./NotificationCenter";
@@ -215,6 +215,16 @@ function DesktopApp() {
   };
 
   const [launchpadOpen, setLaunchpadOpen] = useState(false);
+  /* Intent fed into <Launchpad>. Bumping `launchpadIntentKey` re-applies
+   * the same intent (so callers can re-trigger Reveal on the same file).
+   *
+   * Historical: this is the new home for openApp("files-manager", { fileId })
+   * call sites — the standalone Files Manager tool was retired and the
+   * Launchpad now serves every file-management surface. */
+  const [launchpadIntent, setLaunchpadIntent] = useState<LaunchpadIntent>({
+    kind: "applications",
+  });
+  const [launchpadIntentKey, setLaunchpadIntentKey] = useState(0);
   const [storeOpen, setStoreOpen] = useState(false);
   const [dockCustomizerOpen, setDockCustomizerOpen] = useState(false);
   const [widgetGalleryOpen, setWidgetGalleryOpen] = useState(false);
@@ -400,6 +410,28 @@ function DesktopApp() {
     title: string,
     params?: Record<string, unknown>,
   ) => {
+    // Special slug: "launchpad" isn't a tool, it's the system-level
+    // Finder window. We resolve openApp("launchpad", { fileId }) by
+    // setting an intent + opening the Launchpad rather than spawning a
+    // tool window. Replaces openApp("files-manager", { fileId }) since
+    // Files Manager was retired (Round D).
+    if (slug === "launchpad") {
+      const fileId =
+        params && typeof params.fileId === "string" ? params.fileId : undefined;
+      const requestedKind =
+        params && typeof params.location === "string" ? params.location : null;
+      const next: LaunchpadIntent =
+        requestedKind === "trash"
+          ? { kind: "trash" }
+          : fileId || requestedKind === "home"
+            ? { kind: "home", fileId }
+            : { kind: "applications" };
+      setLaunchpadIntent(next);
+      setLaunchpadIntentKey((k) => k + 1);
+      setLaunchpadOpen(true);
+      sounds.tap();
+      return;
+    }
     // Auto-install if user opens a tool from the Store
     if (!isInstalled(slug)) install(slug);
     // Close any open modal/overlay so the new window comes to the front
@@ -446,13 +478,26 @@ function DesktopApp() {
   // Listen for tool-to-tool navigation requests from inside iframes.
   // The framed inner page (themeInitScript) intercepts clicks on links
   // to other tools and posts here instead of navigating in-place.
+  // Params are forwarded so e.g. ScreenshotCapture's "Open in Files"
+  // button can pass { location, fileId } to the Launchpad.
   useEffect(() => {
     const onMessage = (e: MessageEvent) => {
       if (e.origin !== window.location.origin) return;
-      const data = e.data as { type?: string; slug?: string; title?: string } | null;
+      const data = e.data as
+        | {
+            type?: string;
+            slug?: string;
+            title?: string;
+            params?: Record<string, unknown>;
+          }
+        | null;
       if (!data || data.type !== "tools-open" || !data.slug) return;
       const tool = toolBySlug(data.slug);
-      handleOpenTool(data.slug, tool?.title ?? data.title ?? data.slug);
+      handleOpenTool(
+        data.slug,
+        tool?.title ?? data.title ?? data.slug,
+        data.params
+      );
     };
     window.addEventListener("message", onMessage);
     return () => window.removeEventListener("message", onMessage);
@@ -639,9 +684,13 @@ function DesktopApp() {
           {/* Home file shortcuts — pinned via Files Manager drag-drop. */}
           <HomeFiles
             onOpenFile={(fileId, params) => {
-              const slug = params.editorSlug ?? "files-manager";
+              // Files Manager retirement (Round D): when the home-pinned
+              // file has no dedicated editor, defer to the Launchpad on
+              // Home with the file focused. Historical fallback used to
+              // be openApp("files-manager", { fileId }).
+              const slug = params.editorSlug ?? "launchpad";
               const tool = toolBySlug(slug);
-              handleOpenTool(slug, tool?.title ?? "Files", { fileId });
+              handleOpenTool(slug, tool?.title ?? "Launchpad", { fileId });
             }}
           />
         </div>
@@ -694,6 +743,8 @@ function DesktopApp() {
         onConnect={openWorkspacesSection}
         onTogglePin={togglePin}
         isPinned={(slug) => pinnedSlugs.includes(slug)}
+        intent={launchpadIntent}
+        intentKey={launchpadIntentKey}
       />
 
       {/* App Store — browse all, install / uninstall */}

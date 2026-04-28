@@ -71,7 +71,6 @@ const ICON_SLUGS = new Set<string>([
   "email-template-library",
   "engagement-rate",
   "escalation-matrix",
-  "files-manager",
   "follow-up-reminder",
   "font-pairing",
   "global-market-comparison",
