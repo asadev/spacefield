@@ -692,6 +692,8 @@ function DesktopApp() {
         items={installedTools}
         onAppDroppedOnLaunchpad={moveAppToLaunchpad}
         onConnect={openWorkspacesSection}
+        onTogglePin={togglePin}
+        isPinned={(slug) => pinnedSlugs.includes(slug)}
       />
 
       {/* App Store — browse all, install / uninstall */}

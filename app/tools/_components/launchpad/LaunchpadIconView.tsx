@@ -35,12 +35,20 @@ function tileClassFor(style: IconStyleId): string {
   }
 }
 
+interface ToolGroup {
+  label: string;
+  tools: ToolItem[];
+}
+
 interface Props {
   tools: ToolItem[];
   focusedSlug: string | null;
   onFocus: (slug: string) => void;
   onOpen: (tool: ToolItem) => void;
   onContextMenu: (e: React.MouseEvent, tool: ToolItem) => void;
+  /** When provided, the icon view renders one labelled section per
+   * group instead of a single flat grid. Empty groups are skipped. */
+  groups?: ToolGroup[];
 }
 
 export default function LaunchpadIconView({
@@ -49,9 +57,46 @@ export default function LaunchpadIconView({
   onFocus,
   onOpen,
   onContextMenu,
+  groups,
 }: Props) {
   const { style: iconStyle } = useIconStyle();
   const tileCls = tileClassFor(iconStyle);
+
+  if (groups && groups.length > 0) {
+    const filled = groups.filter((g) => g.tools.length > 0);
+    if (filled.length === 0) {
+      return (
+        <div className="flex h-full items-center justify-center text-sm text-muted">
+          No items
+        </div>
+      );
+    }
+    return (
+      <div className="flex flex-col gap-2 p-6">
+        {filled.map((g) => (
+          <section key={g.label} className="flex flex-col gap-3">
+            <h3 className="px-1 text-[11px] font-semibold uppercase tracking-wider text-muted">
+              {g.label}
+            </h3>
+            <div className="grid grid-cols-2 gap-x-6 gap-y-8 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
+              {g.tools.map((t, i) => (
+                <IconTile
+                  key={t.slug}
+                  tool={t}
+                  index={i}
+                  focused={focusedSlug === t.slug}
+                  tileCls={tileCls}
+                  onFocus={onFocus}
+                  onOpen={onOpen}
+                  onContextMenu={onContextMenu}
+                />
+              ))}
+            </div>
+          </section>
+        ))}
+      </div>
+    );
+  }
 
   if (tools.length === 0) {
     return (
@@ -63,65 +108,94 @@ export default function LaunchpadIconView({
 
   return (
     <div className="grid grid-cols-2 gap-x-6 gap-y-8 p-6 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6">
-      {tools.map((t, i) => {
-        const focused = focusedSlug === t.slug;
-        return (
-          <div
-            key={t.slug}
-            draggable
-            onDragStart={(e) => {
-              const payload: AppDragPayload = {
-                type: "spacefield-app",
-                slug: t.slug,
-                fromZone: "launchpad",
-              };
-              setAppDragPayload(e.dataTransfer, payload);
-            }}
-          >
-            <motion.button
-              type="button"
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.2, delay: Math.min(i * 0.01, 0.3) }}
-              onClick={() => {
-                onFocus(t.slug);
-                onOpen(t);
-              }}
-              onFocus={() => onFocus(t.slug)}
-              onContextMenu={(e) => onContextMenu(e, t)}
-              className={
-                "group flex w-full flex-col items-center gap-2 rounded-lg p-2 transition-colors " +
-                (focused ? "bg-tool-accent-soft" : "hover:bg-surface")
-              }
+      {tools.map((t, i) => (
+        <IconTile
+          key={t.slug}
+          tool={t}
+          index={i}
+          focused={focusedSlug === t.slug}
+          tileCls={tileCls}
+          onFocus={onFocus}
+          onOpen={onOpen}
+          onContextMenu={onContextMenu}
+        />
+      ))}
+    </div>
+  );
+}
+
+interface IconTileProps {
+  tool: ToolItem;
+  index: number;
+  focused: boolean;
+  tileCls: string;
+  onFocus: (slug: string) => void;
+  onOpen: (tool: ToolItem) => void;
+  onContextMenu: (e: React.MouseEvent, tool: ToolItem) => void;
+}
+
+function IconTile({
+  tool: t,
+  index: i,
+  focused,
+  tileCls,
+  onFocus,
+  onOpen,
+  onContextMenu,
+}: IconTileProps) {
+  return (
+    <div
+      draggable
+      onDragStart={(e) => {
+        const payload: AppDragPayload = {
+          type: "spacefield-app",
+          slug: t.slug,
+          fromZone: "launchpad",
+        };
+        setAppDragPayload(e.dataTransfer, payload);
+      }}
+    >
+      <motion.button
+        type="button"
+        initial={{ opacity: 0, y: 8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2, delay: Math.min(i * 0.01, 0.3) }}
+        onClick={() => {
+          onFocus(t.slug);
+          onOpen(t);
+        }}
+        onFocus={() => onFocus(t.slug)}
+        onContextMenu={(e) => onContextMenu(e, t)}
+        className={
+          "group flex w-full flex-col items-center gap-2 rounded-lg p-2 transition-colors " +
+          (focused ? "bg-tool-accent-soft" : "hover:bg-surface")
+        }
+      >
+        {hasAppIcon(t.slug) ? (
+          <AppIcon
+            slug={t.slug}
+            size={64}
+            cornerPct={24}
+            label={t.title}
+            className="transition-transform duration-200 group-hover:-translate-y-0.5"
+          />
+        ) : (
+          <span className={tileCls}>
+            <svg
+              width="28"
+              height="28"
+              viewBox="0 0 24 24"
+              fill="currentColor"
+              aria-hidden="true"
             >
-              {hasAppIcon(t.slug) ? (
-                <AppIcon
-                  slug={t.slug}
-                  size={64}
-                  cornerPct={24}
-                  label={t.title}
-                  className="transition-transform duration-200 group-hover:-translate-y-0.5"
-                />
-              ) : (
-                <span className={tileCls}>
-                  <svg
-                    width="28"
-                    height="28"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                    aria-hidden="true"
-                  >
-                    <path d={TOOL_ICONS[t.icon] ?? TOOL_ICONS.home} />
-                  </svg>
-                </span>
-              )}
-              <span className="line-clamp-2 max-w-[8rem] text-center text-[0.78rem] font-medium leading-tight tracking-tight text-app">
-                {t.title}
-              </span>
-            </motion.button>
-          </div>
-        );
-      })}
+              <path d={TOOL_ICONS[t.icon] ?? TOOL_ICONS.home} />
+            </svg>
+          </span>
+        )}
+        <span className="line-clamp-2 max-w-[8rem] text-center text-[0.78rem] font-medium leading-tight tracking-tight text-app">
+          {t.title}
+        </span>
+      </motion.button>
     </div>
   );
 }

@@ -6,18 +6,22 @@
  *   ◀ ▶ history arrows · centered title · Preview · Connect · View pill ·
  *   Group · Share · Action (…) · Search field
  *
- * Most right-side affordances are visual-only stubs for v1 (Group / Share
- * / Action). They're styled like Finder's so the window reads correctly,
- * but clicking them surfaces a friendly "coming soon" tooltip. The View
- * pill and Preview / Connect / Search are wired to real behavior.
+ * Every control here is wired to real behavior. The Group / Share /
+ * Action buttons trigger callbacks the parent uses to open menus, copy
+ * a link to the clipboard, run a refresh, etc.
  */
 
-import type { LaunchpadViewMode } from "./useLaunchpadView";
+import { forwardRef } from "react";
+import type {
+  LaunchpadGroupMode,
+  LaunchpadViewMode,
+} from "./useLaunchpadView";
 
 interface Props {
   title: string;
   query: string;
   onQuery: (q: string) => void;
+  searchInputRef?: React.Ref<HTMLInputElement>;
 
   view: LaunchpadViewMode;
   onView: (v: LaunchpadViewMode) => void;
@@ -30,12 +34,20 @@ interface Props {
   previewOpen: boolean;
   onTogglePreview: () => void;
   onConnect: () => void;
+
+  group: LaunchpadGroupMode;
+  groupMenuOpen: boolean;
+  onToggleGroupMenu: () => void;
+  onShare: () => void;
+  actionMenuOpen: boolean;
+  onToggleActionMenu: () => void;
 }
 
 export default function LaunchpadToolbar({
   title,
   query,
   onQuery,
+  searchInputRef,
   view,
   onView,
   canBack,
@@ -45,28 +57,26 @@ export default function LaunchpadToolbar({
   previewOpen,
   onTogglePreview,
   onConnect,
+  group,
+  groupMenuOpen,
+  onToggleGroupMenu,
+  onShare,
+  actionMenuOpen,
+  onToggleActionMenu,
 }: Props) {
   return (
     <div
       data-no-drag
-      className="flex h-12 items-center gap-2 border-b border-app bg-app-elevated px-3"
+      className="relative flex h-12 items-center gap-2 border-b border-app bg-app-elevated px-3"
     >
       {/* Back / Forward */}
       <div className="flex items-center gap-0.5">
-        <ToolbarBtn
-          aria-label="Back"
-          disabled={!canBack}
-          onClick={onBack}
-        >
+        <ToolbarBtn aria-label="Back" disabled={!canBack} onClick={onBack}>
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M15 18l-6-6 6-6" />
           </svg>
         </ToolbarBtn>
-        <ToolbarBtn
-          aria-label="Forward"
-          disabled={!canForward}
-          onClick={onForward}
-        >
+        <ToolbarBtn aria-label="Forward" disabled={!canForward} onClick={onForward}>
           <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <path d="M9 6l6 6-6 6" />
           </svg>
@@ -106,11 +116,7 @@ export default function LaunchpadToolbar({
         role="group"
         aria-label="View"
       >
-        <ViewSegment
-          active={view === "icon"}
-          onClick={() => onView("icon")}
-          aria-label="Icon view"
-        >
+        <ViewSegment active={view === "icon"} onClick={() => onView("icon")} aria-label="Icon view">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
             <rect x="3" y="3" width="7" height="7" rx="1" />
             <rect x="14" y="3" width="7" height="7" rx="1" />
@@ -118,31 +124,19 @@ export default function LaunchpadToolbar({
             <rect x="14" y="14" width="7" height="7" rx="1" />
           </svg>
         </ViewSegment>
-        <ViewSegment
-          active={view === "list"}
-          onClick={() => onView("list")}
-          aria-label="List view"
-        >
+        <ViewSegment active={view === "list"} onClick={() => onView("list")} aria-label="List view">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
             <path d="M4 7h16M4 12h16M4 17h16" />
           </svg>
         </ViewSegment>
-        <ViewSegment
-          active={view === "column"}
-          onClick={() => onView("column")}
-          aria-label="Column view"
-        >
+        <ViewSegment active={view === "column"} onClick={() => onView("column")} aria-label="Column view">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
             <rect x="3" y="3" width="5" height="18" rx="1" />
             <rect x="10" y="3" width="5" height="18" rx="1" />
             <rect x="17" y="3" width="4" height="18" rx="1" />
           </svg>
         </ViewSegment>
-        <ViewSegment
-          active={view === "gallery"}
-          onClick={() => onView("gallery")}
-          aria-label="Gallery view"
-        >
+        <ViewSegment active={view === "gallery"} onClick={() => onView("gallery")} aria-label="Gallery view">
           <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <rect x="6" y="4" width="12" height="11" rx="1" />
             <rect x="3" y="17" width="4" height="3" rx="0.5" />
@@ -152,22 +146,40 @@ export default function LaunchpadToolbar({
         </ViewSegment>
       </div>
 
-      {/* Group / Share / Action — visual only for v1 */}
-      <ToolbarBtn aria-label="Group" title="Coming soon" disabled>
+      {/* Group menu trigger */}
+      <ToolbarBtn
+        aria-label="Group"
+        aria-haspopup="menu"
+        aria-expanded={groupMenuOpen}
+        title={group === "none" ? "Group by…" : `Grouped by ${group}`}
+        onClick={onToggleGroupMenu}
+        active={groupMenuOpen || group !== "none"}
+      >
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <rect x="4" y="4" width="7" height="7" rx="1" />
           <rect x="13" y="4" width="7" height="7" rx="1" />
           <rect x="4" y="13" width="16" height="7" rx="1" />
         </svg>
       </ToolbarBtn>
-      <ToolbarBtn aria-label="Share" title="Coming soon" disabled>
+
+      {/* Share */}
+      <ToolbarBtn aria-label="Share" title="Share Spacefield link" onClick={onShare}>
         <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d="M12 3v12" />
           <path d="M8 7l4-4 4 4" />
           <path d="M5 14v5h14v-5" />
         </svg>
       </ToolbarBtn>
-      <ToolbarBtn aria-label="Action" title="Coming soon" disabled>
+
+      {/* Action menu */}
+      <ToolbarBtn
+        aria-label="Action"
+        aria-haspopup="menu"
+        aria-expanded={actionMenuOpen}
+        title="More"
+        onClick={onToggleActionMenu}
+        active={actionMenuOpen}
+      >
         <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
           <circle cx="6" cy="12" r="1.5" />
           <circle cx="12" cy="12" r="1.5" />
@@ -192,12 +204,10 @@ export default function LaunchpadToolbar({
           <circle cx="11" cy="11" r="7" />
           <path d="M20 20l-3.5-3.5" />
         </svg>
-        <input
-          type="text"
+        <SearchInput
+          ref={searchInputRef}
           value={query}
           onChange={(e) => onQuery(e.target.value)}
-          placeholder="Search"
-          className="h-7 w-44 rounded-md border border-app bg-app pl-7 pr-2 text-[12px] text-app placeholder:text-muted focus:outline-none focus:border-tool-accent"
         />
       </div>
     </div>
@@ -241,3 +251,18 @@ function ViewSegment({
     </button>
   );
 }
+
+const SearchInput = forwardRef<
+  HTMLInputElement,
+  React.InputHTMLAttributes<HTMLInputElement>
+>(function SearchInput(props, ref) {
+  return (
+    <input
+      ref={ref}
+      type="text"
+      placeholder="Search"
+      className="h-7 w-44 rounded-md border border-app bg-app pl-7 pr-2 text-[12px] text-app placeholder:text-muted focus:outline-none focus:border-tool-accent"
+      {...props}
+    />
+  );
+});

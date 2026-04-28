@@ -7,12 +7,16 @@
  *   - Is movable (drag the title bar) and resizable (8-way edge handles).
  *   - Persists its bounds per-workspace at `ws:<id>:launchpad-bounds-v1`.
  *   - Persists the chosen view per-workspace at `ws:<id>:launchpad-view-v1`.
+ *   - Persists Group + Preview toggles per-workspace.
  *   - Opens at 1100×640, min 720×420, max full screen.
  *   - Stays z-stacked beneath modals (z-50) but above regular windows so
  *     it acts like a system finder rather than a tool window.
  *
- * The component still receives an `open` prop so existing callers
- * (Desktop.tsx) keep working without changes to the window-manager.
+ * Every sidebar item, toolbar button, and right-click menu in this
+ * window is wired to real behavior — see `LaunchpadSidebar`,
+ * `LaunchpadToolbar`, `LaunchpadActionMenu`, `LaunchpadGroupMenu`,
+ * `LaunchpadFilesPane`, and `LaunchpadAboutDialog` for the moving
+ * parts.
  */
 
 import { AnimatePresence, motion } from "framer-motion";
@@ -24,6 +28,7 @@ import {
   useState,
 } from "react";
 import { TOOL_CATEGORIES, TOOLS, type ToolItem } from "../_data/tools-list";
+import { invalidate } from "@/lib/cache/swr";
 import {
   setAppDragPayload,
   readAppDragPayload,
@@ -39,17 +44,35 @@ import LaunchpadIconView from "./launchpad/LaunchpadIconView";
 import LaunchpadListView from "./launchpad/LaunchpadListView";
 import LaunchpadColumnView from "./launchpad/LaunchpadColumnView";
 import LaunchpadGalleryView from "./launchpad/LaunchpadGalleryView";
+import LaunchpadActionMenu from "./launchpad/LaunchpadActionMenu";
+import LaunchpadGroupMenu from "./launchpad/LaunchpadGroupMenu";
+import LaunchpadAboutDialog from "./launchpad/LaunchpadAboutDialog";
+import LaunchpadFilesPane from "./launchpad/LaunchpadFilesPane";
+import {
+  appForFile,
+  fileKind,
+  fmtSize,
+  FILE_LIST_PREFIX,
+  type LaunchpadFile,
+  type LaunchpadFileKind,
+} from "./launchpad/launchpadFiles";
 import {
   useLaunchpadView,
+  type LaunchpadGroupMode,
   type LaunchpadLocation,
   locationKey,
   locationTitle,
 } from "./launchpad/useLaunchpadView";
+import AppIcon, { hasAppIcon } from "./AppIcon";
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  onOpenTool: (slug: string, title: string) => void;
+  onOpenTool: (
+    slug: string,
+    title: string,
+    params?: Record<string, unknown>
+  ) => void;
   onUninstall?: (slug: string) => void;
   onStore?: () => void;
   /** Restrict to these tools (the installed set). When omitted, all
@@ -60,6 +83,12 @@ interface Props {
   /** Optional: open the workspace switcher (used by the toolbar's
    * "Connect" button). */
   onConnect?: () => void;
+  /** Toggle a slug in the user's pinned-dock list. Wired through from
+   * the desktop's `useDockOrder`. */
+  onTogglePin?: (slug: string) => void;
+  /** True when the slug is currently pinned to the dock. Used to flip
+   * the right-click "Pin to Dock" item to "Unpin from Dock". */
+  isPinned?: (slug: string) => boolean;
 }
 
 const TOPBAR = 32;
@@ -75,6 +104,22 @@ interface Bounds {
   w: number;
   h: number;
 }
+
+interface ItemContextMenu {
+  kind: "tool";
+  tool: ToolItem;
+  x: number;
+  y: number;
+}
+
+interface FileContextMenu {
+  kind: "file";
+  file: LaunchpadFile;
+  x: number;
+  y: number;
+}
+
+type ContextMenuState = ItemContextMenu | FileContextMenu | null;
 
 function clamp(v: number, lo: number, hi: number) {
   return Math.max(lo, Math.min(v, hi));
@@ -105,6 +150,8 @@ export default function Launchpad({
   items,
   onAppDroppedOnLaunchpad,
   onConnect,
+  onTogglePin,
+  isPinned,
 }: Props) {
   const BOUNDS_KEY = useWorkspaceKey(BOUNDS_SUFFIX);
   const { workspaces, activeId, switchWorkspace } = useWorkspaces();
@@ -116,12 +163,19 @@ export default function Launchpad({
   const [prevBounds, setPrevBounds] = useState<Bounds | null>(null);
   const [q, setQ] = useState("");
   const [focusedSlug, setFocusedSlug] = useState<string | null>(null);
-  const [menu, setMenu] = useState<{
-    slug: string;
-    title: string;
-    x: number;
-    y: number;
-  } | null>(null);
+  const [focusedFileId, setFocusedFileId] = useState<string | null>(null);
+  const [menu, setMenu] = useState<ContextMenuState>(null);
+  const [groupMenuOpen, setGroupMenuOpen] = useState(false);
+  const [actionMenuOpen, setActionMenuOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const [toast, setToast] = useState<string | null>(null);
+  const [refreshTick, setRefreshTick] = useState(0);
+  /* Files cache so the right-click "Reveal" / "Delete" handlers can
+   * resolve the focused file by id without prop-drilling through every
+   * pane. Keyed by file id. */
+  const fileCacheRef = useRef<Map<string, LaunchpadFile>>(new Map());
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Hydrate persisted bounds.
   useEffect(() => {
@@ -167,15 +221,25 @@ export default function Launchpad({
     if (!open) {
       setQ("");
       setMenu(null);
+      setGroupMenuOpen(false);
+      setActionMenuOpen(false);
+      setAboutOpen(false);
+      setToast(null);
+      if (toastTimerRef.current) {
+        clearTimeout(toastTimerRef.current);
+        toastTimerRef.current = null;
+      }
     }
   }, [open]);
 
-  // ⌘W closes; Escape closes; ⌘Shift+A toggles (handled by the parent — we
-  // only listen for window-local close keys here).
+  // ⌘W closes; Escape closes; ⌘F focuses the search input.
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        // Don't steal Escape from the About dialog or the popovers —
+        // their own listeners handle it first via stopPropagation.
+        if (aboutOpen || groupMenuOpen || actionMenuOpen || menu) return;
         e.preventDefault();
         onClose();
         return;
@@ -185,10 +249,16 @@ export default function Launchpad({
         onClose();
         return;
       }
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "f") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        searchInputRef.current?.select();
+        return;
+      }
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
-  }, [open, onClose]);
+  }, [open, onClose, aboutOpen, groupMenuOpen, actionMenuOpen, menu]);
 
   // Dismiss the right-click context menu on any pointer-down outside it.
   useEffect(() => {
@@ -198,10 +268,37 @@ export default function Launchpad({
     return () => window.removeEventListener("pointerdown", onDown);
   }, [menu]);
 
+  // Show a transient toast (auto-dismisses after 2.5s).
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    toastTimerRef.current = setTimeout(() => {
+      setToast(null);
+      toastTimerRef.current = null;
+    }, 2500);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    };
+  }, []);
+
   // Resolve the items shown in the main pane based on the current location.
   const sourceTools = useMemo<ToolItem[]>(() => {
     return items ?? TOOLS;
   }, [items]);
+
+  /* For the "Shared" location we surface the workspace's communication
+   * apps. The categories enum doesn't have a literal "communication"
+   * key, so we keep it loose: anything whose category matches that
+   * string (forwards-compat) plus the chat slug. */
+  const communicationTools = useMemo<ToolItem[]>(() => {
+    return sourceTools.filter(
+      (t) =>
+        (t.category as string) === "communication" || t.slug === "chat"
+    );
+  }, [sourceTools]);
 
   const locationItems = useMemo<ToolItem[]>(() => {
     const loc = launchpadView.location;
@@ -220,9 +317,7 @@ export default function Launchpad({
           .filter((t): t is ToolItem => Boolean(t));
       }
       case "shared":
-        // Communication-style apps (chat). Empty if nothing matches —
-        // sidebar tooltip already says "Coming soon".
-        return [];
+        return communicationTools;
       case "workspace":
         // Workspace rows are jump targets, not item lists. The click
         // handler swaps the active workspace and resets to Applications.
@@ -230,25 +325,136 @@ export default function Launchpad({
       case "category":
         return sourceTools.filter((t) => t.category === loc.id);
       case "tag":
+        // The actual tag NAME (not id) is what we filter against — see
+        // the tag-resolution effect below for the mapping. We surface
+        // the items here, but the parent passes us only the id so we
+        // store name lookups in `tagNameRef`.
+        return sourceTools;
       case "downloads":
       case "documents":
       case "desktop":
       default:
         return [];
     }
-  }, [launchpadView.location, sourceTools, recents]);
+  }, [launchpadView.location, sourceTools, recents, communicationTools]);
+
+  /* Tag filter — when location is `tag`, look up its name from the
+   * sidebar's CRM tag list (also fetched here so it survives navigation
+   * even if the sidebar unmounts). */
+  const [tagsByName, setTagsByName] = useState<Record<string, string>>({});
+  useEffect(() => {
+    if (!activeId) return;
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch(
+          `/api/crm/tags?workspace_id=${encodeURIComponent(activeId)}`
+        );
+        if (!res.ok) return;
+        const j = (await res.json()) as { items?: { id: string; name: string }[] };
+        if (cancelled) return;
+        const map: Record<string, string> = {};
+        for (const t of j.items ?? []) map[t.id] = t.name;
+        setTagsByName(map);
+      } catch {
+        /* ignore — tag filter falls back to no-op match */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeId]);
+
+  const filteredByTag = useMemo<ToolItem[]>(() => {
+    const loc = launchpadView.location;
+    if (loc.kind !== "tag") return locationItems;
+    const tagName = (tagsByName[loc.id] ?? "").toLowerCase();
+    if (!tagName) return [];
+    return locationItems.filter(
+      (t) =>
+        t.title.toLowerCase().includes(tagName) ||
+        t.description.toLowerCase().includes(tagName)
+    );
+  }, [launchpadView.location, locationItems, tagsByName]);
 
   // Filter by search query.
   const visibleTools = useMemo<ToolItem[]>(() => {
     const query = q.trim().toLowerCase();
-    if (!query) return locationItems;
-    return locationItems.filter(
+    if (!query) return filteredByTag;
+    return filteredByTag.filter(
       (t) =>
         t.title.toLowerCase().includes(query) ||
         t.description.toLowerCase().includes(query) ||
         t.category.toLowerCase().includes(query)
     );
-  }, [locationItems, q]);
+  }, [filteredByTag, q]);
+
+  /* Group the visible tools when the user has picked a non-"none"
+   * group mode. Recent uses the recents log to label "Recent" /
+   * "Earlier". Tag groups by every CRM tag that matches a tool. */
+  const groupedTools = useMemo<
+    | { groups: Array<{ label: string; tools: ToolItem[] }> }
+    | null
+  >(() => {
+    const mode: LaunchpadGroupMode = launchpadView.group;
+    if (mode === "none") return null;
+    const view = launchpadView.view;
+    if (view !== "icon" && view !== "list") return null;
+    if (mode === "category") {
+      const map = new Map<string, ToolItem[]>();
+      for (const t of visibleTools) {
+        const k = t.category;
+        const list = map.get(k) ?? [];
+        list.push(t);
+        map.set(k, list);
+      }
+      const groups: Array<{ label: string; tools: ToolItem[] }> = [];
+      for (const cat of TOOL_CATEGORIES) {
+        const list = map.get(cat.key);
+        if (list && list.length > 0) groups.push({ label: cat.label, tools: list });
+      }
+      return { groups };
+    }
+    if (mode === "recent") {
+      const recentSlugs = new Set<string>();
+      for (const r of recents) {
+        if (r.kind === "tool") recentSlugs.add(r.slug);
+      }
+      const recent = visibleTools.filter((t) => recentSlugs.has(t.slug));
+      const earlier = visibleTools.filter((t) => !recentSlugs.has(t.slug));
+      return {
+        groups: [
+          { label: "Recent", tools: recent },
+          { label: "Earlier", tools: earlier },
+        ],
+      };
+    }
+    // tag
+    const groups: Array<{ label: string; tools: ToolItem[] }> = [];
+    const seen = new Set<string>();
+    for (const id of Object.keys(tagsByName)) {
+      const name = tagsByName[id];
+      const lower = name.toLowerCase();
+      const matches = visibleTools.filter(
+        (t) =>
+          t.title.toLowerCase().includes(lower) ||
+          t.description.toLowerCase().includes(lower)
+      );
+      if (matches.length > 0) {
+        groups.push({ label: name, tools: matches });
+        for (const m of matches) seen.add(m.slug);
+      }
+    }
+    const untagged = visibleTools.filter((t) => !seen.has(t.slug));
+    if (untagged.length > 0) groups.push({ label: "Untagged", tools: untagged });
+    return { groups };
+  }, [
+    launchpadView.group,
+    launchpadView.view,
+    visibleTools,
+    recents,
+    tagsByName,
+  ]);
 
   // Keep focused item valid when the visible set shrinks.
   useEffect(() => {
@@ -267,8 +473,11 @@ export default function Launchpad({
     if (loc.kind === "category") {
       return TOOL_CATEGORIES.find((c) => c.key === loc.id)?.label ?? loc.id;
     }
+    if (loc.kind === "tag") {
+      return tagsByName[loc.id] ?? "Tag";
+    }
     return locationTitle(loc);
-  }, [launchpadView.location, workspaces]);
+  }, [launchpadView.location, workspaces, tagsByName]);
 
   const handleSelectLocation = useCallback(
     (loc: LaunchpadLocation) => {
@@ -288,9 +497,6 @@ export default function Launchpad({
         onClose();
         return;
       }
-      // Shared: pretend we open Chat. We don't have a comm slug list to
-      // filter against, so for v1 we just show an empty list (tooltip in
-      // the sidebar already says "Coming soon").
       launchpadView.setLocation(loc);
     },
     [activeId, switchWorkspace, onClose, launchpadView]
@@ -304,19 +510,51 @@ export default function Launchpad({
     [onOpenTool, onClose]
   );
 
-  const handleContextMenu = useCallback(
+  const handleOpenFile = useCallback(
+    (file: LaunchpadFile) => {
+      const slug = appForFile(file);
+      const titleByApp: Record<string, string> = {
+        documents: "Documents",
+        sheets: "Sheets",
+        "files-manager": "Files",
+      };
+      onOpenTool(slug, titleByApp[slug] ?? "Files", { fileId: file.id });
+      onClose();
+    },
+    [onOpenTool, onClose]
+  );
+
+  const cacheFile = useCallback((file: LaunchpadFile) => {
+    fileCacheRef.current.set(file.id, file);
+  }, []);
+
+  const handleToolContext = useCallback(
     (e: React.MouseEvent, tool: ToolItem) => {
-      if (!onUninstall) return;
       e.preventDefault();
       const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
       setMenu({
-        slug: tool.slug,
-        title: tool.title,
+        kind: "tool",
+        tool,
         x: rect.left,
         y: rect.top + rect.height + 6,
       });
     },
-    [onUninstall]
+    []
+  );
+
+  const handleFileContext = useCallback(
+    (e: React.MouseEvent, file: LaunchpadFile) => {
+      e.preventDefault();
+      cacheFile(file);
+      const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+      setMenu({
+        kind: "file",
+        file,
+        x: rect.left,
+        y: rect.top + rect.height + 6,
+      });
+    },
+    [cacheFile]
   );
 
   /* Drag-to-move on the title bar */
@@ -459,6 +697,81 @@ export default function Launchpad({
     return () => document.removeEventListener("keydown", onKey);
   }, [open, visibleTools, focusedSlug, launchpadView.view, handleOpen]);
 
+  /* Toolbar action handlers */
+
+  const handleShare = useCallback(() => {
+    const url = "https://spacefield.co/";
+    const nav: Navigator & {
+      share?: (data: { url: string }) => Promise<void>;
+    } = navigator;
+    if (typeof nav.share === "function") {
+      void nav.share({ url }).catch(() => {
+        /* user cancelled or share failed — fall through silently */
+      });
+      return;
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      void navigator.clipboard
+        .writeText(url)
+        .then(() => showToast("Link copied"))
+        .catch(() => showToast("Couldn’t copy link"));
+      return;
+    }
+    showToast("Sharing unavailable");
+  }, [showToast]);
+
+  const handleRefresh = useCallback(() => {
+    invalidate({ prefix: FILE_LIST_PREFIX });
+    invalidate({ prefix: "/api/crm/tags" });
+    setRefreshTick((n) => n + 1);
+    showToast("Refreshed");
+  }, [showToast]);
+
+  const handleResetWindow = useCallback(() => {
+    setMaximized(false);
+    setPrevBounds(null);
+    setBounds(defaultBounds());
+    showToast("Window reset");
+  }, [showToast]);
+
+  const handleResetLaunchpad = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const prefixes = [
+      `ws:${activeId}:launchpad-`,
+    ];
+    const toRemove: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i);
+      if (!k) continue;
+      if (prefixes.some((p) => k.startsWith(p))) toRemove.push(k);
+      // Also clear any global launchpad-* keys that pre-date workspaces.
+      if (k.startsWith("launchpad-")) toRemove.push(k);
+    }
+    toRemove.forEach((k) => window.localStorage.removeItem(k));
+    window.location.reload();
+  }, [activeId]);
+
+  /* Resolve focused name for the status bar. When a file pane is
+   * showing, the focused id refers to a file in the cache; otherwise
+   * we fall back to the focused tool's title. */
+  const focusedNameForStatus = useMemo<string | null>(() => {
+    if (!launchpadView.previewOpen) return null;
+    if (focusedFileId) {
+      const f = fileCacheRef.current.get(focusedFileId);
+      if (f) return f.name;
+    }
+    if (focusedSlug) {
+      const t = visibleTools.find((tt) => tt.slug === focusedSlug);
+      if (t) return t.title;
+    }
+    return null;
+  }, [launchpadView.previewOpen, focusedFileId, focusedSlug, visibleTools]);
+
+  const showsFilePane =
+    launchpadView.location.kind === "downloads" ||
+    launchpadView.location.kind === "documents" ||
+    launchpadView.location.kind === "shared";
+
   return (
     <AnimatePresence>
       {open && (
@@ -551,6 +864,7 @@ export default function Launchpad({
             title={currentTitle}
             query={q}
             onQuery={setQ}
+            searchInputRef={searchInputRef}
             view={launchpadView.view}
             onView={launchpadView.setView}
             canBack={launchpadView.canBack}
@@ -562,6 +876,34 @@ export default function Launchpad({
             onConnect={() => {
               if (onConnect) onConnect();
             }}
+            group={launchpadView.group}
+            groupMenuOpen={groupMenuOpen}
+            onToggleGroupMenu={() => {
+              setActionMenuOpen(false);
+              setGroupMenuOpen((v) => !v);
+            }}
+            onShare={handleShare}
+            actionMenuOpen={actionMenuOpen}
+            onToggleActionMenu={() => {
+              setGroupMenuOpen(false);
+              setActionMenuOpen((v) => !v);
+            }}
+          />
+
+          <LaunchpadGroupMenu
+            open={groupMenuOpen}
+            group={launchpadView.group}
+            onPick={(g) => launchpadView.setGroup(g)}
+            onClose={() => setGroupMenuOpen(false)}
+          />
+
+          <LaunchpadActionMenu
+            open={actionMenuOpen}
+            onClose={() => setActionMenuOpen(false)}
+            onRefresh={handleRefresh}
+            onResetWindow={handleResetWindow}
+            onAbout={() => setAboutOpen(true)}
+            onResetLaunchpad={handleResetLaunchpad}
           />
 
           {/* Body — sidebar + main pane (+ optional preview). */}
@@ -595,21 +937,52 @@ export default function Launchpad({
                 <MainPane
                   view={launchpadView.view}
                   tools={visibleTools}
+                  toolGroups={groupedTools?.groups}
                   focusedSlug={focusedSlug}
-                  onFocus={setFocusedSlug}
+                  onFocus={(slug) => {
+                    setFocusedSlug(slug);
+                    setFocusedFileId(null);
+                  }}
                   onOpen={handleOpen}
-                  onContextMenu={handleContextMenu}
+                  onContextMenu={handleToolContext}
                   itemsHint={items}
                   locationKey={locationKey(launchpadView.location)}
+                  location={launchpadView.location}
                   onOpenStore={onStore}
                   onClose={onClose}
+                  workspaceId={activeId}
+                  refreshTick={refreshTick}
+                  communicationTools={communicationTools}
+                  onOpenFile={(file) => {
+                    cacheFile(file);
+                    setFocusedFileId(file.id);
+                    handleOpenFile(file);
+                  }}
+                  onFileContext={(e, file) => {
+                    setFocusedFileId(file.id);
+                    handleFileContext(e, file);
+                  }}
+                  onFileFocus={(file) => {
+                    cacheFile(file);
+                    setFocusedFileId(file.id);
+                  }}
                 />
               </div>
 
-              {launchpadView.previewOpen && (
+              {launchpadView.previewOpen && !showsFilePane && (
                 <PreviewPane
                   tool={visibleTools.find((t) => t.slug === focusedSlug) ?? null}
                   onOpen={handleOpen}
+                />
+              )}
+              {launchpadView.previewOpen && showsFilePane && (
+                <FilePreviewPane
+                  file={
+                    focusedFileId
+                      ? fileCacheRef.current.get(focusedFileId) ?? null
+                      : null
+                  }
+                  onOpen={(f) => handleOpenFile(f)}
                 />
               )}
             </div>
@@ -617,8 +990,19 @@ export default function Launchpad({
 
           {/* Status bar */}
           <LaunchpadStatusBar
-            itemCount={visibleTools.length}
+            itemCount={
+              // File-listing locations don't lift their row count here;
+              // when on those, fall back to the communication-apps count
+              // (Shared) or 0 (Downloads/Documents) and let the GB
+              // indicator carry the rest.
+              launchpadView.location.kind === "shared"
+                ? communicationTools.length
+                : showsFilePane
+                  ? 0
+                  : visibleTools.length
+            }
             workspaceId={activeId}
+            focusedName={focusedNameForStatus}
           />
 
           {/* Resize handles — only when not maximized. */}
@@ -635,29 +1019,79 @@ export default function Launchpad({
             </>
           )}
 
-          {/* Right-click context menu — preserved from the original
-           * Launchpad. Offers Uninstall for the right-clicked tool. */}
-          {menu && onUninstall && (
+          {/* Right-click context menu — supports both tool and file rows. */}
+          {menu && menu.kind === "tool" && (
+            <ToolContextMenu
+              tool={menu.tool}
+              x={menu.x}
+              y={menu.y}
+              onClose={() => setMenu(null)}
+              onOpen={() => {
+                handleOpen(menu.tool);
+              }}
+              onShowInApps={() => {
+                launchpadView.setLocation({ kind: "applications" });
+                setFocusedSlug(menu.tool.slug);
+              }}
+              onPin={
+                onTogglePin
+                  ? () => {
+                      onTogglePin(menu.tool.slug);
+                      const verb =
+                        isPinned && isPinned(menu.tool.slug) ? "Unpinned" : "Pinned";
+                      showToast(`${verb} ${menu.tool.title}`);
+                    }
+                  : undefined
+              }
+              isPinned={isPinned ? isPinned(menu.tool.slug) : false}
+              onGetInfo={() => {
+                if (!launchpadView.previewOpen) launchpadView.togglePreview();
+                setFocusedSlug(menu.tool.slug);
+              }}
+              onUninstall={
+                onUninstall ? () => onUninstall(menu.tool.slug) : undefined
+              }
+            />
+          )}
+          {menu && menu.kind === "file" && (
+            <FileContextMenu
+              file={menu.file}
+              x={menu.x}
+              y={menu.y}
+              onClose={() => setMenu(null)}
+              onOpen={() => handleOpenFile(menu.file)}
+              onReveal={() => {
+                onOpenTool("files-manager", "Files", { fileId: menu.file.id });
+                onClose();
+              }}
+              onDelete={async () => {
+                try {
+                  await fetch(
+                    `/api/files/delete?id=${encodeURIComponent(menu.file.id)}`,
+                    { method: "DELETE" }
+                  );
+                } catch {
+                  /* swallow — we still show toast + refresh below */
+                }
+                invalidate({ prefix: FILE_LIST_PREFIX });
+                setRefreshTick((n) => n + 1);
+                showToast("Deleted");
+              }}
+            />
+          )}
+
+          <LaunchpadAboutDialog
+            open={aboutOpen}
+            onClose={() => setAboutOpen(false)}
+          />
+
+          {toast && (
             <div
-              role="menu"
-              onPointerDown={(e) => e.stopPropagation()}
-              className="pointer-events-auto fixed z-[90] rounded-lg border border-app bg-app-elevated p-1 shadow-xl"
-              style={{ left: menu.x, top: menu.y }}
+              role="status"
+              aria-live="polite"
+              className="pointer-events-none absolute left-1/2 top-[60px] z-[85] -translate-x-1/2 rounded-md border border-app bg-app-elevated px-3 py-1.5 text-[12px] text-app shadow-lg"
             >
-              <div className="px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-muted">
-                {menu.title}
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  onUninstall(menu.slug);
-                  setMenu(null);
-                }}
-                className="block w-full rounded px-2 py-1.5 text-left text-sm text-app hover:bg-surface transition-colors"
-                role="menuitem"
-              >
-                Uninstall
-              </button>
+              {toast}
             </div>
           )}
         </motion.div>
@@ -669,27 +1103,42 @@ export default function Launchpad({
 interface MainPaneProps {
   view: ReturnType<typeof useLaunchpadView>["view"];
   tools: ToolItem[];
+  toolGroups?: Array<{ label: string; tools: ToolItem[] }>;
   focusedSlug: string | null;
   onFocus: (slug: string) => void;
   onOpen: (tool: ToolItem) => void;
   onContextMenu: (e: React.MouseEvent, tool: ToolItem) => void;
   itemsHint?: ToolItem[];
   locationKey: string;
+  location: LaunchpadLocation;
   onOpenStore?: () => void;
   onClose: () => void;
+  workspaceId: string;
+  refreshTick: number;
+  communicationTools: ToolItem[];
+  onOpenFile: (file: LaunchpadFile) => void;
+  onFileContext: (e: React.MouseEvent, file: LaunchpadFile) => void;
+  onFileFocus: (file: LaunchpadFile) => void;
 }
 
 function MainPane({
   view,
   tools,
+  toolGroups,
   focusedSlug,
   onFocus,
   onOpen,
   onContextMenu,
   itemsHint,
   locationKey: locKey,
+  location,
   onOpenStore,
   onClose,
+  workspaceId,
+  refreshTick,
+  communicationTools,
+  onOpenFile,
+  onFileContext,
 }: MainPaneProps) {
   // First-launch helper: surface a prominent "Open the Store" CTA when
   // the user has no installed tools at all (matches the previous
@@ -719,11 +1168,83 @@ function MainPane({
     );
   }
 
+  // Downloads / Documents / Shared all show the file list.
+  if (location.kind === "downloads") {
+    return (
+      <LaunchpadFilesPane
+        workspaceId={workspaceId}
+        limit={30}
+        refreshTick={refreshTick}
+        emptyTitle="No files yet"
+        emptyHint="Files you upload will show up here."
+        onOpenFile={onOpenFile}
+        onContextMenu={onFileContext}
+      />
+    );
+  }
+  if (location.kind === "documents") {
+    return (
+      <LaunchpadFilesPane
+        workspaceId={workspaceId}
+        limit={30}
+        kinds="document,sheet"
+        filterKinds={["document", "sheet"] as LaunchpadFileKind[]}
+        refreshTick={refreshTick}
+        emptyTitle="No documents yet"
+        emptyHint="Text documents and spreadsheets will appear here."
+        onOpenFile={onOpenFile}
+        onContextMenu={onFileContext}
+      />
+    );
+  }
+  if (location.kind === "shared") {
+    const header =
+      communicationTools.length > 0 ? (
+        <div className="border-b border-app bg-app-elevated">
+          <div className="px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wider text-muted">
+            Communication
+          </div>
+          <div className="flex flex-wrap gap-3 px-3 pb-3">
+            {communicationTools.map((t) => (
+              <button
+                key={t.slug}
+                type="button"
+                onClick={() => onOpen(t)}
+                onContextMenu={(e) => onContextMenu(e, t)}
+                className="flex items-center gap-2 rounded-md border border-app bg-app px-3 py-1.5 text-[12px] text-app transition-colors hover:bg-surface"
+              >
+                {hasAppIcon(t.slug) ? (
+                  <AppIcon slug={t.slug} size={20} cornerPct={22} flatShadow />
+                ) : (
+                  <span className="h-5 w-5 rounded bg-surface" />
+                )}
+                <span>{t.title}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      ) : null;
+    return (
+      <LaunchpadFilesPane
+        workspaceId={workspaceId}
+        limit={20}
+        shared
+        refreshTick={refreshTick}
+        emptyTitle="Nothing shared yet"
+        emptyHint="Files shared with this workspace will appear here."
+        onOpenFile={onOpenFile}
+        onContextMenu={onFileContext}
+        header={header}
+      />
+    );
+  }
+
   switch (view) {
     case "list":
       return (
         <LaunchpadListView
           tools={tools}
+          groups={toolGroups}
           focusedSlug={focusedSlug}
           onFocus={onFocus}
           onOpen={onOpen}
@@ -755,6 +1276,7 @@ function MainPane({
       return (
         <LaunchpadIconView
           tools={tools}
+          groups={toolGroups}
           focusedSlug={focusedSlug}
           onFocus={onFocus}
           onOpen={onOpen}
@@ -775,7 +1297,7 @@ function PreviewPane({
   onOpen: (tool: ToolItem) => void;
 }) {
   return (
-    <aside className="hidden w-72 shrink-0 flex-col items-center gap-3 overflow-y-auto border-l border-app bg-app-elevated p-5 lg:flex">
+    <aside className="hidden w-60 shrink-0 flex-col items-center gap-3 overflow-y-auto border-l border-app bg-app-elevated p-5 lg:flex">
       {tool ? (
         <>
           <div className="pt-2">
@@ -806,13 +1328,212 @@ function PreviewPane({
   );
 }
 
-/* Tiny wrapper so PreviewPane can stay framework-agnostic. We re-import
- * AppIcon here at use-time to avoid lifting it to the file's top scope
- * twice (also used in the view modules). */
-import AppIcon, { hasAppIcon } from "./AppIcon";
+function FilePreviewPane({
+  file,
+  onOpen,
+}: {
+  file: LaunchpadFile | null;
+  onOpen: (file: LaunchpadFile) => void;
+}) {
+  return (
+    <aside className="hidden w-60 shrink-0 flex-col items-center gap-3 overflow-y-auto border-l border-app bg-app-elevated p-5 lg:flex">
+      {file ? (
+        <>
+          <div className="flex h-24 w-24 items-center justify-center rounded-2xl bg-surface text-secondary">
+            <svg viewBox="0 0 24 24" width="56" height="56" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M7 3h10l3 3v15H7z" />
+              <path d="M14 3v4h4" />
+            </svg>
+          </div>
+          <div className="text-center text-sm font-semibold text-app break-words">
+            {file.name}
+          </div>
+          <div className="text-[10px] uppercase tracking-wider text-muted">
+            {fileKind(file)}
+          </div>
+          <div className="text-[11px] text-secondary">
+            {fmtSize(file.size_bytes)}
+          </div>
+          <button
+            type="button"
+            onClick={() => onOpen(file)}
+            className="mt-2 rounded-md bg-tool-accent px-4 py-1.5 text-[12px] font-medium text-white transition-opacity hover:opacity-90"
+          >
+            Open
+          </button>
+        </>
+      ) : (
+        <div className="pt-12 text-sm text-muted">No item selected</div>
+      )}
+    </aside>
+  );
+}
+
 function PreviewIcon({ slug, title }: { slug: string; title: string }) {
   if (hasAppIcon(slug)) {
-    return <AppIcon slug={slug} size={120} cornerPct={24} label={title} />;
+    return <AppIcon slug={slug} size={96} cornerPct={24} label={title} />;
   }
-  return <div className="h-[120px] w-[120px] rounded-2xl bg-surface" />;
+  return <div className="h-[96px] w-[96px] rounded-2xl bg-surface" />;
+}
+
+interface ToolContextMenuProps {
+  tool: ToolItem;
+  x: number;
+  y: number;
+  onClose: () => void;
+  onOpen: () => void;
+  onShowInApps: () => void;
+  onPin?: () => void;
+  isPinned: boolean;
+  onGetInfo: () => void;
+  onUninstall?: () => void;
+}
+
+function ToolContextMenu({
+  tool,
+  x,
+  y,
+  onClose,
+  onOpen,
+  onShowInApps,
+  onPin,
+  isPinned,
+  onGetInfo,
+  onUninstall,
+}: ToolContextMenuProps) {
+  return (
+    <div
+      role="menu"
+      onPointerDown={(e) => e.stopPropagation()}
+      className="pointer-events-auto fixed z-[90] w-56 rounded-lg border border-app bg-app-elevated p-1 shadow-xl"
+      style={{ left: x, top: y }}
+    >
+      <div className="px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-muted">
+        {tool.title}
+      </div>
+      <MenuItem
+        label="Open"
+        onClick={() => {
+          onOpen();
+          onClose();
+        }}
+      />
+      <MenuItem
+        label="Show in Applications"
+        onClick={() => {
+          onShowInApps();
+          onClose();
+        }}
+      />
+      {onPin && (
+        <MenuItem
+          label={isPinned ? "Unpin from Dock" : "Pin to Dock"}
+          onClick={() => {
+            onPin();
+            onClose();
+          }}
+        />
+      )}
+      <MenuItem
+        label="Get Info"
+        onClick={() => {
+          onGetInfo();
+          onClose();
+        }}
+      />
+      {onUninstall && (
+        <>
+          <div aria-hidden="true" className="my-1 h-px bg-app/60" />
+          <MenuItem
+            label="Uninstall"
+            destructive
+            onClick={() => {
+              onUninstall();
+              onClose();
+            }}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+interface FileContextMenuProps {
+  file: LaunchpadFile;
+  x: number;
+  y: number;
+  onClose: () => void;
+  onOpen: () => void;
+  onReveal: () => void;
+  onDelete: () => void | Promise<void>;
+}
+
+function FileContextMenu({
+  file,
+  x,
+  y,
+  onClose,
+  onOpen,
+  onReveal,
+  onDelete,
+}: FileContextMenuProps) {
+  return (
+    <div
+      role="menu"
+      onPointerDown={(e) => e.stopPropagation()}
+      className="pointer-events-auto fixed z-[90] w-60 rounded-lg border border-app bg-app-elevated p-1 shadow-xl"
+      style={{ left: x, top: y }}
+    >
+      <div className="truncate px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-muted">
+        {file.name}
+      </div>
+      <MenuItem
+        label="Open"
+        onClick={() => {
+          onOpen();
+          onClose();
+        }}
+      />
+      <MenuItem
+        label="Reveal in Files Manager"
+        onClick={() => {
+          onReveal();
+          onClose();
+        }}
+      />
+      <div aria-hidden="true" className="my-1 h-px bg-app/60" />
+      <MenuItem
+        label="Delete"
+        destructive
+        onClick={() => {
+          void onDelete();
+          onClose();
+        }}
+      />
+    </div>
+  );
+}
+
+function MenuItem({
+  label,
+  onClick,
+  destructive,
+}: {
+  label: string;
+  onClick: () => void;
+  destructive?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={onClick}
+      className={
+        "block w-full rounded px-2 py-1.5 text-left text-[13px] transition-colors hover:bg-surface " +
+        (destructive ? "text-rose-500" : "text-app")
+      }
+    >
+      {label}
+    </button>
+  );
 }

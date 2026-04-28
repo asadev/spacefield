@@ -3,31 +3,28 @@
 /* LaunchpadSidebar — Finder-style left rail.
  *
  * Sections:
- *   Recents     → top, flat list (Recents, Shared)
- *   Locations   → workspaces (one row per team workspace)
- *   Favorites   → Applications (default), Downloads, Documents, Desktop
- *   Tags        → static colored dots for v1 (Red / Orange / ...)
- *
- * Selection state is driven from the parent — clicking a row calls
- * `onSelect(loc)` and the parent updates `useLaunchpadView`'s history.
+ *   Favorites   → Recents, Shared, Applications, Downloads, Documents,
+ *                 Desktop. Every row is wired to a real location handler
+ *                 in the parent.
+ *   Locations   → workspaces (one row per team workspace).
+ *   Tags        → CRM tags fetched from /api/crm/tags. Hidden when none
+ *                 exist (or the call fails) so users never see a dead
+ *                 placeholder list.
  */
 
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { cachedFetch } from "@/lib/cache/swr";
 import {
   type LaunchpadLocation,
   locationKey,
 } from "./useLaunchpadView";
 import type { Workspace } from "../useWorkspaces";
 
-const TAGS: Array<{ id: string; label: string; color: string }> = [
-  { id: "red", label: "Red", color: "#ff5f57" },
-  { id: "orange", label: "Orange", color: "#ff9f0a" },
-  { id: "yellow", label: "Yellow", color: "#ffd60a" },
-  { id: "green", label: "Green", color: "#30d158" },
-  { id: "blue", label: "Blue", color: "#0a84ff" },
-  { id: "purple", label: "Purple", color: "#bf5af2" },
-  { id: "gray", label: "Gray", color: "#8e8e93" },
-];
+interface CrmTag {
+  id: string;
+  name: string;
+  color: string;
+}
 
 interface Props {
   current: LaunchpadLocation;
@@ -43,13 +40,38 @@ export default function LaunchpadSidebar({
   activeWorkspaceId,
 }: Props) {
   const currentKey = useMemo(() => locationKey(current), [current]);
+  const [tags, setTags] = useState<CrmTag[] | null>(null);
+
+  useEffect(() => {
+    if (!activeWorkspaceId) {
+      setTags([]);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      try {
+        const j = await cachedFetch<{ items: CrmTag[] }>(
+          `/api/crm/tags?workspace_id=${encodeURIComponent(activeWorkspaceId)}`
+        );
+        if (cancelled) return;
+        setTags(Array.isArray(j.items) ? j.items : []);
+      } catch {
+        if (cancelled) return;
+        setTags([]);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeWorkspaceId]);
+
+  const showTags = !!tags && tags.length > 0;
 
   return (
     <nav
       aria-label="Launchpad sidebar"
       className="flex h-full w-56 shrink-0 flex-col gap-3 overflow-y-auto border-r border-app bg-app py-3 text-sm"
     >
-      {/* Recents */}
       <Section title="Favorites">
         <Row
           icon={<ClockIcon />}
@@ -62,7 +84,6 @@ export default function LaunchpadSidebar({
           label="Shared"
           selected={currentKey === "shared"}
           onClick={() => onSelect({ kind: "shared" })}
-          comingSoon
         />
         <Row
           icon={<GridIcon />}
@@ -75,14 +96,12 @@ export default function LaunchpadSidebar({
           label="Downloads"
           selected={currentKey === "downloads"}
           onClick={() => onSelect({ kind: "downloads" })}
-          comingSoon
         />
         <Row
           icon={<DocIcon />}
           label="Documents"
           selected={currentKey === "documents"}
           onClick={() => onSelect({ kind: "documents" })}
-          comingSoon
         />
         <Row
           icon={<DesktopIcon />}
@@ -92,7 +111,6 @@ export default function LaunchpadSidebar({
         />
       </Section>
 
-      {/* Locations — workspaces */}
       <Section title="Locations">
         {workspaces.length === 0 ? (
           <div className="px-3 py-1 text-xs text-muted">No workspaces</div>
@@ -110,25 +128,25 @@ export default function LaunchpadSidebar({
         )}
       </Section>
 
-      {/* Tags */}
-      <Section title="Tags">
-        {TAGS.map((t) => (
-          <Row
-            key={t.id}
-            icon={
-              <span
-                aria-hidden="true"
-                className="block h-3 w-3 rounded-full"
-                style={{ background: t.color }}
-              />
-            }
-            label={t.label}
-            selected={currentKey === `tag:${t.id}`}
-            onClick={() => onSelect({ kind: "tag", id: t.id })}
-            comingSoon
-          />
-        ))}
-      </Section>
+      {showTags && (
+        <Section title="Tags">
+          {tags!.map((t) => (
+            <Row
+              key={t.id}
+              icon={
+                <span
+                  aria-hidden="true"
+                  className="block h-3 w-3 rounded-full ring-1 ring-inset ring-black/10"
+                  style={{ background: t.color || "#8e8e93" }}
+                />
+              }
+              label={t.name}
+              selected={currentKey === `tag:${t.id}`}
+              onClick={() => onSelect({ kind: "tag", id: t.id })}
+            />
+          ))}
+        </Section>
+      )}
     </nav>
   );
 }
@@ -149,21 +167,18 @@ function Row({
   label,
   selected,
   badge,
-  comingSoon,
   onClick,
 }: {
   icon: React.ReactNode;
   label: string;
   selected: boolean;
   badge?: string;
-  comingSoon?: boolean;
   onClick: () => void;
 }) {
   return (
     <button
       type="button"
       onClick={onClick}
-      title={comingSoon ? "Coming soon" : undefined}
       className={
         "mx-1 flex items-center gap-2 rounded-md px-2 py-1 text-left text-[13px] transition-colors " +
         (selected

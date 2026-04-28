@@ -18,6 +18,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useWorkspaceKey } from "../useWorkspaces";
 
 export type LaunchpadViewMode = "icon" | "list" | "column" | "gallery";
+export type LaunchpadGroupMode = "none" | "category" | "recent" | "tag";
 
 /* Stable string ids for every sidebar entry. Workspace ids are the raw
  * uuid; tag ids are prefixed `tag:` to avoid collision with the small set
@@ -71,14 +72,21 @@ export function locationTitle(loc: LaunchpadLocation): string {
 
 const VIEW_SUFFIX = "launchpad-view-v1";
 const PREVIEW_SUFFIX = "launchpad-preview-v1";
+const GROUP_SUFFIX = "launchpad-group-v1";
 
 function isViewMode(v: unknown): v is LaunchpadViewMode {
   return v === "icon" || v === "list" || v === "column" || v === "gallery";
 }
 
+function isGroupMode(v: unknown): v is LaunchpadGroupMode {
+  return v === "none" || v === "category" || v === "recent" || v === "tag";
+}
+
 interface UseLaunchpadView {
   view: LaunchpadViewMode;
   setView: (v: LaunchpadViewMode) => void;
+  group: LaunchpadGroupMode;
+  setGroup: (g: LaunchpadGroupMode) => void;
   location: LaunchpadLocation;
   setLocation: (loc: LaunchpadLocation) => void;
   back: () => void;
@@ -92,7 +100,9 @@ interface UseLaunchpadView {
 export function useLaunchpadView(): UseLaunchpadView {
   const VIEW_KEY = useWorkspaceKey(VIEW_SUFFIX);
   const PREVIEW_KEY = useWorkspaceKey(PREVIEW_SUFFIX);
+  const GROUP_KEY = useWorkspaceKey(GROUP_SUFFIX);
   const [view, setViewState] = useState<LaunchpadViewMode>("icon");
+  const [group, setGroupState] = useState<LaunchpadGroupMode>("none");
   const [previewOpen, setPreviewOpen] = useState(false);
   const [history, setHistory] = useState<LaunchpadLocation[]>([
     { kind: "applications" },
@@ -107,6 +117,8 @@ export function useLaunchpadView(): UseLaunchpadView {
       if (raw && isViewMode(raw)) setViewState(raw);
       const p = localStorage.getItem(PREVIEW_KEY);
       if (p === "1") setPreviewOpen(true);
+      const g = localStorage.getItem(GROUP_KEY);
+      if (g && isGroupMode(g)) setGroupState(g);
     } catch {
       /* silent — localStorage may be unavailable in private mode */
     }
@@ -121,6 +133,16 @@ export function useLaunchpadView(): UseLaunchpadView {
       } catch {}
     },
     [VIEW_KEY]
+  );
+
+  const setGroup = useCallback(
+    (next: LaunchpadGroupMode) => {
+      setGroupState(next);
+      try {
+        localStorage.setItem(GROUP_KEY, next);
+      } catch {}
+    },
+    [GROUP_KEY]
   );
 
   const setLocation = useCallback((loc: LaunchpadLocation) => {
@@ -163,6 +185,8 @@ export function useLaunchpadView(): UseLaunchpadView {
     () => ({
       view,
       setView,
+      group,
+      setGroup,
       location,
       setLocation,
       back,
@@ -172,6 +196,19 @@ export function useLaunchpadView(): UseLaunchpadView {
       previewOpen,
       togglePreview,
     }),
-    [view, setView, location, setLocation, back, forward, canBack, canForward, previewOpen, togglePreview]
+    [
+      view,
+      setView,
+      group,
+      setGroup,
+      location,
+      setLocation,
+      back,
+      forward,
+      canBack,
+      canForward,
+      previewOpen,
+      togglePreview,
+    ]
   );
 }

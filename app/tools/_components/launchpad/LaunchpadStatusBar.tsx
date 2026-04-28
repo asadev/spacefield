@@ -20,6 +20,9 @@ interface Stats {
 interface Props {
   itemCount: number;
   workspaceId: string;
+  /** When the preview pane is open, the parent passes the focused
+   * item's name here so the status bar can echo it on the right. */
+  focusedName?: string | null;
 }
 
 function fmtGB(bytes: number): string {
@@ -29,7 +32,11 @@ function fmtGB(bytes: number): string {
   return `${gb.toFixed(2)} GB`;
 }
 
-export default function LaunchpadStatusBar({ itemCount, workspaceId }: Props) {
+export default function LaunchpadStatusBar({
+  itemCount,
+  workspaceId,
+  focusedName,
+}: Props) {
   const [stats, setStats] = useState<Stats | null>(null);
 
   useEffect(() => {
@@ -58,16 +65,24 @@ export default function LaunchpadStatusBar({ itemCount, workspaceId }: Props) {
 
   const free = stats ? Math.max(0, stats.cap - stats.used) : null;
   return (
-    <div className="flex h-6 items-center justify-center gap-3 border-t border-app bg-app-elevated px-3 text-[11px] text-muted">
-      <span>
-        {itemCount} {itemCount === 1 ? "item" : "items"}
+    <div className="grid h-6 grid-cols-3 items-center border-t border-app bg-app-elevated px-3 text-[11px] text-muted">
+      <span className="justify-self-start truncate">
+        {focusedName ? "" : ""}
       </span>
-      {free !== null && (
-        <>
-          <span aria-hidden="true">·</span>
-          <span>{fmtGB(free)} available</span>
-        </>
-      )}
+      <span className="justify-self-center flex items-center gap-2">
+        <span>
+          {itemCount} {itemCount === 1 ? "item" : "items"}
+        </span>
+        {free !== null && (
+          <>
+            <span aria-hidden="true">·</span>
+            <span>{fmtGB(free)} available</span>
+          </>
+        )}
+      </span>
+      <span className="justify-self-end truncate text-app">
+        {focusedName ?? ""}
+      </span>
     </div>
   );
 }
