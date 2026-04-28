@@ -36,14 +36,19 @@ interface PaddleCheckoutEvent {
   data?: unknown;
 }
 
-interface PaddleSetupOptions {
+/* Paddle Billing v2's Initialize API — DOES NOT accept `environment`.
+ * Environment is set separately via `Paddle.Environment.set()` BEFORE
+ * Initialize is called. The agent originally wired `Paddle.Setup({...,
+ * environment})` (Paddle Classic API on the v2 script) which threw
+ * "[PADDLE] Unknown option parameter 'environment'". This shape is the
+ * correct v2 contract. */
+interface PaddleInitializeOptions {
   token: string;
-  environment?: "production" | "sandbox";
   eventCallback?: (event: PaddleCheckoutEvent) => void;
 }
 
 export interface PaddleGlobal {
-  Setup: (options: PaddleSetupOptions) => void;
+  Initialize: (options: PaddleInitializeOptions) => void;
   Environment: { set: (env: "production" | "sandbox") => void };
   Checkout: {
     open: (options: PaddleCheckoutOpenOptions) => void;
@@ -115,9 +120,15 @@ export async function ensurePaddle(opts: EnsurePaddleOptions): Promise<PaddleGlo
   const Paddle = window.Paddle;
   if (!Paddle) throw new Error("Paddle.js loaded but global Paddle object is missing");
   if (!setupDone) {
-    Paddle.Setup({
+    // Paddle Billing v2 contract:
+    //   - environment goes through Paddle.Environment.set() BEFORE init
+    //   - Initialize() takes only { token, eventCallback }
+    // Default is production so we only call Environment.set when sandbox.
+    if ((opts.environment ?? "production") === "sandbox") {
+      Paddle.Environment.set("sandbox");
+    }
+    Paddle.Initialize({
       token: opts.token,
-      environment: opts.environment ?? "production",
       eventCallback: (event) => {
         if (event?.name === "checkout.completed") {
           opts.onCheckoutCompleted?.();
