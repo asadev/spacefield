@@ -163,6 +163,58 @@ export function useWorkspace(): {
           list.push({ ...w, role: r.role });
         }
         list.sort((a, b) => a.name.localeCompare(b.name));
+
+        /* If the user has no team workspaces in the cloud but the
+         * desktop has an active local workspace, materialize it via
+         * /api/workspaces/ensure. Without this step, every fresh user
+         * — whose first-mount Personal workspace lives only in
+         * localStorage — never gets a Supabase row and tools sit at
+         * the "Workspace not ready" dead-end. The route is idempotent
+         * (handles existing rows, owner re-membership, id collisions),
+         * so it's safe to fire whenever the list comes back empty. */
+        if (list.length === 0) {
+          const desktopId = readDesktopActiveId();
+          if (desktopId) {
+            try {
+              const ensureRes = await fetch("/api/workspaces/ensure", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  id: desktopId,
+                  name: "Personal",
+                }),
+              });
+              if (ensureRes.ok) {
+                const { workspace, role } = (await ensureRes.json()) as {
+                  workspace: { id: string; name: string; slug?: string };
+                  role: WorkspaceRole;
+                };
+                if (!cancelled) {
+                  list.push({
+                    id: workspace.id,
+                    name: workspace.name,
+                    slug: workspace.slug ?? workspace.id,
+                    created_by: userData.user.id,
+                    created_at: new Date().toISOString(),
+                    role,
+                  });
+                }
+              } else {
+                // eslint-disable-next-line no-console
+                console.warn(
+                  "[workspaces] ensure failed:",
+                  ensureRes.status,
+                  await ensureRes.text().catch(() => "")
+                );
+              }
+            } catch (err) {
+              // eslint-disable-next-line no-console
+              console.warn("[workspaces] ensure threw:", err);
+            }
+          }
+        }
+
+        if (cancelled) return;
         setWorkspaces(list);
 
         // Auto-resolve `current` against the desktop's active workspace.
