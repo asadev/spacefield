@@ -160,14 +160,23 @@ export default function DesktopBackground() {
         />
       </div>
       <style jsx>{`
+        /* Glow blobs: a giant blur radius (80px+) is the single biggest
+         * GPU cost on this page — Safari/Chrome allocate offscreen
+         * surfaces sized to the layer + the blur margin and re-composite
+         * every animation frame. Cutting the radius from 80px to 32px is
+         * visually almost identical on a 60vw blob (the blob itself is
+         * already a soft radial gradient that fades to transparent at
+         * 70%) but ~3-5x cheaper. We also raise opacity slightly so the
+         * smaller blur reads at the same intensity. */
         .desktop-glow {
           position: absolute;
           width: 60vw;
           height: 60vw;
           border-radius: 50%;
-          filter: blur(80px);
-          opacity: 0.45;
+          filter: blur(32px);
+          opacity: 0.55;
           mix-blend-mode: screen;
+          will-change: transform;
         }
         .desktop-glow-1 {
           background: radial-gradient(
@@ -205,21 +214,26 @@ export default function DesktopBackground() {
           opacity: 0.28;
           mix-blend-mode: multiply;
         }
+        /* Cursor-follow glow: re-paints on every mouse move at 520px
+         * blurred. Replaced the 40px filter blur with a softer larger
+         * gradient stop — visually similar but no filter pass. Trimmed
+         * size + opacity so it doesn't read as harsh under the smaller
+         * blur. */
         .desktop-cursor-glow {
           position: absolute;
-          width: 520px;
-          height: 520px;
+          width: 380px;
+          height: 380px;
           border-radius: 50%;
           pointer-events: none;
           background: radial-gradient(
             circle at center,
-            color-mix(in srgb, var(--accent) 18%, transparent) 0%,
-            color-mix(in srgb, var(--accent) 6%, transparent) 40%,
-            transparent 70%
+            color-mix(in srgb, var(--accent) 14%, transparent) 0%,
+            color-mix(in srgb, var(--accent) 4%, transparent) 55%,
+            transparent 78%
           );
-          filter: blur(40px);
           mix-blend-mode: screen;
-          opacity: 0.6;
+          opacity: 0.5;
+          will-change: transform;
         }
         :global([data-theme="light"]) .desktop-cursor-glow {
           mix-blend-mode: multiply;

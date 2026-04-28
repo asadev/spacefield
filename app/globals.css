@@ -766,6 +766,19 @@ body {
   animation: pulse-ring 2.5s ease-in-out infinite;
 }
 
+/* When the tab is in the background, suspend every infinite animation
+ * we've defined. Browsers throttle JS timers in hidden tabs but they
+ * keep paying compositor cost for CSS animations + filter blurs, which
+ * is exactly the heat source on this app. Toggled via a <html
+ * data-tab-hidden> attribute set by app/_components/TabVisibility.tsx
+ * on first mount. */
+html[data-tab-hidden="1"] *,
+html[data-tab-hidden="1"] *::before,
+html[data-tab-hidden="1"] *::after {
+  animation-play-state: paused !important;
+  transition: none !important;
+}
+
 /* ─── Brain float animation ─── */
 @keyframes brain-float {
   0%, 100% { transform: translateY(0px); }
