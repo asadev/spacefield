@@ -27,6 +27,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspace } from "@/lib/workspaces/client";
 import type { CrmSection, CrmSectionMeta } from "../types";
 import type { NativeAppProps } from "../../_data/tools-list";
+import PipelineView from "./PipelineView";
+import DealsListView from "./DealsListView";
+import LeadsView from "./LeadsView";
 
 const NAV_ITEMS: CrmSectionMeta[] = [
   { key: "pipeline", label: "Pipeline", icon: "kanban" },
@@ -389,7 +392,28 @@ export default function Shell({ width, initialParams }: NativeAppProps) {
           className="relative flex-1 overflow-hidden"
           style={{ minWidth: 0 }}
         >
-          <EmptyState section={section} width={width} />
+          {section === "pipeline" ? (
+            <PipelineView
+              width={width}
+              search={search}
+              onSearchChange={setSearch}
+            />
+          ) : section === "deals" ? (
+            <DealsListView
+              width={width}
+              search={search}
+              onSearchChange={setSearch}
+              goToPipeline={() => setSection("pipeline")}
+            />
+          ) : section === "leads" ? (
+            <LeadsView
+              width={width}
+              search={search}
+              onSearchChange={setSearch}
+            />
+          ) : (
+            <EmptyState section={section} width={width} />
+          )}
         </main>
       </div>
     </div>
