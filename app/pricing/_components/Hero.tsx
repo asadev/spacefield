@@ -68,7 +68,7 @@ export default function Hero({ billingCycle, onChangeBillingCycle }: Props) {
                   : "rounded-full bg-tool-accent-soft px-1.5 py-0.5 text-[0.6rem] font-semibold uppercase tracking-wider text-tool-accent"
               }
             >
-              -20%
+              -30%
             </span>
           </button>
         </div>

@@ -50,6 +50,35 @@ export default function MembersSection({
   const [inviteIdentifier, setInviteIdentifier] = useState("");
   const [inviteRole, setInviteRole] = useState<"admin" | "member">("member");
   const [inviteSending, setInviteSending] = useState(false);
+  const [tierCap, setTierCap] = useState<number | null>(null);
+  const [tierName, setTierName] = useState<string | null>(null);
+
+  useEffect(() => {
+    /* Read the owner's tier cap so we can pre-block invites that the
+     * server-side workspace_member_quota trigger would reject anyway.
+     * Without this, the user types an email, hits Send, and gets a
+     * generic "Invite failed" — much better to surface the limit in
+     * the UI BEFORE they bother. */
+    let cancelled = false;
+    void (async () => {
+      try {
+        const r = await fetch("/api/me", { cache: "no-store" });
+        if (!r.ok) return;
+        const j = (await r.json()) as {
+          tier?: string;
+          tier_config?: { max_members_per_workspace?: number };
+        };
+        if (cancelled) return;
+        setTierCap(j.tier_config?.max_members_per_workspace ?? null);
+        setTierName(j.tier ?? null);
+      } catch {
+        /* swallow — fall back to letting the server enforce */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const refresh = useCallback(async () => {
     setLoading(true);
@@ -204,12 +233,47 @@ export default function MembersSection({
     }
   };
 
+  /* Cap-aware invite gate. The DB trigger workspace_member_quota
+   * rejects oversize invites server-side; the UI just surfaces the
+   * limit ahead of time so users know why the form is locked. Free /
+   * Pro = 1-user workspaces (no invites at all); Team = 5 included
+   * with seats purchasable. */
+  const atCap =
+    tierCap !== null && !loading && members.length >= tierCap;
+  const isSoloTier =
+    tierCap !== null && tierCap <= 1 && (tierName === "free" || tierName === "pro");
+
   return (
     <div className="space-y-5">
-      {canInvite && (
+      {canInvite && atCap && (
+        <div className="rounded-xl border border-tool-accent-soft bg-tool-accent-soft/30 p-4">
+          <h4 className="mb-2 text-[0.6rem] uppercase tracking-[0.2em] text-tool-accent">
+            {isSoloTier ? "Solo workspace" : "Seat limit reached"}
+          </h4>
+          <p className="text-sm text-app">
+            {isSoloTier
+              ? `${tierName === "pro" ? "Pro" : "Free"} workspaces are single-user. Upgrade to Team to invite up to 5 members (extra seats $5/mo each).`
+              : `You've used all ${tierCap} seats on this workspace. Buy more seats at $5/mo each to keep adding members.`}
+          </p>
+          <div className="mt-3 flex gap-2">
+            <a
+              href="/pricing"
+              className="inline-flex items-center gap-1.5 rounded-md bg-tool-accent px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+            >
+              {isSoloTier ? "Upgrade to Team" : "Add more seats"}
+            </a>
+          </div>
+        </div>
+      )}
+      {canInvite && !atCap && (
         <div className="rounded-xl border border-app bg-app p-4">
           <h4 className="mb-3 text-[0.6rem] uppercase tracking-[0.2em] text-muted">
             Invite to {workspaceName}
+            {tierCap !== null && (
+              <span className="ml-2 text-faint">
+                · {members.length} / {tierCap} seats used
+              </span>
+            )}
           </h4>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_auto_auto]">
             <input

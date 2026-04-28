@@ -27,66 +27,73 @@ interface TierData {
   bullets: string[];
 }
 
+/* Annual discount is 30% off monthly × 12. Annual price IDs aren't yet
+ * minted in Paddle (TODO: create them and pass through to checkout);
+ * until then the toggle just shows the discounted display price and
+ * checkout uses the monthly price ID. */
+const ANNUAL_DISCOUNT = 0.3;
+const annualPerMonth = (monthly: number) =>
+  Math.round(monthly * (1 - ANNUAL_DISCOUNT));
+
 const TIERS: TierData[] = [
   {
     tierId: "free",
     name: "Free",
     priceMonthly: 0,
     priceAnnualPerMonth: 0,
-    tagline: "For solos kicking the tires. Every tool, one workspace.",
+    tagline: "Solo workspace, all tools, just enough room to start.",
     isRecommended: false,
     isFree: true,
     storageLabel: "5 GB",
-    membersLabel: "5",
+    membersLabel: "1 user",
     workspacesLabel: "1",
     bullets: [
-      "All real estate, productivity, and finance tools",
+      "Single-user workspace — no invites",
+      "Every tool: real estate, productivity, finance",
       "Files Manager with drag-and-drop",
       "Documents and Sheets editors",
       "CRM with contacts, deals, and leads",
-      "Real-time chat in your workspace",
       "Community support",
     ],
   },
   {
     tierId: "pro",
     name: "Pro",
-    priceMonthly: 19,
-    priceAnnualPerMonth: 15,
-    tagline: "For people who use it every day. More room to actually work.",
+    priceMonthly: 10,
+    priceAnnualPerMonth: annualPerMonth(10),
+    tagline: "Solo, but serious. More storage, premium polish.",
     isRecommended: true,
     isFree: false,
     storageLabel: "100 GB",
-    membersLabel: "10",
-    workspacesLabel: "5",
+    membersLabel: "1 user",
+    workspacesLabel: "1",
     bullets: [
       "Everything in Free",
-      "Real-time co-editing in Documents and Sheets",
+      "100 GB storage (vs 5 GB)",
       "Premium themes and wallpapers",
       "External share links for files",
       "Inventory module in CRM",
-      "App and tool gating per member",
       "Email support, 48-hour response",
     ],
   },
   {
     tierId: "team",
     name: "Team",
-    priceMonthly: 49,
-    priceAnnualPerMonth: 39,
-    tagline: "For teams that ship together. Admin controls and full history.",
+    priceMonthly: 30,
+    priceAnnualPerMonth: annualPerMonth(30),
+    tagline: "Bring your people in. 5 seats included, +$5/mo each more.",
     isRecommended: false,
     isFree: false,
     storageLabel: "1 TB",
-    membersLabel: "50",
-    workspacesLabel: "25",
+    membersLabel: "5 included",
+    workspacesLabel: "Up to 25",
     bullets: [
       "Everything in Pro",
-      "50 members per workspace",
+      "5 members included; add more at $5/mo each",
+      "Workspace admin controls and roles",
       "Activity log and audit log export",
       "Unlimited custom CRM fields",
       "Reports and exports across CRM",
-      "Onboarding session for your team",
       "Priority email support, 12-hour response",
     ],
   },
