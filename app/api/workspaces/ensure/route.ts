@@ -121,10 +121,14 @@ export async function POST(req: NextRequest) {
   // (d) Row doesn't exist anywhere. INSERT as caller-owned via the
   //     user-scoped client (so RLS check fires and we get a real 400 if
   //     the quota trigger blocks us).
+  //
+  //     `slug` is NOT NULL and globally unique (see 20260428 migration).
+  //     We seed it with the UUID so callers don't need to supply one.
+  //     Future work can add a "rename slug" admin path.
   const { data: created, error: insertErr } = await supabase
     .from("workspaces")
-    .insert({ id, user_id: user.id, name: safeName })
-    .select("id, user_id, name")
+    .insert({ id, user_id: user.id, name: safeName, slug: id })
+    .select("id, user_id, name, slug")
     .single();
   if (insertErr) {
     return NextResponse.json(
