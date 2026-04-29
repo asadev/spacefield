@@ -14,7 +14,7 @@
  * on Applications every time, just like Finder does.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useWorkspaceKey } from "../useWorkspaces";
 
 export type LaunchpadViewMode = "icon" | "list" | "column" | "gallery";
@@ -159,19 +159,44 @@ export function useLaunchpadView(): UseLaunchpadView {
     [GROUP_KEY]
   );
 
-  const setLocation = useCallback((loc: LaunchpadLocation) => {
-    setHistory((prev) => {
-      // Truncate any forward history when the user navigates somewhere new
-      // (mirrors browser/Finder behavior).
-      const head = prev.slice(0, cursor + 1);
-      // Don't push duplicates back-to-back.
-      if (head.length > 0 && locationKey(head[head.length - 1]) === locationKey(loc)) {
-        return head;
-      }
-      return [...head, loc];
-    });
-    setCursor((c) => c + 1);
+  // Refs so setLocation doesn't need history/cursor in its deps — that
+  // re-created the callback on every navigation and (more importantly)
+  // let the closure see a stale cursor when React batched updates,
+  // causing the cursor to advance past the actual history slot. The
+  // resulting `history[cursor]` was undefined and the view silently
+  // fell back to Applications — the symptom Asad saw as "the sidebar
+  // panel isn't accessible / nothing happens when I tap a row".
+  const historyRef = useRef(history);
+  const cursorRef = useRef(cursor);
+  useEffect(() => {
+    historyRef.current = history;
+  }, [history]);
+  useEffect(() => {
+    cursorRef.current = cursor;
   }, [cursor]);
+
+  const setLocation = useCallback((loc: LaunchpadLocation) => {
+    const c = cursorRef.current;
+    const prev = historyRef.current;
+    // Truncate any forward history when the user navigates somewhere new
+    // (mirrors browser/Finder behavior).
+    const head = prev.slice(0, c + 1);
+    // Don't push duplicates back-to-back. Crucially: when we dedupe,
+    // we must NOT advance the cursor either, otherwise location ends
+    // up pointing past the end of history and renders Applications.
+    const isDuplicate =
+      head.length > 0 &&
+      locationKey(head[head.length - 1]) === locationKey(loc);
+    if (isDuplicate) {
+      // No-op. Cursor + history both stay pinned to head.
+      return;
+    }
+    const next = [...head, loc];
+    historyRef.current = next;
+    cursorRef.current = c + 1;
+    setHistory(next);
+    setCursor(c + 1);
+  }, []);
 
   const back = useCallback(() => {
     setCursor((c) => Math.max(0, c - 1));
