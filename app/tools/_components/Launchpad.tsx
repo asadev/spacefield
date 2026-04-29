@@ -1435,13 +1435,18 @@ export default function Launchpad({
                 />
               </div>
 
-              {launchpadView.previewOpen && !showsFilePane && (
+              {/* Preview pane — desktop only. On mobile a 240px right-rail
+               * pane next to the main scroll area would squeeze content
+               * to ~135px; the toolbar's preview toggle is hidden on
+               * compact, but persisted previewOpen state from desktop use
+               * could still trigger this branch. Gate it. */}
+              {!isMobile && launchpadView.previewOpen && !showsFilePane && (
                 <PreviewPane
                   tool={visibleTools.find((t) => t.slug === focusedSlug) ?? null}
                   onOpen={handleOpen}
                 />
               )}
-              {launchpadView.previewOpen && showsFilePane && (
+              {!isMobile && launchpadView.previewOpen && showsFilePane && (
                 <FilePreviewPane
                   file={
                     focusedFileId
