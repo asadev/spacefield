@@ -178,6 +178,18 @@ export async function dispatch(
         await appendHistory(ctx, channel, message.text, reply);
         return { reply, usage, creditUsed: { quick: 0, deep: 0 } };
       }
+      // Re-check permissions against the current snapshot. If an admin
+      // flipped this skill to 'deny' between the request and the YES,
+      // we must not execute. The snapshot loaded above for this turn
+      // is the freshest view we have.
+      const mode = effectiveMode(permissions, pending.skill_id, tool);
+      if (mode === "deny") {
+        await clearPendingApproval(ctx.supabase, pending.id);
+        const reply =
+          "That action was disabled by an admin since you asked. Cancelled.";
+        await appendHistory(ctx, channel, message.text, reply);
+        return { reply, usage, creditUsed: { quick: 0, deep: 0 } };
+      }
       const result = await executeToolGuarded(tool, pending.tool_input, ctx);
       await clearPendingApproval(ctx.supabase, pending.id);
       const reply = result.ok

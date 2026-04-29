@@ -270,16 +270,22 @@ export default function Launchpad({
     let cancelled = false;
     void (async () => {
       try {
+        // The route returns `cap` and `used` as flat top-level numbers
+        // (see app/api/workspaces/storage-stats/route.ts). An earlier
+        // type assumed an object shape `{cap_bytes, used_bytes}` —
+        // mismatch left every Launchpad upload preflight reading 0,
+        // silently disabling client-side quota warnings.
         const j = await cachedFetch<{
-          cap?: { cap_bytes?: number; used_bytes?: number } | null;
+          cap?: number;
+          used?: number;
         }>(
           `/api/workspaces/storage-stats?workspaceId=${encodeURIComponent(
             activeId
           )}`
         );
         if (cancelled) return;
-        setCap(Number(j.cap?.cap_bytes ?? 0));
-        setUsed(Number(j.cap?.used_bytes ?? 0));
+        setCap(Number(j.cap ?? 0));
+        setUsed(Number(j.used ?? 0));
       } catch {
         /* leave at 0 — uploads will still run, but the local
          * pre-flight against quota is skipped. The server-side check

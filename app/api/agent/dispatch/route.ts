@@ -20,6 +20,11 @@ import { dispatch } from "@/lib/agent/runtime/dispatcher";
 import type { DispatchScope, Tier, UserContext } from "@/lib/agent/runtime/types";
 
 export const runtime = "nodejs";
+// Hybrid runtime can chain classifier → orchestrator → executor →
+// formatter calls, plus tool execution. The Vercel Hobby default is
+// 10s, well below realistic worst case. Pin to the 60s ceiling so we
+// don't 504 mid-tool-call and leave a half-applied state.
+export const maxDuration = 60;
 
 interface DispatchBody {
   workspace_id?: string;

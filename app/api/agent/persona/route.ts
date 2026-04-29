@@ -36,7 +36,11 @@ export async function GET(req: NextRequest) {
       { status: 400 }
     );
   }
-  const { data, error } = await supabase
+  // Read via service role — caller is verified above. SSR cookie
+  // sessions sometimes lose JWT under RLS and the persona would
+  // silently fall through to DEFAULT_PERSONA, looking "reset".
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("agent_personas")
     .select("bot_name, persona_description, voice_tone, custom_greeting, updated_at")
     .eq("workspace_id", workspaceId)
@@ -107,7 +111,9 @@ export async function PUT(req: NextRequest) {
       ? body.custom_greeting.trim().slice(0, 200)
       : "";
 
-  const { error: upsertErr } = await supabase
+  // Same JWT-flake reason as the membership check — write through the
+  // admin client so the upsert can't silently no-op under RLS.
+  const { error: upsertErr } = await admin
     .from("agent_personas")
     .upsert(
       {
@@ -148,7 +154,21 @@ export async function DELETE(req: NextRequest) {
       { status: 400 }
     );
   }
-  const { error } = await supabase
+  // Re-gate role through service role (matches PUT). Without this an
+  // RLS-broken session could 200 with a no-op delete and the persona
+  // would appear "reset" to the user but stay in the DB.
+  const admin = createAdminClient();
+  const { data: mem } = await admin
+    .from("workspace_members")
+    .select("role")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const role = (mem?.role as string | undefined) ?? null;
+  if (role !== "owner" && role !== "admin") {
+    return NextResponse.json({ error: "admin_only" }, { status: 403 });
+  }
+  const { error } = await admin
     .from("agent_personas")
     .delete()
     .eq("workspace_id", workspaceId);

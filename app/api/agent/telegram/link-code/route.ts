@@ -8,15 +8,16 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { randomInt } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 const BOT_USERNAME = "SpaceField_Bot";
 
 function generateCode(): string {
-  return Math.floor(Math.random() * 1_000_000)
-    .toString()
-    .padStart(6, "0");
+  // Cryptographically strong RNG. Math.random() is brute-forceable
+  // over the 1M-key, 10-min-TTL space.
+  return randomInt(0, 1_000_000).toString().padStart(6, "0");
 }
 
 export async function POST(req: NextRequest) {
@@ -47,7 +48,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "not_a_member" }, { status: 403 });
   }
 
-  await supabase
+  // Use admin client for the write — same JWT-propagation flake that
+  // hits the membership check would silently no-op the insert/delete
+  // and the user would see a 200 with no working code on the server.
+  const adm = createAdminClient();
+  await adm
     .from("agent_telegram_link_codes")
     .delete()
     .eq("workspace_id", workspaceId)
@@ -55,7 +60,7 @@ export async function POST(req: NextRequest) {
 
   const code = generateCode();
   const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
-  const { error } = await supabase.from("agent_telegram_link_codes").insert({
+  const { error } = await adm.from("agent_telegram_link_codes").insert({
     code,
     workspace_id: workspaceId,
     user_id: user.id,
@@ -89,7 +94,8 @@ export async function DELETE(req: NextRequest) {
       { status: 400 }
     );
   }
-  const { error } = await supabase
+  // Service role for the same JWT-flake reason as POST.
+  const { error } = await createAdminClient()
     .from("agent_telegram_links")
     .delete()
     .eq("workspace_id", workspaceId)

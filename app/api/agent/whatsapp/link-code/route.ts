@@ -10,14 +10,16 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { randomInt } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 function generateCode(): string {
-  // 6 digits, leading zeros allowed
-  return Math.floor(Math.random() * 1_000_000)
-    .toString()
-    .padStart(6, "0");
+  // 6 digits, leading zeros allowed. Cryptographically strong RNG —
+  // Math.random() is predictable enough to be brute-forced over the
+  // 1M-key, 10-min-TTL space if an attacker can guess concurrently
+  // with active codes.
+  return randomInt(0, 1_000_000).toString().padStart(6, "0");
 }
 
 export async function POST(req: NextRequest) {
@@ -54,8 +56,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "not_a_member" }, { status: 403 });
   }
 
-  // Drop any existing codes for this user/workspace pair.
-  await supabase
+  // Drop any existing codes for this user/workspace pair. Use the admin
+  // client for the same reason as the membership check — the JWT-flake
+  // that hides the membership row would silently no-op the
+  // insert/delete and the user would see a 200 with no working code
+  // server-side.
+  await admin
     .from("agent_whatsapp_link_codes")
     .delete()
     .eq("workspace_id", workspaceId)
@@ -63,7 +69,7 @@ export async function POST(req: NextRequest) {
 
   const code = generateCode();
   const expiresAt = new Date(Date.now() + 10 * 60_000).toISOString();
-  const { error } = await supabase.from("agent_whatsapp_link_codes").insert({
+  const { error } = await admin.from("agent_whatsapp_link_codes").insert({
     code,
     workspace_id: workspaceId,
     user_id: user.id,
@@ -97,7 +103,8 @@ export async function DELETE(req: NextRequest) {
       { status: 400 }
     );
   }
-  const { error } = await supabase
+  // Service role for the same JWT-flake reason as POST.
+  const { error } = await createAdminClient()
     .from("agent_whatsapp_links")
     .delete()
     .eq("workspace_id", workspaceId)

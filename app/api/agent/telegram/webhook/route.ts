@@ -22,6 +22,10 @@ import type { Tier, UserContext } from "@/lib/agent/runtime/types";
 import { sendTelegramText } from "../send/route";
 
 export const runtime = "nodejs";
+// Webhook runs the full hybrid agent (classifier → executor/orchestrator
+// → formatter, plus tool calls). Hobby default is 10s, which 504s mid-
+// tool. 60s is the Hobby ceiling.
+export const maxDuration = 60;
 
 interface TgUser {
   id: number;

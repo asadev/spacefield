@@ -9,6 +9,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { ALL_SKILLS } from "@/lib/agent/skills";
 
 interface PutBody {
@@ -16,20 +17,24 @@ interface PutBody {
   mode?: string;
 }
 
-async function authAndRole(req: NextRequest, workspaceId: string) {
+async function authAndRole(_req: NextRequest, workspaceId: string) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
     return {
-      supabase,
+      admin: createAdminClient(),
       user: null,
       role: null as null | string,
       error: NextResponse.json({ error: "unauthorized" }, { status: 401 }),
     };
   }
-  const { data: mem } = await supabase
+  // Read membership through the service role — the SSR cookie session
+  // sometimes fails to propagate JWT into RLS / auth.uid(), and a real
+  // owner/admin would otherwise see a spurious "admin_only" 403.
+  const admin = createAdminClient();
+  const { data: mem } = await admin
     .from("workspace_members")
     .select("role")
     .eq("workspace_id", workspaceId)
@@ -38,13 +43,13 @@ async function authAndRole(req: NextRequest, workspaceId: string) {
   const role = (mem?.role as string | undefined) ?? null;
   if (role !== "owner" && role !== "admin") {
     return {
-      supabase,
+      admin,
       user,
       role,
       error: NextResponse.json({ error: "admin_only" }, { status: 403 }),
     };
   }
-  return { supabase, user, role, error: null };
+  return { admin, user, role, error: null };
 }
 
 function validSkill(skillId: string): boolean {
@@ -74,7 +79,7 @@ export async function PUT(
   const auth = await authAndRole(req, workspaceId);
   if (auth.error || !auth.user) return auth.error!;
 
-  const { error } = await auth.supabase.from("agent_permissions").upsert(
+  const { error } = await auth.admin.from("agent_permissions").upsert(
     {
       workspace_id: workspaceId,
       skill_id: skillId,
@@ -109,7 +114,7 @@ export async function DELETE(
   const auth = await authAndRole(req, workspaceId);
   if (auth.error) return auth.error;
 
-  const { error } = await auth.supabase
+  const { error } = await auth.admin
     .from("agent_permissions")
     .delete()
     .eq("workspace_id", workspaceId)

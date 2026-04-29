@@ -4,6 +4,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { TIER_DEFAULTS, currentMonthKey } from "@/lib/agent/runtime/budget";
 import type { Tier } from "@/lib/agent/runtime/types";
 
@@ -24,7 +25,14 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const { data: subData } = await supabase
+  // Read everything through the service role — caller identity is
+  // already verified above. The SSR cookie session sometimes loses
+  // its JWT under RLS, which would make a logged-in user's balance,
+  // tier, and link rows all read as null and the AI panel show
+  // "Storage/Balance unavailable" or default-free caps.
+  const admin = createAdminClient();
+
+  const { data: subData } = await admin
     .from("subscriptions")
     .select("tier_id")
     .eq("user_id", user.id)
@@ -36,7 +44,7 @@ export async function GET(req: NextRequest) {
       : "free";
 
   const month = currentMonthKey();
-  const { data: balance } = await supabase
+  const { data: balance } = await admin
     .from("agent_credit_balances")
     .select("quick_used, quick_cap, deep_used, deep_cap")
     .eq("workspace_id", workspaceId)
@@ -46,7 +54,7 @@ export async function GET(req: NextRequest) {
 
   // 30-day usage trend, grouped by day + bucket.
   const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
-  const { data: events } = await supabase
+  const { data: events } = await admin
     .from("agent_credit_events")
     .select("bucket, tokens, created_at")
     .eq("user_id", user.id)
@@ -66,13 +74,13 @@ export async function GET(req: NextRequest) {
     .map(([day, vals]) => ({ day, ...vals }));
 
   const caps = TIER_DEFAULTS[tier];
-  const link = await supabase
+  const link = await admin
     .from("agent_whatsapp_links")
     .select("whatsapp_number, linked_at")
     .eq("workspace_id", workspaceId)
     .eq("user_id", user.id)
     .maybeSingle();
-  const tg = await supabase
+  const tg = await admin
     .from("agent_telegram_links")
     .select("telegram_user_id, telegram_username, linked_at")
     .eq("workspace_id", workspaceId)
