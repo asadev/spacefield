@@ -21,6 +21,7 @@ import {
 } from "@/app/_data/storage-addons";
 import WorkspaceSettingsView from "./workspace-settings/WorkspaceSettingsView";
 import type {
+  SectionId,
   WorkspaceFullRow,
   WorkspaceRole,
   WorkspaceSummary,
@@ -37,7 +38,21 @@ interface PendingInvite {
   inviter_name?: string;
 }
 
-export default function WorkspacesPane() {
+interface WorkspacesPaneProps {
+  /** Auto-expand this workspace row on first render. Used by the mobile
+   *  Settings deep-link to drop the user straight into a workspace's
+   *  settings without an extra tap. */
+  initialExpandedId?: string;
+  /** Inside the auto-expanded row, jump to this section first. Currently
+   *  used by the mobile Settings "AI Assistant" entry to land on the
+   *  AI tab. */
+  initialSection?: SectionId;
+}
+
+export default function WorkspacesPane({
+  initialExpandedId,
+  initialSection,
+}: WorkspacesPaneProps = {}) {
   const { user, supabase, enabled } = useAuth();
   const {
     workspaces: localWs,
@@ -52,7 +67,20 @@ export default function WorkspacesPane() {
   const [msg, setMsg] = useState<
     { type: "success" | "error"; text: string } | null
   >(null);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(
+    initialExpandedId ?? null
+  );
+
+  // If the deep-linked workspace appears later (loaded after first
+  // render) re-apply expansion. Skip if user already toggled something.
+  const userToggledRef = useMemo(() => ({ current: false }), []);
+  useEffect(() => {
+    if (userToggledRef.current) return;
+    if (!initialExpandedId) return;
+    if (rows.some((r) => r.id === initialExpandedId)) {
+      setExpandedId(initialExpandedId);
+    }
+  }, [initialExpandedId, rows, userToggledRef]);
 
   // Tier base + name from /api/me. Used by StorageSection.
   const [tierBaseMb, setTierBaseMb] = useState<number | null>(null);
@@ -390,8 +418,12 @@ export default function WorkspacesPane() {
               workspace={w}
               storage={rowStorage[w.id]}
               expanded={expandedId === w.id}
-              onToggle={() =>
-                setExpandedId((cur) => (cur === w.id ? null : w.id))
+              onToggle={() => {
+                userToggledRef.current = true;
+                setExpandedId((cur) => (cur === w.id ? null : w.id));
+              }}
+              initialSection={
+                expandedId === w.id ? initialSection : undefined
               }
               onSwitch={() => switchWorkspace(w.id)}
               tierBaseMb={tierBaseMb}
@@ -424,8 +456,12 @@ export default function WorkspacesPane() {
               workspace={w}
               storage={rowStorage[w.id]}
               expanded={expandedId === w.id}
-              onToggle={() =>
-                setExpandedId((cur) => (cur === w.id ? null : w.id))
+              onToggle={() => {
+                userToggledRef.current = true;
+                setExpandedId((cur) => (cur === w.id ? null : w.id));
+              }}
+              initialSection={
+                expandedId === w.id ? initialSection : undefined
               }
               onSwitch={() => switchWorkspace(w.id)}
               tierBaseMb={tierBaseMb}
@@ -487,6 +523,7 @@ function WorkspaceRow({
   onWorkspaceChanged,
   onLeave,
   busy,
+  initialSection,
 }: {
   workspace: WorkspaceSummary;
   storage: { capBytes: number; usedBytes: number } | undefined;
@@ -501,6 +538,7 @@ function WorkspaceRow({
   onWorkspaceChanged: (id: string, patch: Partial<WorkspaceFullRow>) => void;
   onLeave?: () => void;
   busy?: boolean;
+  initialSection?: SectionId;
 }) {
   const cap = storage?.capBytes ?? 0;
   const used = storage?.usedBytes ?? 0;
@@ -564,6 +602,7 @@ function WorkspaceRow({
             onSuccess={onSuccess}
             onWorkspaceDeleted={onWorkspaceDeleted}
             onWorkspaceChanged={onWorkspaceChanged}
+            initialSection={initialSection}
           />
         </div>
       )}

@@ -166,13 +166,26 @@ export interface FolderGroup {
   files: LaunchpadFile[];
 }
 
+/** Folder placeholders are 0-byte rows the agent inserts via
+ *  `create_folder` so an empty folder appears in the tree. The
+ *  placeholder itself shouldn't show up as a "file" in the right pane. */
+function isFolderPlaceholder(f: LaunchpadFile): boolean {
+  return (
+    f.size_bytes === 0 &&
+    f.content_type === "application/x-folder-placeholder"
+  );
+}
+
 export function groupFilesByFolder(files: LaunchpadFile[]): FolderGroup[] {
   const map = new Map<string, LaunchpadFile[]>();
   for (const f of files) {
     const slash = f.name.indexOf("/");
     const folder = slash > 0 ? f.name.slice(0, slash) : LOOSE_FOLDER;
     const list = map.get(folder) ?? [];
-    list.push(f);
+    // Keep the placeholder out of the right-pane list, but still let
+    // its presence register the folder as known (the map.set below
+    // handles that).
+    if (!isFolderPlaceholder(f)) list.push(f);
     map.set(folder, list);
   }
   const groups: FolderGroup[] = [];

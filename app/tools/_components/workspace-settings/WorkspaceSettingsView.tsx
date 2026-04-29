@@ -39,6 +39,9 @@ interface Props {
   onSuccess: (msg: string) => void;
   onWorkspaceDeleted: (id: string) => void;
   onWorkspaceChanged: (id: string, patch: Partial<WorkspaceFullRow>) => void;
+  /** Open this section first instead of "general". Used by deep-links
+   *  from the mobile Settings root (e.g. "AI Assistant" → ai). */
+  initialSection?: SectionId;
 }
 
 interface TabDef {
@@ -65,9 +68,19 @@ export default function WorkspaceSettingsView({
   onSuccess,
   onWorkspaceDeleted,
   onWorkspaceChanged,
+  initialSection,
 }: Props) {
   const { supabase } = useAuth();
-  const [section, setSection] = useState<SectionId>("general");
+  // Honor `initialSection` only if the caller asked for a section the
+  // current role can see; otherwise fall back to "general".
+  const initial: SectionId =
+    initialSection &&
+    TABS.find((t) => t.id === initialSection)?.visibleFor.includes(
+      workspace.role
+    )
+      ? initialSection
+      : "general";
+  const [section, setSection] = useState<SectionId>(initial);
   const [full, setFull] = useState<WorkspaceFullRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [memberCount, setMemberCount] = useState(workspace.member_count);

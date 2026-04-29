@@ -31,6 +31,7 @@ const EASE = [0.25, 0.46, 0.45, 0.94] as const;
 export type MobileSettingsSection =
   | "profile"
   | "workspaces"
+  | "ai"
   | "appearance"
   | "dock"
   | "widgets"
@@ -61,6 +62,8 @@ const ICON = {
   dock: "M5 5h2v2H5V5zm6 0h2v2h-2V5zm6 0h2v2h-2V5zM5 11h2v2H5v-2zm6 0h2v2h-2v-2zm6 0h2v2h-2v-2zM5 17h2v2H5v-2zm6 0h2v2h-2v-2zm6 0h2v2h-2v-2z",
   widget: "M4 4h7v7H4V4zm9 0h7v7h-7V4zM4 13h7v7H4v-7zm9 0h7v7h-7v-7z",
   bell: "M6 8a6 6 0 0112 0c0 7 3 9 3 9H3s3-2 3-9zm4 13a2 2 0 004 0h-4z",
+  spark:
+    "M12 2l2.4 5.6L20 10l-5.6 2.4L12 18l-2.4-5.6L4 10l5.6-2.4L12 2zM5 17l1 2 2 1-2 1-1 2-1-2-2-1 2-1 1-2zm14-3l1 2 2 1-2 1-1 2-1-2-2-1 2-1 1-2z",
   speaker:
     "M3 9v6h4l5 4V5L7 9H3zm12 1.5a3 3 0 010 3v-3zm0-3.5a6 6 0 010 10v-2a4 4 0 000-6V7z",
   account:
@@ -71,6 +74,12 @@ const ICON = {
 const SECTIONS: SectionDef[] = [
   { id: "profile", label: "Profile", hint: "Name, photo, bio, socials", iconPath: ICON.user },
   { id: "workspaces", label: "Workspaces", hint: "Members, roles, invites", iconPath: ICON.grid },
+  {
+    id: "ai",
+    label: "AI Assistant",
+    hint: "Persona, credits, WhatsApp + Telegram",
+    iconPath: ICON.spark,
+  },
   { id: "appearance", label: "Appearance", hint: "Theme, icon style", iconPath: ICON.palette },
   { id: "dock", label: "Dock", hint: "Pinned apps", iconPath: ICON.dock },
   { id: "widgets", label: "Widgets", hint: "Live tiles", iconPath: ICON.widget },
@@ -82,6 +91,10 @@ const SECTIONS: SectionDef[] = [
 
 export default function MobileSettings({ open, initialSection = "profile", onClose }: Props) {
   const [section, setSection] = useState<MobileSettingsSection | null>(null);
+  // Used by the "AI Assistant" sub-screen to deep-link straight into
+  // the active workspace's AI tab without making the user drill in
+  // through Workspaces → tap row → tap AI tab.
+  const { activeId } = useWorkspaces();
 
   useEffect(() => {
     if (!open) return;
@@ -172,6 +185,14 @@ export default function MobileSettings({ open, initialSection = "profile", onClo
                   {section === "workspaces" && (
                     <div className="rounded-2xl border border-app bg-app-elevated p-1">
                       <WorkspacesPane />
+                    </div>
+                  )}
+                  {section === "ai" && (
+                    <div className="rounded-2xl border border-app bg-app-elevated p-1">
+                      <WorkspacesPane
+                        initialExpandedId={activeId}
+                        initialSection="ai"
+                      />
                     </div>
                   )}
                   {section === "appearance" && <AppearanceSection />}
