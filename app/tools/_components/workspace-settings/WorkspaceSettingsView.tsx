@@ -21,6 +21,7 @@ import StorageSection from "./StorageSection";
 import MembersSection from "./MembersSection";
 import PermissionsSection from "./PermissionsSection";
 import ActivitySection from "./ActivitySection";
+import AISection from "./AISection";
 import DangerSection from "./DangerSection";
 import {
   PILL,
@@ -52,6 +53,7 @@ const TABS: TabDef[] = [
   { id: "members", label: "Members", visibleFor: ["owner", "admin", "member"] },
   { id: "permissions", label: "Permissions", visibleFor: ["owner"] },
   { id: "activity", label: "Activity", visibleFor: ["owner", "admin", "member"] },
+  { id: "ai", label: "AI", visibleFor: ["owner", "admin", "member"] },
   { id: "danger", label: "Danger", visibleFor: ["owner"] },
 ];
 
@@ -217,6 +219,14 @@ export default function WorkspaceSettingsView({
           <ActivitySection
             workspaceId={workspace.id}
             onError={onError}
+          />
+        )}
+        {!loading && section === "ai" && (
+          <AISection
+            workspaceId={workspace.id}
+            role={workspace.role}
+            onError={onError}
+            onSuccess={onSuccess}
           />
         )}
         {!loading && section === "danger" && (

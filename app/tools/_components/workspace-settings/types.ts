@@ -104,6 +104,7 @@ export type SectionId =
   | "members"
   | "permissions"
   | "activity"
+  | "ai"
   | "danger";
 
 export const PILL =
