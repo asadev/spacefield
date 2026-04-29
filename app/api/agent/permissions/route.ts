@@ -7,6 +7,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { ALL_SKILLS } from "@/lib/agent/skills";
 import {
   defaultModeFor,
@@ -38,7 +39,7 @@ export async function GET(req: NextRequest) {
       { status: 400 }
     );
   }
-  const { data: mem } = await supabase
+  const { data: mem } = await createAdminClient()
     .from("workspace_members")
     .select("role")
     .eq("workspace_id", workspaceId)

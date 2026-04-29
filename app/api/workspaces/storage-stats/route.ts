@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 /* GET /api/workspaces/storage-stats?workspaceId=<uuid>
  *
@@ -77,14 +78,32 @@ export async function GET(req: NextRequest) {
     );
   }
 
+  // Membership check + data reads go through service-role. The
+  // SECURITY DEFINER RPCs use auth.uid() inside, which is null when the
+  // SSR cookie session doesn't propagate cleanly through the Vercel
+  // edge → fra1 → Supabase chain — the symptom is "Storage unavailable"
+  // for legitimate workspace owners. The auth.getUser() call above
+  // already verified the caller's identity; using admin here just
+  // bypasses the auth.uid()-gated chain.
+  const admin = createAdminClient();
+  const { data: mem } = await admin
+    .from("workspace_members")
+    .select("role")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!mem) {
+    return NextResponse.json({ error: "not_a_member" }, { status: 403 });
+  }
+
   const [cap, byKind, byUser, top, trash, trend, addon] = await Promise.all([
-    supabase.rpc("workspace_storage", { ws_id: workspaceId }),
-    supabase.rpc("workspace_storage_by_kind", { ws_id: workspaceId }),
-    supabase.rpc("workspace_storage_by_user", { ws_id: workspaceId }),
-    supabase.rpc("workspace_top_files", { ws_id: workspaceId, top_n: 10 }),
-    supabase.rpc("workspace_trash_summary", { ws_id: workspaceId }),
-    supabase.rpc("workspace_upload_trend_30d", { ws_id: workspaceId }),
-    supabase
+    admin.rpc("workspace_storage", { ws_id: workspaceId }),
+    admin.rpc("workspace_storage_by_kind", { ws_id: workspaceId }),
+    admin.rpc("workspace_storage_by_user", { ws_id: workspaceId }),
+    admin.rpc("workspace_top_files", { ws_id: workspaceId, top_n: 10 }),
+    admin.rpc("workspace_trash_summary", { ws_id: workspaceId }),
+    admin.rpc("workspace_upload_trend_30d", { ws_id: workspaceId }),
+    admin
       .from("workspace_storage_addons")
       .select("workspace_id, addon_gb, payment_status")
       .eq("workspace_id", workspaceId)

@@ -15,6 +15,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { dispatch } from "@/lib/agent/runtime/dispatcher";
 import type { DispatchScope, Tier, UserContext } from "@/lib/agent/runtime/types";
 
@@ -51,8 +52,13 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Confirm membership + pull role.
-  const { data: mem } = await supabase
+  // Confirm membership + pull role via service-role lookup. The
+  // auth.getUser() call above already verified the caller's identity;
+  // RLS on workspace_members can hide a user's own row in some SSR
+  // sessions, which falsely returns "not_a_member" for legitimate
+  // workspace owners.
+  const admin = createAdminClient();
+  const { data: mem } = await admin
     .from("workspace_members")
     .select("role")
     .eq("workspace_id", workspaceId)

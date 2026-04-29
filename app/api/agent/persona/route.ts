@@ -9,6 +9,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { DEFAULT_PERSONA, type AgentPersona } from "@/lib/agent/runtime/persona";
 
 const VALID_TONES: AgentPersona["voice_tone"][] = [
@@ -73,9 +74,11 @@ export async function PUT(req: NextRequest) {
       { status: 400 }
     );
   }
-  // Admin/owner gate. RLS enforces this too — we 403 here for a cleaner
-  // error message.
-  const { data: mem } = await supabase
+  // Admin/owner gate via service-role (RLS on workspace_members can
+  // hide a user's own row in some SSR sessions; auth.getUser already
+  // verified caller identity above).
+  const admin = createAdminClient();
+  const { data: mem } = await admin
     .from("workspace_members")
     .select("role")
     .eq("workspace_id", workspaceId)

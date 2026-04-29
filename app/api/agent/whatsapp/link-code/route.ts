@@ -11,6 +11,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 
 function generateCode(): string {
   // 6 digits, leading zeros allowed
@@ -37,8 +38,13 @@ export async function POST(req: NextRequest) {
       { status: 400 }
     );
   }
-  // Confirm membership.
-  const { data: mem } = await supabase
+  // Confirm membership via service-role lookup. The auth.getUser()
+  // call above already verified the caller's identity; the membership
+  // check just validates the requested workspace is theirs. We use the
+  // admin client because RLS on workspace_members can hide a user's
+  // own row in some Supabase SSR sessions.
+  const admin = createAdminClient();
+  const { data: mem } = await admin
     .from("workspace_members")
     .select("role")
     .eq("workspace_id", workspaceId)
