@@ -18,7 +18,7 @@
  * is sanitized to a same-origin path to prevent open-redirects. */
 
 import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
 import Desktop from "../tools/_components/Desktop";
 import Landing from "./Landing";
@@ -35,14 +35,26 @@ function sanitizeNext(raw: string | null): string | null {
   return raw;
 }
 
+/** Read `?next=` from window.location instead of useSearchParams() so the
+ *  home page can stay statically prerendered — useSearchParams() forces a
+ *  CSR bailout that breaks `next build` on `/`. */
+function readNextFromLocation(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const sp = new URLSearchParams(window.location.search);
+    return sanitizeNext(sp.get("next"));
+  } catch {
+    return null;
+  }
+}
+
 export default function HomeGate() {
   const [mode, setMode] = useState<Mode>("loading");
   const router = useRouter();
-  const searchParams = useSearchParams();
-  const next = sanitizeNext(searchParams?.get("next") ?? null);
 
   useEffect(() => {
     let cancelled = false;
+    const next = readNextFromLocation();
 
     // No Supabase configured → there's no way to be signed in, show
     // Landing. (Used in local dev without env vars.)
@@ -78,7 +90,7 @@ export default function HomeGate() {
       cancelled = true;
       sub.subscription.unsubscribe();
     };
-  }, [router, next]);
+  }, [router]);
 
   if (mode === "loading") {
     return <div className="fixed inset-0 bg-app" aria-hidden="true" />;
