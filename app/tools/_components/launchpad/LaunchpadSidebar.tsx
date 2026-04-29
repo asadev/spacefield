@@ -57,6 +57,11 @@ interface Props {
   /** Optional footer slot — used for the storage usage bar. Lives at
    *  the bottom of the sidebar, sticky-anchored. */
   footer?: React.ReactNode;
+  /** When true, the sidebar widens its rows + bumps text size so it
+   * fits a touch viewport (the Launchpad's mobile drawer). It also
+   * fills its parent (no fixed 14rem width — the parent picks the
+   * width). Desktop renders a fixed 14rem rail. */
+  compact?: boolean;
 }
 
 const FAVORITES_INLINE_LIMIT = 10;
@@ -71,6 +76,7 @@ export default function LaunchpadSidebar({
   onFavoriteContext,
   onFavoriteOpen,
   footer,
+  compact = false,
 }: Props) {
   const currentKey = useMemo(() => locationKey(current), [current]);
   const activeWorkspace = useMemo(
@@ -88,10 +94,20 @@ export default function LaunchpadSidebar({
       // Specular highlight is added via the ::before pseudo on the
       // wrapper div below; soft inner shadow on the right edge gives
       // the sidebar a sense of depth.
-      className="relative flex h-full w-56 shrink-0 flex-col border-r border-app/40 bg-app/40 text-sm backdrop-blur-xl"
-      style={{
-        boxShadow: "inset -1px 0 0 0 rgb(0 0 0 / 0.04)",
-      }}
+      //
+      // On compact (mobile drawer) we drop the fixed 14rem width so the
+      // parent drawer can pick a touch-friendly width, and we lose the
+      // backdrop blur (the drawer already sits on a solid panel).
+      className={
+        compact
+          ? "relative flex h-full w-full shrink-0 flex-col border-r border-app/40 bg-app-elevated text-base"
+          : "relative flex h-full w-56 shrink-0 flex-col border-r border-app/40 bg-app/40 text-sm backdrop-blur-xl"
+      }
+      style={
+        compact
+          ? { paddingTop: "env(safe-area-inset-top, 0px)" }
+          : { boxShadow: "inset -1px 0 0 0 rgb(0 0 0 / 0.04)" }
+      }
     >
       {/* Top specular highlight */}
       <div
@@ -121,30 +137,35 @@ export default function LaunchpadSidebar({
           label="Recents"
           selected={currentKey === "recents"}
           onClick={() => onSelect({ kind: "recents" })}
+          compact={compact}
         />
         <Row
           icon={<UsersIcon />}
           label="Shared"
           selected={currentKey === "shared"}
           onClick={() => onSelect({ kind: "shared" })}
+          compact={compact}
         />
         <Row
           icon={<TrashIcon />}
           label="Trash"
           selected={currentKey === "trash"}
           onClick={() => onSelect({ kind: "trash" })}
+          compact={compact}
         />
         <Row
           icon={<HomeIcon />}
           label="Home"
           selected={currentKey === "home"}
           onClick={() => onSelect({ kind: "home" })}
+          compact={compact}
         />
         <Row
           icon={<GridIcon />}
           label="Applications"
           selected={currentKey === "applications"}
           onClick={() => onSelect({ kind: "applications" })}
+          compact={compact}
         />
       </Section>
 
@@ -154,12 +175,14 @@ export default function LaunchpadSidebar({
           label="Downloads"
           selected={currentKey === "downloads"}
           onClick={() => onSelect({ kind: "downloads" })}
+          compact={compact}
         />
         <Row
           icon={<DocIcon />}
           label="Documents"
           selected={currentKey === "documents"}
           onClick={() => onSelect({ kind: "documents" })}
+          compact={compact}
         />
 
         {inlineFavorites.map((f) => (
@@ -170,6 +193,7 @@ export default function LaunchpadSidebar({
             selected={currentKey === `favorite-file:${f.id}`}
             onClick={() => onFavoriteOpen(f)}
             onContextMenu={(e) => onFavoriteContext(e, f)}
+            compact={compact}
           />
         ))}
 
@@ -178,7 +202,10 @@ export default function LaunchpadSidebar({
             type="button"
             onClick={() => onSelect({ kind: "favorites" })}
             className={
-              "mx-1 flex items-center gap-2 rounded-md px-2 py-1 text-left text-[12px] transition-colors " +
+              "mx-1 flex items-center gap-2 rounded-md text-left transition-colors " +
+              (compact
+                ? "px-3 py-2.5 text-[14px] "
+                : "px-2 py-1 text-[12px] ") +
               (currentKey === "favorites"
                 ? "bg-tool-accent text-white"
                 : "text-secondary hover:bg-surface hover:text-app")
@@ -284,6 +311,7 @@ function Row({
   badge,
   onClick,
   onContextMenu,
+  compact = false,
 }: {
   icon: React.ReactNode;
   label: string;
@@ -291,6 +319,7 @@ function Row({
   badge?: string;
   onClick: () => void;
   onContextMenu?: (e: React.MouseEvent) => void;
+  compact?: boolean;
 }) {
   return (
     <button
@@ -298,13 +327,21 @@ function Row({
       onClick={onClick}
       onContextMenu={onContextMenu}
       className={
-        "mx-1 flex items-center gap-2 rounded-md px-2 py-1 text-left text-[13px] transition-colors " +
+        "mx-1 flex items-center gap-2 rounded-md text-left transition-colors " +
+        (compact
+          ? "px-3 py-2.5 text-[15px] "
+          : "px-2 py-1 text-[13px] ") +
         (selected
           ? "bg-tool-accent text-white"
           : "text-app hover:bg-surface")
       }
     >
-      <span className="flex h-4 w-4 items-center justify-center text-secondary [.bg-tool-accent_&]:text-white">
+      <span
+        className={
+          "flex items-center justify-center text-secondary [.bg-tool-accent_&]:text-white " +
+          (compact ? "h-5 w-5" : "h-4 w-4")
+        }
+      >
         {icon}
       </span>
       <span className="truncate flex-1">{label}</span>

@@ -67,6 +67,7 @@ import SignInDialog from "./SignInDialog";
 import Onboarding from "./Onboarding";
 import MobileSettings from "./MobileSettings";
 import MobileNotifications from "./MobileNotifications";
+import Launchpad, { type LaunchpadIntent } from "./Launchpad";
 
 const STATUS_BAR_HEIGHT = 44;
 const HOME_INDICATOR_HEIGHT = 24;
@@ -126,6 +127,18 @@ export default function MobileShell() {
   const [controlCenterOpen, setControlCenterOpen] = useState(false);
   const [appSwitcherOpen, setAppSwitcherOpen] = useState(false);
   const [allAppsOpen, setAllAppsOpen] = useState(false);
+  /* Launchpad — Files Manager replacement. Same component the desktop
+   * shell uses; the Launchpad's internal `useIsMobile` switches it to
+   * fullscreen + drawer chrome so it lays out correctly on mobile. We
+   * just toggle `open` from the dock. The intent is permanently
+   * "applications" — mobile users opening Files always start on the
+   * Home pane via the sidebar drawer; we don't try to deep-link
+   * anywhere else. */
+  const [launchpadOpen, setLaunchpadOpen] = useState(false);
+  const launchpadIntent = useMemo<LaunchpadIntent>(
+    () => ({ kind: "applications" }),
+    []
+  );
 
   // Open windows — pick the topmost (highest z, not minimized) as active.
   const activeWindow = useMemo<WindowState | null>(() => {
@@ -162,6 +175,7 @@ export default function MobileShell() {
       setAllAppsOpen(false);
       setUserMenuOpen(false);
       setWorkspaceMenuOpen(false);
+      setLaunchpadOpen(false);
       open(slug, title, params);
     },
     [isInstalled, install, open]
@@ -282,12 +296,13 @@ export default function MobileShell() {
           )}
         </AnimatePresence>
 
-        {/* Dock — 4 pinned + All Apps overflow */}
+        {/* Dock — 4 pinned + Files + All Apps overflow */}
         {windowsHydrated && installHydrated && onboarded && !activeWindow && (
           <MobileDock
             tools={dockTools}
             onOpenTool={handleOpenTool}
             onAllApps={() => setAllAppsOpen(true)}
+            onFiles={() => setLaunchpadOpen(true)}
           />
         )}
 
@@ -407,6 +422,29 @@ export default function MobileShell() {
 
         {/* Screenshot capture (⌘⇧3 / ⌘⇧4) — handy on iPad keyboards. */}
         <ScreenshotCapture />
+
+        {/* Launchpad — Files Manager replacement. Renders fullscreen on
+         * mobile via its internal `useIsMobile` branch. We pass the
+         * installed-tool list so Applications mirrors the home grid,
+         * onConnect to open the workspace switcher, and onStore to
+         * reach the App Store. Drag-drop and pin handlers are no-ops on
+         * mobile (no dock pinning UI). */}
+        <Launchpad
+          open={launchpadOpen}
+          onClose={() => setLaunchpadOpen(false)}
+          onOpenTool={handleOpenTool}
+          onUninstall={uninstall}
+          onStore={() => {
+            setLaunchpadOpen(false);
+            setAllAppsOpen(true);
+          }}
+          items={installedTools}
+          onConnect={() => {
+            setLaunchpadOpen(false);
+            setWorkspaceMenuOpen(true);
+          }}
+          intent={launchpadIntent}
+        />
       </div>
     </DesktopShellProvider>
   );
@@ -792,10 +830,12 @@ function MobileDock({
   tools,
   onOpenTool,
   onAllApps,
+  onFiles,
 }: {
   tools: Array<NonNullable<ReturnType<typeof toolBySlug>>>;
   onOpenTool: (slug: string, title: string) => void;
   onAllApps: () => void;
+  onFiles: () => void;
 }) {
   const { getCount } = useDockBadges();
   return (
@@ -817,6 +857,15 @@ function MobileDock({
             badge={getCount(t.slug)}
           />
         ))}
+        {/* Files — opens the Launchpad in mobile mode. The desktop
+         * Files Manager was retired; the Launchpad now serves every
+         * file-management surface on both shells. */}
+        <DockIcon
+          slug={null}
+          title="Files"
+          iconKey="document"
+          onTap={onFiles}
+        />
         <DockIcon
           slug={null}
           title="All apps"

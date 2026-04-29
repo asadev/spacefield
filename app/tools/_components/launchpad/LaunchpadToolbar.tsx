@@ -48,6 +48,24 @@ interface Props {
   /** Optional slot rendered between Action menu and the search field
    *  — used to host the per-app AI assistant button. */
   aiSlot?: React.ReactNode;
+
+  /* Mobile-only props ------------------------------------------------ */
+  /** When true, the toolbar collapses to a compact mobile layout: back
+   * button + title + view toggle + search/menu icons. Group, Action,
+   * Share, Connect, Preview, Upload, and the persistent search field
+   * are hidden — they live in the drawer or the action sheet on
+   * mobile. */
+  compact?: boolean;
+  /** Mobile back button — closes the Launchpad and returns to the
+   * MobileShell home screen. */
+  onCloseMobile?: () => void;
+  /** Toggles the mobile drawer that hosts the sidebar. */
+  onToggleMobileMenu?: () => void;
+  mobileMenuOpen?: boolean;
+  /** When true, the mobile toolbar swaps the title row for an inline
+   * full-width search field. Tapping the search icon flips this. */
+  mobileSearchOpen?: boolean;
+  onToggleMobileSearch?: () => void;
 }
 
 export default function LaunchpadToolbar({
@@ -72,7 +90,137 @@ export default function LaunchpadToolbar({
   actionMenuOpen,
   onToggleActionMenu,
   aiSlot,
+  compact = false,
+  onCloseMobile,
+  onToggleMobileMenu,
+  mobileMenuOpen = false,
+  mobileSearchOpen = false,
+  onToggleMobileSearch,
 }: Props) {
+  if (compact) {
+    return (
+      <div
+        data-no-drag
+        // Safe-area top padding lets the toolbar clear the notch on
+        // mobile devices that report a non-zero env(safe-area-inset-top).
+        className="relative flex h-14 shrink-0 items-center gap-1 border-b border-app/50 bg-app-elevated px-2"
+        style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
+      >
+        {mobileSearchOpen ? (
+          <>
+            <ToolbarBtn
+              aria-label="Close search"
+              onClick={() => {
+                onQuery("");
+                onToggleMobileSearch?.();
+              }}
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M19 12H5" />
+                <path d="M12 5l-7 7 7 7" />
+              </svg>
+            </ToolbarBtn>
+            <div className="relative flex-1">
+              <svg
+                viewBox="0 0 24 24"
+                width="13"
+                height="13"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+                className="pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted"
+              >
+                <circle cx="11" cy="11" r="7" />
+                <path d="M20 20l-3.5-3.5" />
+              </svg>
+              <SearchInput
+                ref={searchInputRef}
+                value={query}
+                onChange={(e) => onQuery(e.target.value)}
+                className="h-9 w-full rounded-md border border-app bg-app pl-7 pr-2 text-[14px] text-app placeholder:text-muted focus:border-tool-accent focus:outline-none"
+              />
+            </div>
+          </>
+        ) : (
+          <>
+            {/* Back / close-Launchpad — returns to the MobileShell home. */}
+            <ToolbarBtn
+              aria-label="Close"
+              onClick={onCloseMobile}
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M19 12H5" />
+                <path d="M12 5l-7 7 7 7" />
+              </svg>
+            </ToolbarBtn>
+
+            {/* Hamburger toggles the sidebar drawer. */}
+            <ToolbarBtn
+              aria-label={mobileMenuOpen ? "Hide menu" : "Show menu"}
+              onClick={onToggleMobileMenu}
+              active={mobileMenuOpen}
+            >
+              <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <path d="M4 6h16M4 12h16M4 18h16" />
+              </svg>
+            </ToolbarBtn>
+
+            <div className="ml-1 flex-1 truncate text-[15px] font-semibold text-app">
+              {title}
+            </div>
+
+            {/* Compact 2-segment view toggle — Icon vs List. Column /
+             * Gallery don't make sense on a 375px viewport. If the
+             * persisted view is column or gallery we still render
+             * Icon/List as the only options; the view stays whatever
+             * the user picked. */}
+            <div
+              className="flex items-center overflow-hidden rounded-md border border-app bg-app text-secondary"
+              role="group"
+              aria-label="View"
+            >
+              <ViewSegment active={view === "icon"} onClick={() => onView("icon")} aria-label="Icon view">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
+                  <rect x="3" y="3" width="7" height="7" rx="1" />
+                  <rect x="14" y="3" width="7" height="7" rx="1" />
+                  <rect x="3" y="14" width="7" height="7" rx="1" />
+                  <rect x="14" y="14" width="7" height="7" rx="1" />
+                </svg>
+              </ViewSegment>
+              <ViewSegment active={view === "list"} onClick={() => onView("list")} aria-label="List view">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+                  <path d="M4 7h16M4 12h16M4 17h16" />
+                </svg>
+              </ViewSegment>
+            </div>
+
+            {/* Search — taps swap the toolbar for a full-width input. */}
+            <ToolbarBtn aria-label="Search" onClick={onToggleMobileSearch}>
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <circle cx="11" cy="11" r="7" />
+                <path d="M20 20l-3.5-3.5" />
+              </svg>
+            </ToolbarBtn>
+
+            {/* Upload — only when the active location accepts uploads. */}
+            {onUpload && (
+              <ToolbarBtn aria-label="Upload" onClick={onUpload}>
+                <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <path d="M12 19V5" />
+                  <path d="M5 12l7-7 7 7" />
+                  <path d="M5 21h14" />
+                </svg>
+              </ToolbarBtn>
+            )}
+          </>
+        )}
+      </div>
+    );
+  }
+
   return (
     <div
       data-no-drag

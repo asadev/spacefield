@@ -41,6 +41,7 @@ import LaunchpadSidebar from "./launchpad/LaunchpadSidebar";
 import LaunchpadToolbar from "./launchpad/LaunchpadToolbar";
 import AgentChatScope from "./agent/AgentChatScope";
 import LaunchpadStatusBar from "./launchpad/LaunchpadStatusBar";
+import { useIsMobile } from "./useIsMobile";
 import LaunchpadIconView from "./launchpad/LaunchpadIconView";
 import LaunchpadListView from "./launchpad/LaunchpadListView";
 import LaunchpadColumnView from "./launchpad/LaunchpadColumnView";
@@ -217,6 +218,15 @@ export default function Launchpad({
   const { recents } = useRecents();
   const launchpadView = useLaunchpadView();
   const favoritesState = useLaunchpadFavorites(activeId);
+  const isMobile = useIsMobile();
+  /* Mobile-only: drawer holds the sidebar (Locations + Favorites). It's
+   * closed by default when the Launchpad opens so the user lands on
+   * content. The toolbar's hamburger toggles it; tapping a row closes
+   * it. The desktop layout never uses this state. */
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  /* Mobile-only: expandable search bar — collapsed by default so the
+   * toolbar stays compact. */
+  const [mobileSearchOpen, setMobileSearchOpen] = useState(false);
 
   const [bounds, setBounds] = useState<Bounds>(defaultBounds);
   const [maximized, setMaximized] = useState(false);
@@ -375,6 +385,8 @@ export default function Launchpad({
       setActionMenuOpen(false);
       setAboutOpen(false);
       setToast(null);
+      setMobileDrawerOpen(false);
+      setMobileSearchOpen(false);
       if (toastTimerRef.current) {
         clearTimeout(toastTimerRef.current);
         toastTimerRef.current = null;
@@ -1064,106 +1076,129 @@ export default function Launchpad({
     if (onConnect) onConnect();
   }, [onConnect]);
 
+  /* On mobile we render the Launchpad fullscreen — no draggable
+   * traffic-light title bar, no resize handles, no persisted bounds.
+   * The motion root is fixed inset-0 with 100dvh so it adapts to the
+   * mobile viewport without overflowing under the URL/tab bar. */
+  const rootStyle: React.CSSProperties = isMobile
+    ? {
+        position: "fixed",
+        left: 0,
+        top: 0,
+        right: 0,
+        bottom: 0,
+        width: "100vw",
+        height: "100dvh",
+        zIndex: 75,
+        borderRadius: 0,
+      }
+    : {
+        position: "fixed",
+        left: bounds.x,
+        top: bounds.y,
+        width: bounds.w,
+        height: bounds.h,
+        zIndex: 75,
+        borderRadius: maximized ? 0 : undefined,
+      };
+
   return (
     <AnimatePresence>
       {open && (
         <motion.div
           role="dialog"
           aria-label="Applications"
-          initial={{ opacity: 0, scale: 0.97 }}
-          animate={{ opacity: 1, scale: 1 }}
-          exit={{ opacity: 0, scale: 0.97 }}
+          initial={isMobile ? { opacity: 0 } : { opacity: 0, scale: 0.97 }}
+          animate={isMobile ? { opacity: 1 } : { opacity: 1, scale: 1 }}
+          exit={isMobile ? { opacity: 0 } : { opacity: 0, scale: 0.97 }}
           transition={{ type: "spring", stiffness: 320, damping: 28 }}
-          style={{
-            position: "fixed",
-            left: bounds.x,
-            top: bounds.y,
-            width: bounds.w,
-            height: bounds.h,
-            zIndex: 75,
-            borderRadius: maximized ? 0 : undefined,
-          }}
+          style={rootStyle}
           // Liquid Glass — translucent body so the desktop wallpaper
           // bleeds through; backdrop-blur adds the frosted feel; the
           // soft outer drop shadow + rounded corners give the window
-          // its native macOS depth. The animation perf optimisations
-          // from 8fe67d7 (will-change: transform on the motion root +
-          // tab-hidden pause) stay intact.
+          // its native macOS depth. On mobile we drop the rounded
+          // corners (we cover the whole screen) and the outer shadow.
           className={
-            "overflow-hidden border border-app/40 bg-app-elevated/70 shadow-2xl backdrop-blur-2xl " +
-            (maximized ? "" : "rounded-xl")
+            isMobile
+              ? "flex flex-col overflow-hidden bg-app"
+              : "overflow-hidden border border-app/40 bg-app-elevated/70 shadow-2xl backdrop-blur-2xl " +
+                (maximized ? "" : "rounded-xl")
           }
           onPointerDown={(e) => {
             // Stop bubbling so the desktop's drop handlers don't grab events.
             e.stopPropagation();
           }}
         >
-          {/* Title bar — Liquid Glass: translucent + specular highlight */}
-          <div
-            onPointerDown={onTitleDrag}
-            onDoubleClick={toggleMaximize}
-            className="relative flex h-9 select-none items-center gap-2 border-b border-app/50 bg-app-elevated/60 px-3 backdrop-blur-2xl"
-            style={{ cursor: maximized ? "default" : "grab" }}
-          >
+          {/* Title bar — Liquid Glass on desktop only. On mobile we skip
+           * the macOS traffic-light row entirely; the toolbar carries
+           * the back button instead. */}
+          {!isMobile && (
             <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 h-px"
-              style={{
-                background:
-                  "linear-gradient(90deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.06) 100%)",
-              }}
-            />
-            <div className="flex items-center gap-1.5" data-no-drag>
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Close"
-                className="group h-3 w-3 rounded-full bg-[#ff5f57] transition-colors"
-              >
-                <svg viewBox="0 0 12 12" className="h-3 w-3 opacity-0 group-hover:opacity-80 text-[#4d0000]" aria-hidden="true">
-                  <path d="M3.5 3.5l5 5M8.5 3.5l-5 5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                onClick={onClose}
-                aria-label="Minimize"
-                className="group h-3 w-3 rounded-full bg-[#febc2e] transition-colors"
-              >
-                <svg viewBox="0 0 12 12" className="h-3 w-3 opacity-0 group-hover:opacity-80 text-[#604000]" aria-hidden="true">
-                  <path d="M3 6h6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
-                </svg>
-              </button>
-              <button
-                type="button"
-                onClick={toggleMaximize}
-                aria-label={maximized ? "Restore" : "Maximize"}
-                className="group h-3 w-3 rounded-full bg-[#28c840] transition-colors"
-              >
-                <svg viewBox="0 0 12 12" className="h-3 w-3 opacity-0 group-hover:opacity-80 text-[#013000]" aria-hidden="true">
-                  <path d="M3.5 6l2.5-2.5L8.5 6M3.5 6l2.5 2.5L8.5 6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" fill="none" />
-                </svg>
-              </button>
-            </div>
-            <div className="flex-1 truncate text-center text-xs font-medium text-app">
-              {currentTitle}
-            </div>
-            <div className="flex items-center gap-1" data-no-drag>
-              {onStore && (
+              onPointerDown={onTitleDrag}
+              onDoubleClick={toggleMaximize}
+              className="relative flex h-9 select-none items-center gap-2 border-b border-app/50 bg-app-elevated/60 px-3 backdrop-blur-2xl"
+              style={{ cursor: maximized ? "default" : "grab" }}
+            >
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 top-0 h-px"
+                style={{
+                  background:
+                    "linear-gradient(90deg, rgba(255,255,255,0.06) 0%, rgba(255,255,255,0.18) 50%, rgba(255,255,255,0.06) 100%)",
+                }}
+              />
+              <div className="flex items-center gap-1.5" data-no-drag>
                 <button
                   type="button"
-                  onClick={() => {
-                    onClose();
-                    onStore();
-                  }}
-                  className="rounded px-2 py-0.5 text-[11px] text-secondary hover:bg-surface hover:text-app transition-colors"
-                  title="Open the Store"
+                  onClick={onClose}
+                  aria-label="Close"
+                  className="group h-3 w-3 rounded-full bg-[#ff5f57] transition-colors"
                 >
-                  Store
+                  <svg viewBox="0 0 12 12" className="h-3 w-3 opacity-0 group-hover:opacity-80 text-[#4d0000]" aria-hidden="true">
+                    <path d="M3.5 3.5l5 5M8.5 3.5l-5 5" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                  </svg>
                 </button>
-              )}
+                <button
+                  type="button"
+                  onClick={onClose}
+                  aria-label="Minimize"
+                  className="group h-3 w-3 rounded-full bg-[#febc2e] transition-colors"
+                >
+                  <svg viewBox="0 0 12 12" className="h-3 w-3 opacity-0 group-hover:opacity-80 text-[#604000]" aria-hidden="true">
+                    <path d="M3 6h6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
+                  </svg>
+                </button>
+                <button
+                  type="button"
+                  onClick={toggleMaximize}
+                  aria-label={maximized ? "Restore" : "Maximize"}
+                  className="group h-3 w-3 rounded-full bg-[#28c840] transition-colors"
+                >
+                  <svg viewBox="0 0 12 12" className="h-3 w-3 opacity-0 group-hover:opacity-80 text-[#013000]" aria-hidden="true">
+                    <path d="M3.5 6l2.5-2.5L8.5 6M3.5 6l2.5 2.5L8.5 6" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" fill="none" />
+                  </svg>
+                </button>
+              </div>
+              <div className="flex-1 truncate text-center text-xs font-medium text-app">
+                {currentTitle}
+              </div>
+              <div className="flex items-center gap-1" data-no-drag>
+                {onStore && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onClose();
+                      onStore();
+                    }}
+                    className="rounded px-2 py-0.5 text-[11px] text-secondary hover:bg-surface hover:text-app transition-colors"
+                    title="Open the Store"
+                  >
+                    Store
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
 
           {/* Toolbar */}
           <LaunchpadToolbar
@@ -1195,8 +1230,26 @@ export default function Launchpad({
               setGroupMenuOpen(false);
               setActionMenuOpen((v) => !v);
             }}
+            compact={isMobile}
+            onCloseMobile={onClose}
+            onToggleMobileMenu={() => setMobileDrawerOpen((v) => !v)}
+            mobileMenuOpen={mobileDrawerOpen}
+            mobileSearchOpen={mobileSearchOpen}
+            onToggleMobileSearch={() => {
+              setMobileSearchOpen((v) => {
+                const next = !v;
+                if (next) {
+                  // Focus the search input on the next tick so it lands
+                  // after the input mounts.
+                  window.setTimeout(() => {
+                    searchInputRef.current?.focus();
+                  }, 0);
+                }
+                return next;
+              });
+            }}
             aiSlot={
-              activeId ? (
+              activeId && !isMobile ? (
                 <AgentChatScope
                   workspaceId={activeId}
                   scope="files"
@@ -1225,10 +1278,21 @@ export default function Launchpad({
 
           {/* Body — sidebar + main pane (+ optional preview).
            *  Translucent so wallpaper bleeds through; the inner panes
-           *  layer their own opacities on top. */}
+           *  layer their own opacities on top.
+           *
+           *  On desktop, the body's height is computed off the window's
+           *  pixel bounds (title bar 36 + toolbar 48 + status bar 24).
+           *  On mobile, the body uses `flex-1` so it fills whatever the
+           *  toolbar + status bar leave behind — no fixed pixel math. */}
           <div
-            className="flex bg-app/30"
-            style={{ height: bounds.h - 36 - 48 - 24 }}
+            className={
+              isMobile
+                ? "relative flex min-h-0 flex-1 bg-app/30"
+                : "flex bg-app/30"
+            }
+            style={
+              isMobile ? undefined : { height: bounds.h - 36 - 48 - 24 }
+            }
             onDragOver={(e) => {
               if (!onAppDroppedOnLaunchpad) return;
               if (e.dataTransfer.types.includes("application/x-spacefield-app")) {
@@ -1244,42 +1308,95 @@ export default function Launchpad({
               onAppDroppedOnLaunchpad(payload);
             }}
           >
-            <LaunchpadSidebar
-              current={launchpadView.location}
-              onSelect={handleSelectLocation}
-              workspaces={workspaces}
-              activeWorkspaceId={activeId}
-              onSwitchWorkspace={onConnect}
-              favorites={favoritesState.favorites}
-              onFavoriteOpen={(file) => {
-                cacheFile(file);
-                setFocusedFileId(file.id);
-                handleOpenFile(file);
-              }}
-              onFavoriteContext={(e, file) => {
-                cacheFile(file);
-                setFocusedFileId(file.id);
-                handleFileContext(e, file);
-              }}
-              footer={
-                activeId ? (
-                  <LaunchpadStorageBar
-                    workspaceId={activeId}
-                    refreshTick={refreshTick}
-                    onOpenStorageSettings={handleOpenStorageSettings}
+            {/* Sidebar — always rendered on desktop. On mobile it lives
+             * inside a slide-in drawer that sits on top of the main
+             * pane; tapping the backdrop closes it. */}
+            {!isMobile && (
+              <LaunchpadSidebar
+                current={launchpadView.location}
+                onSelect={handleSelectLocation}
+                workspaces={workspaces}
+                activeWorkspaceId={activeId}
+                onSwitchWorkspace={onConnect}
+                favorites={favoritesState.favorites}
+                onFavoriteOpen={(file) => {
+                  cacheFile(file);
+                  setFocusedFileId(file.id);
+                  handleOpenFile(file);
+                }}
+                onFavoriteContext={(e, file) => {
+                  cacheFile(file);
+                  setFocusedFileId(file.id);
+                  handleFileContext(e, file);
+                }}
+                footer={
+                  activeId ? (
+                    <LaunchpadStorageBar
+                      workspaceId={activeId}
+                      refreshTick={refreshTick}
+                      onOpenStorageSettings={handleOpenStorageSettings}
+                    />
+                  ) : null
+                }
+              />
+            )}
+
+            {isMobile && mobileDrawerOpen && (
+              <>
+                <button
+                  type="button"
+                  aria-label="Close menu"
+                  onClick={() => setMobileDrawerOpen(false)}
+                  className="absolute inset-0 z-[60] bg-black/40"
+                />
+                <div className="absolute inset-y-0 left-0 z-[61] flex w-[78%] max-w-[280px] flex-col bg-app-elevated shadow-2xl">
+                  <LaunchpadSidebar
+                    compact
+                    current={launchpadView.location}
+                    onSelect={(loc) => {
+                      handleSelectLocation(loc);
+                      setMobileDrawerOpen(false);
+                    }}
+                    workspaces={workspaces}
+                    activeWorkspaceId={activeId}
+                    onSwitchWorkspace={onConnect}
+                    favorites={favoritesState.favorites}
+                    onFavoriteOpen={(file) => {
+                      cacheFile(file);
+                      setFocusedFileId(file.id);
+                      handleOpenFile(file);
+                      setMobileDrawerOpen(false);
+                    }}
+                    onFavoriteContext={(e, file) => {
+                      cacheFile(file);
+                      setFocusedFileId(file.id);
+                      handleFileContext(e, file);
+                    }}
+                    footer={
+                      activeId ? (
+                        <LaunchpadStorageBar
+                          workspaceId={activeId}
+                          refreshTick={refreshTick}
+                          onOpenStorageSettings={handleOpenStorageSettings}
+                        />
+                      ) : null
+                    }
                   />
-                ) : null
-              }
-            />
+                </div>
+              </>
+            )}
 
             <div
-              className="relative flex flex-1 overflow-hidden"
+              className="relative flex min-h-0 flex-1 overflow-hidden"
               onDragEnter={onMainDragEnter}
               onDragLeave={onMainDragLeave}
               onDragOver={onMainDragOver}
               onDrop={onMainDrop}
             >
-              <div className="flex-1 overflow-auto">
+              <div
+                className="flex-1 overflow-y-auto"
+                style={{ WebkitOverflowScrolling: "touch" }}
+              >
                 <MainPane
                   view={launchpadView.view}
                   tools={visibleTools}
@@ -1361,10 +1478,12 @@ export default function Launchpad({
             }
             workspaceId={activeId}
             focusedName={focusedNameForStatus}
+            compact={isMobile}
           />
 
-          {/* Resize handles — only when not maximized. */}
-          {!maximized && (
+          {/* Resize handles — desktop only. Mobile is full-screen with
+           * fixed bounds; resize is irrelevant. */}
+          {!isMobile && !maximized && (
             <>
               <div onPointerDown={startResize("n")} aria-label="Resize top edge" className="absolute left-3 right-3 top-0 h-1.5 cursor-ns-resize" />
               <div onPointerDown={startResize("s")} aria-label="Resize bottom edge" className="absolute left-3 right-3 bottom-0 h-1.5 cursor-ns-resize" />

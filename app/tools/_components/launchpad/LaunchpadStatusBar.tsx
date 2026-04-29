@@ -23,6 +23,9 @@ interface Props {
   /** When the preview pane is open, the parent passes the focused
    * item's name here so the status bar can echo it on the right. */
   focusedName?: string | null;
+  /** When true, the status bar honors the mobile safe-area inset so
+   * iOS home-indicator hardware doesn't sit on top of the count. */
+  compact?: boolean;
 }
 
 function fmtGB(bytes: number): string {
@@ -36,6 +39,7 @@ export default function LaunchpadStatusBar({
   itemCount,
   workspaceId,
   focusedName,
+  compact = false,
 }: Props) {
   const [stats, setStats] = useState<Stats | null>(null);
 
@@ -65,7 +69,16 @@ export default function LaunchpadStatusBar({
 
   const free = stats ? Math.max(0, stats.cap - stats.used) : null;
   return (
-    <div className="grid h-6 grid-cols-3 items-center border-t border-app/50 bg-app-elevated/60 px-3 text-[11px] text-muted backdrop-blur-2xl">
+    <div
+      className="grid grid-cols-3 shrink-0 items-center border-t border-app/50 bg-app-elevated/60 px-3 text-[11px] text-muted backdrop-blur-2xl"
+      style={{
+        // The bottom inset gives iOS its home-indicator gutter without
+        // collapsing on devices that report 0. The row height is fixed
+        // by min-height so empty insets still match desktop's 24px.
+        minHeight: 24,
+        paddingBottom: compact ? "env(safe-area-inset-bottom, 0px)" : undefined,
+      }}
+    >
       <span className="justify-self-start truncate">
         {focusedName ? "" : ""}
       </span>
