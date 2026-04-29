@@ -116,8 +116,10 @@ export const PRIMARY =
 export const DANGER =
   "rounded-md border border-rose-400/30 bg-rose-400/10 px-2 py-1 text-[0.62rem] uppercase tracking-[0.14em] font-medium text-rose-400 transition-colors hover:bg-rose-400/20 disabled:opacity-50";
 
+// 16px font-size on inputs prevents iOS Safari from auto-zooming the
+// page when the field receives focus on mobile.
 export const INPUT =
-  "rounded-lg border border-app bg-app px-3 py-2 text-sm text-app placeholder:text-faint focus:border-tool-accent focus:outline-none focus:ring-2 focus:ring-tool-accent-soft";
+  "rounded-lg border border-app bg-app px-3 py-2 text-[16px] text-app placeholder:text-faint focus:border-tool-accent focus:outline-none focus:ring-2 focus:ring-tool-accent-soft";
 
 /** Format an ISO timestamp as "5m ago" / "2h ago" / "3d ago" / a date. */
 export function relativeTime(iso: string): string {

@@ -201,21 +201,34 @@ export default function LaunchpadSidebar({
           <button
             type="button"
             onClick={() => onSelect({ kind: "favorites" })}
+            aria-current={currentKey === "favorites" ? "page" : undefined}
             className={
               "mx-1 flex items-center gap-2 rounded-md text-left transition-colors " +
               (compact
                 ? "px-3 py-2.5 text-[14px] "
                 : "px-2 py-1 text-[12px] ") +
               (currentKey === "favorites"
-                ? "bg-tool-accent text-white"
+                ? "bg-tool-accent text-white shadow-sm"
                 : "text-secondary hover:bg-surface hover:text-app")
             }
           >
-            <span className="flex h-4 w-4 items-center justify-center">
+            <span
+              className={
+                "flex h-4 w-4 items-center justify-center " +
+                (currentKey === "favorites" ? "text-white" : "")
+              }
+            >
               <StarIcon />
             </span>
             <span className="truncate flex-1">Show all favorites</span>
-            <span className="text-[10px] text-muted [.bg-tool-accent_&]:text-white/80">
+            <span
+              className={
+                "text-[10px] " +
+                (currentKey === "favorites"
+                  ? "text-white/80"
+                  : "text-muted")
+              }
+            >
               {favorites.length}
             </span>
           </button>
@@ -321,24 +334,36 @@ function Row({
   onContextMenu?: (e: React.MouseEvent) => void;
   compact?: boolean;
 }) {
+  /* Selected state styling.
+   *
+   * Earlier iterations relied on Tailwind's arbitrary parent-selector
+   * variant `[.bg-tool-accent_&]:text-white` to flip the icon + badge
+   * colors when the row was selected. That variant doesn't resolve
+   * reliably under Tailwind v4 — symptom: on a selected row, the icon
+   * stayed `text-secondary` (a low-contrast gray) on the violet
+   * `bg-tool-accent` background, making the row's icon look
+   * invisible. Switching to explicit conditional classes pegged to
+   * the `selected` prop makes the contrast loud and obvious. */
   return (
     <button
       type="button"
       onClick={onClick}
       onContextMenu={onContextMenu}
+      aria-current={selected ? "page" : undefined}
       className={
         "mx-1 flex items-center gap-2 rounded-md text-left transition-colors " +
         (compact
           ? "px-3 py-2.5 text-[15px] "
           : "px-2 py-1 text-[13px] ") +
         (selected
-          ? "bg-tool-accent text-white"
+          ? "bg-tool-accent text-white shadow-sm"
           : "text-app hover:bg-surface")
       }
     >
       <span
         className={
-          "flex items-center justify-center text-secondary [.bg-tool-accent_&]:text-white " +
+          "flex items-center justify-center " +
+          (selected ? "text-white " : "text-secondary ") +
           (compact ? "h-5 w-5" : "h-4 w-4")
         }
       >
@@ -346,7 +371,14 @@ function Row({
       </span>
       <span className="truncate flex-1">{label}</span>
       {badge && (
-        <span className="rounded bg-surface px-1.5 text-[10px] uppercase tracking-wide text-muted [.bg-tool-accent_&]:bg-white/20 [.bg-tool-accent_&]:text-white">
+        <span
+          className={
+            "rounded px-1.5 text-[10px] uppercase tracking-wide " +
+            (selected
+              ? "bg-white/25 text-white"
+              : "bg-surface text-muted")
+          }
+        >
           {badge}
         </span>
       )}

@@ -140,7 +140,12 @@ export default function LaunchpadToolbar({
                 ref={searchInputRef}
                 value={query}
                 onChange={(e) => onQuery(e.target.value)}
-                className="h-9 w-full rounded-md border border-app bg-app pl-7 pr-2 text-[14px] text-app placeholder:text-muted focus:border-tool-accent focus:outline-none"
+                /* iOS Safari auto-zooms inputs whose font-size is below
+                 * 16px when they receive focus — symptom: tapping the
+                 * search bar zooms the entire page in by ~10%, and the
+                 * user has to pinch-out to recover. Force 16px on mobile
+                 * to suppress the zoom. */
+                className="h-9 w-full rounded-md border border-app bg-app pl-7 pr-2 text-[16px] text-app placeholder:text-muted focus:border-tool-accent focus:outline-none"
               />
             </div>
           </>

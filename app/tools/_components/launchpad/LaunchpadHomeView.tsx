@@ -104,27 +104,41 @@ export default function LaunchpadHomeView({
         ) : folders.length === 0 ? (
           <div className="px-3 py-2 text-xs text-muted">No folders</div>
         ) : (
-          folders.map((g) => (
-            <button
-              key={g.name}
-              type="button"
-              onClick={() => setSelectedFolder(g.name)}
-              className={
-                "mx-1 flex items-center gap-2 rounded-md px-2 py-1 text-left text-[12px] transition-colors " +
-                (selectedFolder === g.name
-                  ? "bg-tool-accent text-white"
-                  : "text-app hover:bg-surface")
-              }
-            >
-              <span className="flex h-4 w-4 items-center justify-center text-secondary [.bg-tool-accent_&]:text-white">
-                {g.name === LOOSE_FOLDER ? <FilesGlyph /> : <FolderGlyph />}
-              </span>
-              <span className="truncate flex-1">{g.name}</span>
-              <span className="text-[10px] text-muted [.bg-tool-accent_&]:text-white/80">
-                {g.files.length}
-              </span>
-            </button>
-          ))
+          folders.map((g) => {
+            const isSelected = selectedFolder === g.name;
+            return (
+              <button
+                key={g.name}
+                type="button"
+                onClick={() => setSelectedFolder(g.name)}
+                aria-current={isSelected ? "page" : undefined}
+                className={
+                  "mx-1 flex items-center gap-2 rounded-md px-2 py-1 text-left text-[12px] transition-colors " +
+                  (isSelected
+                    ? "bg-tool-accent text-white shadow-sm"
+                    : "text-app hover:bg-surface")
+                }
+              >
+                <span
+                  className={
+                    "flex h-4 w-4 items-center justify-center " +
+                    (isSelected ? "text-white" : "text-secondary")
+                  }
+                >
+                  {g.name === LOOSE_FOLDER ? <FilesGlyph /> : <FolderGlyph />}
+                </span>
+                <span className="truncate flex-1">{g.name}</span>
+                <span
+                  className={
+                    "text-[10px] " +
+                    (isSelected ? "text-white/80" : "text-muted")
+                  }
+                >
+                  {g.files.length}
+                </span>
+              </button>
+            );
+          })
         )}
       </div>
 

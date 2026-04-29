@@ -18,8 +18,14 @@
 import { useEffect, useState } from "react";
 import { cachedFetch } from "@/lib/cache/swr";
 
+/* Shape returned by /api/workspaces/storage-stats. Earlier iterations
+ * of this bar expected `cap` to be an object `{cap_bytes, used_bytes}`,
+ * but the route flattened those into top-level `cap` + `used` numbers
+ * — every reader of the bar then saw cap = 0 and rendered the
+ * "Storage unavailable" empty state. Match the route exactly. */
 interface StorageStats {
-  cap?: { cap_bytes?: number; used_bytes?: number } | null;
+  cap?: number;
+  used?: number;
 }
 
 interface Props {
@@ -66,8 +72,8 @@ export default function LaunchpadStorageBar({
         )}`;
         const j = await cachedFetch<StorageStats>(url);
         if (cancelled) return;
-        setUsed(Number(j.cap?.used_bytes ?? 0));
-        setCap(Number(j.cap?.cap_bytes ?? 0));
+        setUsed(Number(j.used ?? 0));
+        setCap(Number(j.cap ?? 0));
       } catch {
         if (!cancelled) {
           setUsed(0);

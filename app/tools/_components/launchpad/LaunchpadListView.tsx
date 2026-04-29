@@ -210,9 +210,9 @@ function ListRow({ tool: t, focused, onFocus, onOpen, onContextMenu }: ListRowPr
         )}
         <span className="truncate">{t.title}</span>
       </span>
-      <span className="truncate text-secondary [.bg-tool-accent_&]:text-white/80">—</span>
-      <span className="truncate text-secondary [.bg-tool-accent_&]:text-white/80">App</span>
-      <span className="truncate text-secondary [.bg-tool-accent_&]:text-white/80">{categoryLabel(t.category)}</span>
+      <span className={"truncate " + (focused ? "text-white/80" : "text-secondary")}>—</span>
+      <span className={"truncate " + (focused ? "text-white/80" : "text-secondary")}>App</span>
+      <span className={"truncate " + (focused ? "text-white/80" : "text-secondary")}>{categoryLabel(t.category)}</span>
     </div>
   );
 }

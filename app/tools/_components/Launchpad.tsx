@@ -1343,13 +1343,23 @@ export default function Launchpad({
 
             {isMobile && mobileDrawerOpen && (
               <>
-                <button
-                  type="button"
+                {/* Backdrop — div, not button. Earlier iteration used a
+                 * <button> backdrop covering inset-0; Safari's accessibility
+                 * tree got confused by interactive elements (drawer rows)
+                 * sitting visually inside another button's hit-area, and
+                 * occasionally swallowed taps on the rows. Plain div with
+                 * onClick + role=button is reliable on every browser. */}
+                <div
+                  role="button"
+                  tabIndex={-1}
                   aria-label="Close menu"
                   onClick={() => setMobileDrawerOpen(false)}
                   className="absolute inset-0 z-[60] bg-black/40"
                 />
-                <div className="absolute inset-y-0 left-0 z-[61] flex w-[78%] max-w-[280px] flex-col bg-app-elevated shadow-2xl">
+                <div
+                  className="absolute inset-y-0 left-0 z-[61] flex w-[78%] max-w-[280px] flex-col bg-app-elevated shadow-2xl"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <LaunchpadSidebar
                     compact
                     current={launchpadView.location}
