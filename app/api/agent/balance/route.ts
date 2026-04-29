@@ -72,6 +72,12 @@ export async function GET(req: NextRequest) {
     .eq("workspace_id", workspaceId)
     .eq("user_id", user.id)
     .maybeSingle();
+  const tg = await supabase
+    .from("agent_telegram_links")
+    .select("telegram_user_id, telegram_username, linked_at")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", user.id)
+    .maybeSingle();
 
   return NextResponse.json({
     tier,
@@ -89,6 +95,13 @@ export async function GET(req: NextRequest) {
       ? {
           number: link.data.whatsapp_number as string,
           linked_at: link.data.linked_at as string,
+        }
+      : null,
+    telegram: tg.data
+      ? {
+          user_id: Number(tg.data.telegram_user_id),
+          username: (tg.data.telegram_username as string | null) ?? null,
+          linked_at: tg.data.linked_at as string,
         }
       : null,
   });

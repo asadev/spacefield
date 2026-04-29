@@ -45,6 +45,9 @@ interface Props {
   onShare: () => void;
   actionMenuOpen: boolean;
   onToggleActionMenu: () => void;
+  /** Optional slot rendered between Action menu and the search field
+   *  — used to host the per-app AI assistant button. */
+  aiSlot?: React.ReactNode;
 }
 
 export default function LaunchpadToolbar({
@@ -68,6 +71,7 @@ export default function LaunchpadToolbar({
   onShare,
   actionMenuOpen,
   onToggleActionMenu,
+  aiSlot,
 }: Props) {
   return (
     <div
@@ -223,6 +227,8 @@ export default function LaunchpadToolbar({
           <circle cx="18" cy="12" r="1.5" />
         </svg>
       </ToolbarBtn>
+
+      {aiSlot}
 
       {/* Search */}
       <div className="relative ml-1">

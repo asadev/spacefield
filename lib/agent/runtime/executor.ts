@@ -7,6 +7,10 @@
  * The system prompt + tool catalog get cache_control breakpoints so
  * repeated calls within a 5-minute window read at ~10% of normal price.
  * See cache.ts for the placement.
+ *
+ * Phase 2: accepts a persona (style only) and a permissions snapshot.
+ * When a write tool would run under 'confirm' mode, the executor stops
+ * and surfaces a pendingApproval to the dispatcher.
  */
 
 import Anthropic from "@anthropic-ai/sdk";
@@ -21,9 +25,16 @@ import {
   findTool,
   getAllTools,
 } from "@/lib/agent/skills";
+import { DEFAULT_PERSONA, personaSystemPrefix, type AgentPersona } from "./persona";
+import {
+  effectiveMode,
+  writePendingApproval,
+  type PermissionsSnapshot,
+} from "./permissions";
 import type {
   CallUsage,
   ConversationMessage,
+  IncomingChannel,
   SkillDefinition,
   UserContext,
 } from "./types";
@@ -37,11 +48,28 @@ function client(): Anthropic {
   return _client;
 }
 
-function buildSystemPrompt(skills: SkillDefinition[], ctx: UserContext): string {
+function channelStyleHint(channel: IncomingChannel): string {
+  if (channel === "in_app") {
+    return "You reach the user via an in-app chat panel inside their Spacefield workspace. Plain text or simple markdown lists are fine; keep replies tight.";
+  }
+  if (channel === "telegram") {
+    return "You reach the user via Telegram — keep responses short, plain text, no markdown.";
+  }
+  return "You reach the user via WhatsApp — keep responses short, plain text, no markdown.";
+}
+
+function buildSystemPrompt(
+  skills: SkillDefinition[],
+  ctx: UserContext,
+  persona: AgentPersona,
+  channel: IncomingChannel
+): string {
   const fragments = skills.map((s) => `[${s.id}] ${s.systemFragment}`).join("\n");
-  return `You are the Spacefield workspace assistant.
+  return `${personaSystemPrefix(persona)}
+
+You are the Spacefield workspace assistant.
 The user is ${ctx.user.email ?? ctx.userId} (role: ${ctx.role}, tier: ${ctx.tier}) on workspace_id ${ctx.workspaceId}.
-You reach the user via WhatsApp — keep responses short, plain text, no markdown.
+${channelStyleHint(channel)}
 
 You have access to these skills:
 ${fragments}
@@ -49,6 +77,7 @@ ${fragments}
 Rules:
 - Use a tool when the user asks for data or wants to change something. Don't guess.
 - If a tool returns ok:false, briefly explain the error to the user; don't retry blindly.
+- If a tool returns {pending_approval: true}, the action was paused waiting for the user. Tell them what you'd like to do and ask them to reply YES to confirm. Do NOT call any more tools in that turn.
 - Don't list more than ~5 items in a reply unless the user asked for "all" of them.
 - For destructive actions (delete, close-lost, etc.), confirm with the user first if their request was ambiguous. If they said "delete X", just do it.
 - Respond in the user's language; default to English.`;
@@ -68,19 +97,49 @@ function historyToAnthropic(
   return history.map((m) => ({ role: m.role, content: m.content }));
 }
 
+export interface ExecutorPendingApproval {
+  skillId: string;
+  toolName: string;
+  summary: string;
+}
+
 export interface ExecutorResult {
   text: string;
   usage: CallUsage[];
+  pendingApproval?: ExecutorPendingApproval;
+}
+
+export interface ExecutorOptions {
+  persona?: AgentPersona;
+  permissions?: PermissionsSnapshot;
+  channel?: IncomingChannel;
+}
+
+function summarizeToolCall(toolName: string, input: unknown): string {
+  // Keep it short — one line. Avoid dumping full JSON in the bot reply.
+  const safeInput =
+    typeof input === "object" && input !== null
+      ? Object.entries(input as Record<string, unknown>)
+          .slice(0, 3)
+          .map(([k, v]) => `${k}=${JSON.stringify(v).slice(0, 40)}`)
+          .join(", ")
+      : "";
+  return safeInput
+    ? `${toolName.replace(/_/g, " ")} (${safeInput})`
+    : toolName.replace(/_/g, " ");
 }
 
 export async function runExecutor(
   userText: string,
   history: ConversationMessage[],
   skills: SkillDefinition[],
-  ctx: UserContext
+  ctx: UserContext,
+  options: ExecutorOptions = {}
 ): Promise<ExecutorResult> {
   const usage: CallUsage[] = [];
-  const system = cachedSystem(buildSystemPrompt(skills, ctx));
+  const persona = options.persona ?? DEFAULT_PERSONA;
+  const channel: IncomingChannel = options.channel ?? ctx.channel;
+  const system = cachedSystem(buildSystemPrompt(skills, ctx, persona, channel));
   const tools = cachedTools(toAnthropicTools(skills));
 
   const messages: Anthropic.Messages.MessageParam[] = [
@@ -89,6 +148,7 @@ export async function runExecutor(
   ];
 
   let finalText = "";
+  let pendingApproval: ExecutorPendingApproval | undefined;
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     const cachedMsgs = cachedMessages(messages);
@@ -126,8 +186,11 @@ export async function runExecutor(
       );
       const toolResults: Anthropic.Messages.ToolResultBlockParam[] = [];
       for (const use of toolUses) {
+        const owningSkill = skills.find((s) =>
+          s.tools.some((t) => t.name === use.name)
+        );
         const tool = findTool(skills, use.name);
-        if (!tool) {
+        if (!tool || !owningSkill) {
           toolResults.push({
             type: "tool_result",
             tool_use_id: use.id,
@@ -136,6 +199,53 @@ export async function runExecutor(
           });
           continue;
         }
+
+        // Permission gate. read_only tools always pass through here.
+        if (options.permissions) {
+          const mode = effectiveMode(options.permissions, owningSkill.id, tool);
+          if (mode === "deny") {
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: use.id,
+              content: JSON.stringify({
+                ok: false,
+                error: "permission_denied",
+                message: `The workspace has disabled ${owningSkill.id} writes via the assistant.`,
+              }),
+              is_error: true,
+            });
+            continue;
+          }
+          if (mode === "confirm" && !tool.read_only) {
+            const summary = summarizeToolCall(use.name, use.input);
+            await writePendingApproval(ctx.supabase, {
+              workspaceId: ctx.workspaceId,
+              userId: ctx.userId,
+              channel,
+              skillId: owningSkill.id,
+              toolName: use.name,
+              toolInput: use.input,
+              summary,
+            });
+            pendingApproval = {
+              skillId: owningSkill.id,
+              toolName: use.name,
+              summary,
+            };
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: use.id,
+              content: JSON.stringify({
+                ok: false,
+                pending_approval: true,
+                summary,
+                message: `Action paused. Asked the user to confirm: "${summary}". Reply with the confirmation prompt; do NOT call this tool again until they say yes.`,
+              }),
+            });
+            continue;
+          }
+        }
+
         const result = await executeToolGuarded(tool, use.input, ctx);
         toolResults.push({
           type: "tool_result",
@@ -145,6 +255,34 @@ export async function runExecutor(
         });
       }
       messages.push({ role: "user", content: toolResults });
+
+      // If we just paused a write, stop the loop after one final
+      // model turn to let the model phrase the confirmation question.
+      if (pendingApproval) {
+        const cachedMsgs2 = cachedMessages(messages);
+        const followup = await client().messages.create({
+          model: MODEL,
+          max_tokens: 256,
+          system,
+          tools,
+          messages: cachedMsgs2,
+        });
+        usage.push({
+          bucket: "quick",
+          tokens:
+            totalInputTokens(followup.usage) + followup.usage.output_tokens,
+          model: MODEL,
+          callKind: "executor",
+        });
+        finalText =
+          followup.content
+            .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")
+            .map((b) => b.text)
+            .join("\n")
+            .trim() ||
+          `I'd like to ${pendingApproval.summary}. Reply YES to confirm.`;
+        break;
+      }
       continue;
     }
 
@@ -161,5 +299,6 @@ export async function runExecutor(
   return {
     text: finalText || "Done.",
     usage,
+    pendingApproval,
   };
 }

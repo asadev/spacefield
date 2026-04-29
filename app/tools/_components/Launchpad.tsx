@@ -39,6 +39,7 @@ import { useWorkspaces, useWorkspaceKey } from "./useWorkspaces";
 
 import LaunchpadSidebar from "./launchpad/LaunchpadSidebar";
 import LaunchpadToolbar from "./launchpad/LaunchpadToolbar";
+import AgentChatScope from "./agent/AgentChatScope";
 import LaunchpadStatusBar from "./launchpad/LaunchpadStatusBar";
 import LaunchpadIconView from "./launchpad/LaunchpadIconView";
 import LaunchpadListView from "./launchpad/LaunchpadListView";
@@ -1194,6 +1195,16 @@ export default function Launchpad({
               setGroupMenuOpen(false);
               setActionMenuOpen((v) => !v);
             }}
+            aiSlot={
+              activeId ? (
+                <AgentChatScope
+                  workspaceId={activeId}
+                  scope="files"
+                  variant="compact"
+                  title="Ask the Files assistant"
+                />
+              ) : null
+            }
           />
 
           <LaunchpadGroupMenu

@@ -1,0 +1,131 @@
+/* Internal POST /api/agent/dispatch — the in-app chat endpoint.
+ *
+ * Authenticated via the user's Supabase cookie session (NOT a phone link),
+ * so we can pass the cookie-scoped client straight into the runtime and
+ * RLS still applies to every tool call. No service-role JWT roundtrip
+ * like the WhatsApp webhook needs.
+ *
+ * Body:
+ *   { workspace_id, message, scope?: 'crm'|'files'|'boards'|null,
+ *     conversation_id?: string }
+ *
+ * Returns the dispatch result, including any pending-approval flag the
+ * UI can render as a "[Confirm] [Cancel]" callout.
+ */
+
+import { NextResponse, type NextRequest } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+import { dispatch } from "@/lib/agent/runtime/dispatcher";
+import type { DispatchScope, Tier, UserContext } from "@/lib/agent/runtime/types";
+
+export const runtime = "nodejs";
+
+interface DispatchBody {
+  workspace_id?: string;
+  message?: string;
+  scope?: DispatchScope;
+  conversation_id?: string;
+}
+
+export async function POST(req: NextRequest) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+  const body = (await req.json().catch(() => ({}))) as DispatchBody;
+  const workspaceId = body.workspace_id;
+  const messageText = body.message?.trim();
+  if (!workspaceId) {
+    return NextResponse.json(
+      { error: "workspace_id required" },
+      { status: 400 }
+    );
+  }
+  if (!messageText) {
+    return NextResponse.json(
+      { error: "message required" },
+      { status: 400 }
+    );
+  }
+
+  // Confirm membership + pull role.
+  const { data: mem } = await supabase
+    .from("workspace_members")
+    .select("role")
+    .eq("workspace_id", workspaceId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+  if (!mem) {
+    return NextResponse.json({ error: "not_a_member" }, { status: 403 });
+  }
+  const roleRaw = (mem.role as string | undefined) ?? "member";
+  const role: "owner" | "admin" | "member" | "viewer" =
+    roleRaw === "owner" ||
+    roleRaw === "admin" ||
+    roleRaw === "viewer" ||
+    roleRaw === "member"
+      ? roleRaw
+      : "member";
+
+  // Tier resolution mirrors the WhatsApp webhook.
+  const { data: subData } = await supabase
+    .from("subscriptions")
+    .select("tier_id")
+    .eq("user_id", user.id)
+    .maybeSingle();
+  const tierRaw = (subData?.tier_id as string | undefined) ?? "free";
+  const tier: Tier =
+    tierRaw === "pro" || tierRaw === "team" || tierRaw === "enterprise"
+      ? tierRaw
+      : "free";
+
+  // Scope validation.
+  const rawScope = body.scope;
+  const scope: DispatchScope =
+    rawScope === "crm" || rawScope === "files" || rawScope === "boards"
+      ? rawScope
+      : null;
+
+  const ctx: UserContext = {
+    userId: user.id,
+    workspaceId,
+    tier,
+    role,
+    supabase,
+    user,
+    channel: "in_app",
+  };
+
+  try {
+    const result = await dispatch(
+      {
+        kind: "text",
+        channel: "in_app",
+        text: messageText,
+        from: user.id,
+        receivedAt: new Date().toISOString(),
+      },
+      ctx,
+      { scope }
+    );
+
+    return NextResponse.json({
+      reply: result.reply,
+      credit_used: result.creditUsed ?? { quick: 0, deep: 0 },
+      requires_approval: result.requiresApproval ?? null,
+      budget_exhausted: result.budgetExhausted ?? false,
+      conversation_id: body.conversation_id ?? null,
+    });
+  } catch (e) {
+    return NextResponse.json(
+      {
+        error: "dispatch_failed",
+        message: (e as Error).message,
+      },
+      { status: 500 }
+    );
+  }
+}

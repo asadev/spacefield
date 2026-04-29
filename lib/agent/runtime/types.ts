@@ -7,7 +7,11 @@
 
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
-export type IncomingChannel = "whatsapp" | "in_app";
+export type IncomingChannel = "whatsapp" | "in_app" | "telegram";
+
+/** Optional scoping for the in-app per-app chat. Restricts the skill
+ *  catalog the executor sees. `null` = no scope (default). */
+export type DispatchScope = "crm" | "files" | "boards" | null;
 
 /** Forward-compatible incoming message. */
 export type IncomingMessage =
@@ -122,4 +126,14 @@ export interface DispatchResult {
   usage: CallUsage[];
   /** True when the user was over-budget; reply is a short upsell. */
   budgetExhausted?: boolean;
+  /** When the bot needs the user to confirm a write, this is set. The
+   *  /api/agent/dispatch endpoint surfaces it to the in-app chat as a
+   *  visible callout. The reply already contains the same prompt. */
+  requiresApproval?: {
+    skillId: string;
+    toolName: string;
+    summary: string;
+  };
+  /** Sum of credits debited during this dispatch. */
+  creditUsed?: { quick: number; deep: number };
 }

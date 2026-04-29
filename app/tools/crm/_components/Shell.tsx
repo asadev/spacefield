@@ -45,6 +45,7 @@ import SavedViewsManager from "./SavedViewsManager";
 import TemplatePicker from "./TemplatePicker";
 import LeadSourcesAdmin from "./LeadSourcesAdmin";
 import BoardsListView from "./BoardsListView";
+import AgentChatScope from "../../_components/agent/AgentChatScope";
 import { useCrmTemplate } from "./useCrmTemplate";
 import { CRM_TEMPLATES } from "../_templates/registry";
 
@@ -468,6 +469,15 @@ export default function Shell({ width, initialParams, openApp }: NativeAppProps)
         </div>
 
         {compact && <div className="flex-1" />}
+
+        {wsId && (
+          <AgentChatScope
+            workspaceId={wsId}
+            scope="crm"
+            variant="compact"
+            title="Ask the CRM assistant"
+          />
+        )}
 
         <div className="relative" ref={createRef}>
           <button

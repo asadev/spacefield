@@ -45,9 +45,11 @@ import Spotlight from "./Spotlight";
 import ClipboardHistory from "./ClipboardHistory";
 import QuickNote from "./QuickNote";
 import EasterEggs from "./EasterEggs";
+import AgentChatLauncher from "./agent/AgentChatLauncher";
 import { AuthProvider, useAuth } from "./useAuth";
 import { useWorkspaceSync } from "./useWorkspaceSync";
 import { useWorkspaceRole } from "./useWorkspaceRole";
+import { useWorkspace as useTeamWorkspace } from "@/lib/workspaces/client";
 
 /* The exported default is the WorkspaceProvider + a key-based remount
  * gate. When the user switches workspace, activeId changes, the inner
@@ -263,6 +265,9 @@ function DesktopApp() {
   const { user: authUser, signOut: authSignOut } = useAuth();
   useWorkspaceSync();
   const { canAdmin } = useWorkspaceRole();
+  const teamWorkspace = useTeamWorkspace();
+  const teamWorkspaceId =
+    teamWorkspace.current.kind === "team" ? teamWorkspace.current.id : null;
   const [theme, setTheme] = useState<"light" | "dark" | null>(null);
   const { resolved } = useTheme();
   const sounds = useDesktopSounds();
@@ -882,6 +887,14 @@ function DesktopApp() {
       <ClipboardHistory />
       <QuickNote />
       <EasterEggs />
+
+      {/* AI agent launcher (Phase 2) — bottom-left floating button +
+       *  chat panel. Only mounts after onboarding so first-run users
+       *  finish setup without a popup in their face. Requires a team
+       *  workspace selection (the dispatch endpoint reads workspace_id). */}
+      {windowsHydrated && onboarded && teamWorkspaceId && (
+        <AgentChatLauncher workspaceId={teamWorkspaceId} />
+      )}
 
       {/* Ambient sound mixer — floating button + panel. AudioContext is
        * lazily created only after the user clicks a track on. Other UI

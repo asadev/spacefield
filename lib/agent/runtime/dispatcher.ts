@@ -5,6 +5,14 @@
  * last ~20 turns and let the LLM rely on prompt caching for the static
  * prefix. We don't store full transcripts long-term — agent_credit_events
  * has the audit trail we need.
+ *
+ * Phase 2 additions:
+ *   - persona      — workspace-level tone/name injected into every prompt
+ *   - permissions  — per-skill allow/confirm/deny gating
+ *   - scope        — restrict skill catalog for per-app in-app chat
+ *   - approval flow — when a 'confirm' tool comes up the bot pauses,
+ *     stores a row in agent_pending_approvals, replies "say YES",
+ *     and resumes execution on the next turn.
  */
 
 import { randomUUID } from "node:crypto";
@@ -13,12 +21,29 @@ import { runExecutor } from "./executor";
 import { runOrchestrator } from "./orchestrator";
 import { formatReply } from "./formatter";
 import { debit, hasBudget } from "./budget";
-import { getSkillsByIds } from "@/lib/agent/skills";
+import { ALL_SKILLS, executeToolGuarded, findTool, getSkillsByIds } from "@/lib/agent/skills";
+import {
+  DEFAULT_PERSONA,
+  loadPersona,
+  type AgentPersona,
+} from "./persona";
+import {
+  clearPendingApproval,
+  effectiveMode,
+  isAffirmation,
+  isNegation,
+  loadPermissions,
+  readPendingApproval,
+  writePendingApproval,
+  type PermissionsSnapshot,
+} from "./permissions";
 import type {
   CallUsage,
   ConversationMessage,
   DispatchResult,
+  DispatchScope,
   IncomingMessage,
+  SkillDefinition,
   UserContext,
 } from "./types";
 
@@ -69,9 +94,53 @@ function pickBucket(complexity: "simple" | "complex" | "off_topic"): "quick" | "
   return complexity === "complex" ? "deep" : "quick";
 }
 
+/** Restrict the skill catalog for a per-app scope. Always keeps `meta`. */
+function applyScope(
+  skills: SkillDefinition[],
+  scope: DispatchScope
+): SkillDefinition[] {
+  if (!scope) return skills;
+  const prefixes: Record<NonNullable<DispatchScope>, string[]> = {
+    crm: ["crm.", "meta", "workspace"],
+    files: ["files", "meta", "workspace"],
+    boards: ["boards", "meta", "workspace"],
+  };
+  const allow = prefixes[scope];
+  return skills.filter((s) =>
+    allow.some((p) => s.id === p || s.id.startsWith(p))
+  );
+}
+
+/** Resolve which skill owns a given tool name. */
+function findSkillForTool(
+  skills: SkillDefinition[],
+  toolName: string
+): SkillDefinition | null {
+  for (const s of skills) {
+    if (s.tools.some((t) => t.name === toolName)) return s;
+  }
+  return null;
+}
+
+function totalDebit(usage: CallUsage[]): { quick: number; deep: number } {
+  const out = { quick: 0, deep: 0 };
+  for (const u of usage) {
+    if (u.bucket === "quick") out.quick += u.tokens;
+    else out.deep += u.tokens;
+  }
+  return out;
+}
+
+export interface DispatchOptions {
+  scope?: DispatchScope;
+  persona?: AgentPersona;
+  permissions?: PermissionsSnapshot;
+}
+
 export async function dispatch(
   message: IncomingMessage,
-  ctx: UserContext
+  ctx: UserContext,
+  options: DispatchOptions = {}
 ): Promise<DispatchResult> {
   if (message.kind !== "text") {
     return {
@@ -83,7 +152,53 @@ export async function dispatch(
 
   const requestId = randomUUID();
   const usage: CallUsage[] = [];
-  const history = await loadHistory(ctx, message.channel);
+  const channel = message.channel;
+  const scope = options.scope ?? null;
+
+  const persona =
+    options.persona ?? (await loadPersona(ctx.supabase, ctx.workspaceId));
+  const permissions =
+    options.permissions ??
+    (await loadPermissions(ctx.supabase, ctx.workspaceId));
+
+  // 0) If there's a pending approval and the user said yes/no, resolve it
+  // before calling any model. This is a deterministic short-circuit.
+  const pending = await readPendingApproval(
+    ctx.supabase,
+    ctx.workspaceId,
+    ctx.userId,
+    channel
+  );
+  if (pending) {
+    if (isAffirmation(message.text)) {
+      const tool = findTool(ALL_SKILLS, pending.tool_name);
+      if (!tool) {
+        await clearPendingApproval(ctx.supabase, pending.id);
+        const reply = "I lost track of that pending action. Try again from the top.";
+        await appendHistory(ctx, channel, message.text, reply);
+        return { reply, usage, creditUsed: { quick: 0, deep: 0 } };
+      }
+      const result = await executeToolGuarded(tool, pending.tool_input, ctx);
+      await clearPendingApproval(ctx.supabase, pending.id);
+      const reply = result.ok
+        ? `Done — ${pending.summary}.`
+        : `Couldn't complete that: ${result.error ?? "unknown error"}`;
+      await appendHistory(ctx, channel, message.text, reply);
+      return { reply, usage, creditUsed: { quick: 0, deep: 0 } };
+    }
+    if (isNegation(message.text)) {
+      await clearPendingApproval(ctx.supabase, pending.id);
+      const reply = "Cancelled. Nothing changed.";
+      await appendHistory(ctx, channel, message.text, reply);
+      return { reply, usage, creditUsed: { quick: 0, deep: 0 } };
+    }
+    // Neither yes nor no — drop the pending row and continue with normal
+    // flow. Better to interpret the new message than to hold the user
+    // hostage.
+    await clearPendingApproval(ctx.supabase, pending.id);
+  }
+
+  const history = await loadHistory(ctx, channel);
 
   // 1) Classify (Quick bucket).
   const quickOk = await hasBudget(
@@ -99,6 +214,7 @@ export async function dispatch(
         "You're out of monthly credits for the assistant. Open Spacefield → Settings → AI to top up.",
       usage,
       budgetExhausted: true,
+      creditUsed: { quick: 0, deep: 0 },
     };
   }
 
@@ -126,8 +242,8 @@ export async function dispatch(
     const reply =
       classification.result.suggested_reply ??
       "I'm built for your Spacefield workspace — try 'show my pipeline' or 'what can you do'.";
-    await appendHistory(ctx, message.channel, message.text, reply);
-    return { reply, usage };
+    await appendHistory(ctx, channel, message.text, reply);
+    return { reply, usage, creditUsed: totalDebit(usage) };
   }
 
   // 3) Bucket budget pre-check for the heavy call we're about to make.
@@ -142,8 +258,15 @@ export async function dispatch(
     );
     if (!deepOk) {
       // Fall back to executor — better a partial answer than nothing.
-      const skills = getSkillsByIds(classification.result.skills);
-      const exec = await runExecutor(message.text, history, skills, ctx);
+      const skills = applyScope(
+        getSkillsByIds(classification.result.skills),
+        scope
+      );
+      const exec = await runExecutor(message.text, history, skills, ctx, {
+        persona,
+        permissions,
+        channel,
+      });
       usage.push(...exec.usage);
       for (const u of exec.usage) {
         await debit(
@@ -158,7 +281,7 @@ export async function dispatch(
           requestId
         );
       }
-      const formatted = await formatReply(exec.text);
+      const formatted = await formatReply(exec.text, persona);
       usage.push(...formatted.usage);
       for (const u of formatted.usage) {
         await debit(
@@ -174,17 +297,31 @@ export async function dispatch(
         );
       }
       const reply = `${formatted.text}\n\n(Heads up: you're out of Deep credits this month, so I used the simpler model. Top up in Settings.)`;
-      await appendHistory(ctx, message.channel, message.text, reply);
-      return { reply, usage, budgetExhausted: true };
+      await appendHistory(ctx, channel, message.text, reply);
+      return {
+        reply,
+        usage,
+        budgetExhausted: true,
+        creditUsed: totalDebit(usage),
+        requiresApproval: exec.pendingApproval ?? undefined,
+      };
     }
   }
 
   // 4) Run the appropriate model branch.
-  const skills = getSkillsByIds(classification.result.skills);
+  const skills = applyScope(getSkillsByIds(classification.result.skills), scope);
   const branch =
     bucket === "deep"
-      ? await runOrchestrator(message.text, history, skills, ctx)
-      : await runExecutor(message.text, history, skills, ctx);
+      ? await runOrchestrator(message.text, history, skills, ctx, {
+          persona,
+          permissions,
+          channel,
+        })
+      : await runExecutor(message.text, history, skills, ctx, {
+          persona,
+          permissions,
+          channel,
+        });
 
   usage.push(...branch.usage);
   for (const u of branch.usage) {
@@ -201,8 +338,8 @@ export async function dispatch(
     );
   }
 
-  // 5) Format for WhatsApp.
-  const formatted = await formatReply(branch.text);
+  // 5) Format for the channel.
+  const formatted = await formatReply(branch.text, persona);
   usage.push(...formatted.usage);
   for (const u of formatted.usage) {
     await debit(
@@ -218,7 +355,23 @@ export async function dispatch(
     );
   }
 
-  await appendHistory(ctx, message.channel, message.text, formatted.text);
+  await appendHistory(ctx, channel, message.text, formatted.text);
 
-  return { reply: formatted.text, usage };
+  return {
+    reply: formatted.text,
+    usage,
+    creditUsed: totalDebit(usage),
+    requiresApproval: branch.pendingApproval ?? undefined,
+  };
 }
+
+// Re-exports for runtime helpers callers may need.
+export {
+  applyScope,
+  findSkillForTool,
+  DEFAULT_PERSONA,
+  effectiveMode,
+  loadPersona,
+  loadPermissions,
+  writePendingApproval,
+};
