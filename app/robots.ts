@@ -12,6 +12,8 @@ export default function robots(): MetadataRoute.Robots {
           "/api/",
           "/auth/",
           "/dashboard/",
+          "/tools/",
+          "/solutions/tools/",
           "/cursor-demo",
           "/_next/",
         ],
@@ -20,7 +22,6 @@ export default function robots(): MetadataRoute.Robots {
     sitemap: [
       "https://example.com/sitemap.xml",
       "https://example.com/sitemap-core.xml",
-      "https://example.com/sitemap-tools.xml",
       "https://example.com/sitemap-blog.xml",
       "https://example.com/sitemap-network.xml",
     ],

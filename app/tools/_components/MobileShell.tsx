@@ -81,7 +81,11 @@ const EASE = [0.25, 0.46, 0.45, 0.94] as const;
 export default function MobileShell() {
   const { user, signOut } = useAuth();
   const { workspaces, activeId, switchWorkspace } = useWorkspaces();
-  const { canInstallApps, canUninstallApps } = useWorkspaceRole();
+  const {
+    canInstallApps,
+    canUninstallApps,
+    hydrated: roleHydrated,
+  } = useWorkspaceRole();
   const { resolved } = useTheme();
   // Pending workspace invites — drives the red dot on the status-bar bell.
   const { count: pendingInviteCount, refresh: refreshPendingInvites } =
@@ -204,6 +208,33 @@ export default function MobileShell() {
     },
     [activeId, canInstallApps, isInstalled, install, open]
   );
+
+  // Same shell-only direct-link gateway as DesktopApp. Old standalone app
+  // URLs land at /?app=<slug>; mobile consumes that once permissions and
+  // installed-app state are hydrated, then clears the address bar.
+  const shellIntentHandledRef = useRef(false);
+  useEffect(() => {
+    if (shellIntentHandledRef.current) return;
+    if (!installHydrated || !roleHydrated) return;
+    const params = new URLSearchParams(window.location.search);
+    const slug = params.get("app");
+    if (!slug) return;
+
+    shellIntentHandledRef.current = true;
+    params.delete("app");
+    const next =
+      window.location.pathname +
+      (params.toString() ? `?${params.toString()}` : "") +
+      window.location.hash;
+    window.history.replaceState({}, "", next);
+
+    if (slug === "launchpad") {
+      setLaunchpadOpen(true);
+      return;
+    }
+    const tool = toolBySlug(slug);
+    if (tool) handleOpenTool(tool.slug, tool.title);
+  }, [handleOpenTool, installHydrated, roleHydrated]);
 
   // Shell API — same shape native apps already expect on desktop. Crucially
   // openApp + closeWindow work identically here so no app needs to know it's

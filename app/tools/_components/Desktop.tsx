@@ -268,7 +268,11 @@ function DesktopApp() {
   const [signInOpen, setSignInOpen] = useState(false);
   const { user: authUser, signOut: authSignOut } = useAuth();
   useWorkspaceSync();
-  const { canInstallApps, canUninstallApps } = useWorkspaceRole();
+  const {
+    canInstallApps,
+    canUninstallApps,
+    hydrated: roleHydrated,
+  } = useWorkspaceRole();
   const teamWorkspace = useTeamWorkspace();
   const teamWorkspaceId =
     teamWorkspace.current.kind === "team" ? teamWorkspace.current.id : null;
@@ -484,6 +488,35 @@ function DesktopApp() {
       sounds.tap();
     })();
   };
+
+  // Direct tool URLs are not standalone app runtimes anymore. Middleware
+  // rewrites legacy /tools/<slug> and /solutions/tools/<slug> visits to
+  // /?app=<slug>; the shell consumes that intent here, then opens the app
+  // through the same permission-gated path as Dock/Launchpad/App Store.
+  const shellIntentHandledRef = useRef(false);
+  useEffect(() => {
+    if (shellIntentHandledRef.current) return;
+    if (!installHydrated || !roleHydrated) return;
+    const params = new URLSearchParams(window.location.search);
+    const slug = params.get("app");
+    if (!slug) return;
+
+    shellIntentHandledRef.current = true;
+    params.delete("app");
+    const next =
+      window.location.pathname +
+      (params.toString() ? `?${params.toString()}` : "") +
+      window.location.hash;
+    window.history.replaceState({}, "", next);
+
+    if (slug === "launchpad") {
+      handleOpenTool("launchpad", "Launchpad");
+      return;
+    }
+    const tool = toolBySlug(slug);
+    if (tool) handleOpenTool(tool.slug, tool.title);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [installHydrated, roleHydrated]);
 
   // Shell API exposed to native apps via DesktopShellContext. openApp lets
   // any tool launch / focus another tool with intent params (e.g. opening

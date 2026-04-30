@@ -63,17 +63,17 @@ const nextConfig: NextConfig = {
       },
       {
         source: '/learn',
-        destination: '/solutions/tools',
+        destination: '/',
         permanent: false,
       },
       {
         source: '/learn/:path*',
-        destination: '/solutions/tools',
+        destination: '/',
         permanent: false,
       },
       {
         source: '/market',
-        destination: '/tools/market-pulse',
+        destination: '/?app=market-pulse',
         permanent: false,
       },
       {
@@ -83,8 +83,8 @@ const nextConfig: NextConfig = {
       },
       {
         source: '/tools/what-can-i-afford',
-        destination: '/tools/affordability',
-        permanent: true,
+        destination: '/?app=affordability',
+        permanent: false,
       },
       {
         // (Files Manager retirement, Round D) The standalone tool route
@@ -95,8 +95,8 @@ const nextConfig: NextConfig = {
         // desktop, where the Launchpad opens via ⌘K or the dock's
         // launcher.
         source: '/tools/files-manager',
-        destination: '/tools',
-        permanent: true,
+        destination: '/?app=launchpad',
+        permanent: false,
       },
     ];
   },

@@ -11,7 +11,6 @@ const BASE = "https://example.com";
  *
  * Child sitemaps live at:
  *   /sitemap-core    — home + region homes + marketing / section roots
- *   /sitemap-tools   — RE tools (all regions) + /solutions tools
  *   /sitemap-blog    — static + DB-authored blog posts across all regions
  *   /sitemap-network — verified broker directory + profile pages
  *   /sitemap-seo     — programmatic SEO pages (city landings, region comparisons, migration corridors)
@@ -20,7 +19,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date().toISOString();
   return [
     { url: `${BASE}/sitemap-core.xml`, lastModified: now },
-    { url: `${BASE}/sitemap-tools.xml`, lastModified: now },
     { url: `${BASE}/sitemap-blog.xml`, lastModified: now },
     { url: `${BASE}/sitemap-network.xml`, lastModified: now },
     { url: `${BASE}/sitemap-seo.xml`, lastModified: now },
