@@ -50,11 +50,31 @@ function findApp(slugOrTitle: string) {
   );
 }
 
-function installedApps(ctx: UserContext) {
-  const slugs = ctx.clientContext?.installedApps ?? [];
+async function allowedSlugSet(ctx: UserContext, slugs: string[]) {
+  const unique = Array.from(new Set(slugs)).filter(Boolean).slice(0, 500);
+  const pairs = await Promise.all(
+    unique.map(async (slug) => {
+      const { data, error } = await ctx.supabase.rpc("tool_availability", {
+        ws_id: ctx.workspaceId,
+        tool_slug: slug,
+      });
+      return [slug, !error && data === "allowed"] as const;
+    })
+  );
+  return new Set(pairs.filter(([, allowed]) => allowed).map(([slug]) => slug));
+}
+
+async function allowedAppsFromSlugs(ctx: UserContext, slugs: string[]) {
+  const allowed = await allowedSlugSet(ctx, slugs);
   return slugs
+    .filter((slug) => allowed.has(slug))
     .map(compactApp)
     .filter((app): app is NonNullable<typeof app> => Boolean(app));
+}
+
+async function installedApps(ctx: UserContext) {
+  const slugs = ctx.clientContext?.installedApps ?? [];
+  return allowedAppsFromSlugs(ctx, slugs);
 }
 
 const list_installed_apps: ToolDefinition = {
@@ -64,13 +84,15 @@ const list_installed_apps: ToolDefinition = {
   input_schema: { type: "object", properties: {}, additionalProperties: false },
   read_only: true,
   execute: async (_input, ctx) => {
-    const apps = installedApps(ctx);
+    const rawInstalled = ctx.clientContext?.installedApps ?? [];
+    const apps = await installedApps(ctx);
     return toolOk({
       count: apps.length,
       apps,
       most_recent_known: apps.at(-1) ?? null,
+      hidden_installed_count: Math.max(0, rawInstalled.length - apps.length),
       note:
-        "Spacefield does not currently store install timestamps. The most recent known app is inferred from the browser install-list order.",
+        "Spacefield does not currently store install timestamps. The most recent known app is inferred from the browser install-list order. Apps blocked by workspace/admin availability are filtered out.",
       client_context_available: Boolean(ctx.clientContext?.installedApps),
     });
   },
@@ -102,10 +124,15 @@ const search_spacefield_apps: ToolDefinition = {
       typeof obj.query === "string" ? obj.query.trim().toLowerCase() : "";
     const installedOnly = obj.installed_only === true;
     const installedSet = new Set(ctx.clientContext?.installedApps ?? []);
-    const source = installedOnly
+    const prefiltered = installedOnly
       ? TOOLS.filter((t) => installedSet.has(t.slug))
       : TOOLS;
-    const matches = source
+    const allowed = await allowedSlugSet(
+      ctx,
+      prefiltered.map((t) => t.slug)
+    );
+    const matches = prefiltered
+      .filter((t) => allowed.has(t.slug))
       .filter((t) => {
         if (!query) return Boolean(t.topRated);
         const category =
@@ -153,6 +180,16 @@ const get_spacefield_app_info: ToolDefinition = {
     const app = findApp(slugOrTitle);
     if (!app) {
       return toolOk({ found: false, query: slugOrTitle });
+    }
+    const allowed = await allowedSlugSet(ctx, [app.slug]);
+    if (!allowed.has(app.slug)) {
+      return toolOk({
+        found: false,
+        query: slugOrTitle,
+        unavailable: true,
+        message:
+          "That app is not available in this workspace for this user.",
+      });
     }
     const installedSet = new Set(ctx.clientContext?.installedApps ?? []);
     return toolOk({
