@@ -182,7 +182,7 @@ export default function ShareDialog({
         initial={{ scale: 0.96, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.96, opacity: 0 }}
-        className="w-full max-w-md rounded-2xl border border-app bg-app-elevated p-5 shadow-2xl"
+        className="sf-glass-window w-full max-w-md rounded-2xl p-5"
       >
         <h3 className="text-base font-bold text-app">
           Share &lsquo;{file.name}&rsquo; with another workspace

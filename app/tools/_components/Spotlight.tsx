@@ -517,14 +517,14 @@ export default function Spotlight() {
           onClick={() => setOpen(false)}
         >
           <motion.div
-            className="mt-[12vh] w-[min(640px,92vw)] overflow-hidden rounded-2xl border border-app bg-app-elevated shadow-2xl"
+            className="sf-glass-window mt-[12vh] w-[min(640px,92vw)] overflow-hidden rounded-2xl"
             initial={{ opacity: 0, y: -8, scale: 0.98 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -8, scale: 0.98 }}
             transition={{ duration: 0.14 }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center gap-2 border-b border-app px-4 py-3">
+            <div className="sf-glass-titlebar flex items-center gap-2 px-4 py-3">
               <svg
                 width="18"
                 height="18"

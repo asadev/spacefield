@@ -115,7 +115,7 @@ export default function ContextMenu({
             transformOrigin: "top left",
             minWidth: 200,
           }}
-          className="pointer-events-auto fixed z-[100] rounded-lg border border-app bg-app-elevated p-1.5 shadow-2xl backdrop-blur-xl"
+          className="sf-glass-menu pointer-events-auto fixed z-[100] rounded-lg p-1.5"
         >
           {items.map((item, i) => {
             if (item.divider) {

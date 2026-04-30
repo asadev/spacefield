@@ -1127,7 +1127,7 @@ export default function Launchpad({
           className={
             isMobile
               ? "flex flex-col overflow-hidden bg-app"
-              : "overflow-hidden border border-app/40 bg-app-elevated/70 shadow-2xl backdrop-blur-2xl " +
+              : "sf-glass-window overflow-hidden " +
                 (maximized ? "" : "rounded-xl")
           }
           onPointerDown={(e) => {
@@ -1142,7 +1142,7 @@ export default function Launchpad({
             <div
               onPointerDown={onTitleDrag}
               onDoubleClick={toggleMaximize}
-              className="relative flex h-9 select-none items-center gap-2 border-b border-app/50 bg-app-elevated/60 px-3 backdrop-blur-2xl"
+              className="sf-glass-titlebar relative flex h-9 select-none items-center gap-2 px-3"
               style={{ cursor: maximized ? "default" : "grab" }}
             >
               <div
@@ -1363,7 +1363,7 @@ export default function Launchpad({
                   className="absolute inset-0 z-[60] bg-black/40"
                 />
                 <div
-                  className="absolute inset-y-0 left-0 z-[61] flex w-[78%] max-w-[280px] flex-col bg-app-elevated shadow-2xl"
+                  className="sf-glass-window absolute inset-y-0 left-0 z-[61] flex w-[78%] max-w-[280px] flex-col"
                   onClick={(e) => e.stopPropagation()}
                 >
                   <LaunchpadSidebar
@@ -2201,7 +2201,7 @@ function ToolContextMenu({
     <div
       role="menu"
       onPointerDown={(e) => e.stopPropagation()}
-      className="pointer-events-auto fixed z-[90] w-56 rounded-lg border border-app bg-app-elevated p-1 shadow-xl"
+      className="sf-glass-menu pointer-events-auto fixed z-[90] w-56 rounded-lg p-1"
       style={{ left: x, top: y }}
     >
       <div className="px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-muted">

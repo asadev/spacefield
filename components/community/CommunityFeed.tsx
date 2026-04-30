@@ -342,7 +342,7 @@ function PostCard({
             </div>
           ) : (
             <p className="text-[11px] text-gray-600 mt-2">
-              <Link href="/auth/sign-in" className="text-emerald-300 hover:text-white font-bold">Sign in</Link> to reply
+              <Link href="/signin?next=/community" className="text-emerald-300 hover:text-white font-bold">Sign in</Link> to reply
             </p>
           )}
         </div>
@@ -706,7 +706,7 @@ export default function CommunityFeed({
                 ) : (
                   <div className="text-center py-4">
                     <p className="text-sm text-gray-400">
-                      <Link href={`/auth/sign-in?next=${prefix}/community`} className="text-emerald-300 hover:text-white font-bold">
+                      <Link href={`/signin?next=${encodeURIComponent(`${prefix}/community`)}`} className="text-emerald-300 hover:text-white font-bold">
                         Sign in
                       </Link>{" "}
                       to join the conversation

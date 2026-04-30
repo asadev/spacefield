@@ -164,11 +164,11 @@ export default function WallpaperPicker({ open, onClose }: Props) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ type: "spring", stiffness: 260, damping: 24 }}
-            className="relative z-10 mx-auto flex h-[min(78vh,680px)] max-w-3xl flex-col overflow-hidden rounded-2xl border border-app bg-app-elevated shadow-2xl"
+            className="sf-glass-window relative z-10 mx-auto flex h-[min(78vh,680px)] max-w-3xl flex-col overflow-hidden rounded-2xl"
             style={{ marginTop: "9vh" }}
           >
             {/* Header */}
-            <div className="flex items-center gap-3 border-b border-app bg-app-elevated px-6 py-4">
+            <div className="sf-glass-titlebar flex items-center gap-3 px-6 py-4">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-tool-accent-soft text-tool-accent">
                 <svg
                   width="18"
@@ -218,7 +218,7 @@ export default function WallpaperPicker({ open, onClose }: Props) {
             </div>
 
             {/* Tabs */}
-            <div className="flex items-center gap-1 overflow-x-auto border-b border-app bg-app-elevated px-4 py-2">
+            <div className="flex items-center gap-1 overflow-x-auto border-b border-app bg-app-elevated/70 px-4 py-2 backdrop-blur-xl">
               {sections.map((s) => {
                 const active = activeSection === s.id;
                 return (
@@ -315,7 +315,7 @@ export default function WallpaperPicker({ open, onClose }: Props) {
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between gap-3 border-t border-app bg-app-elevated px-6 py-3">
+            <div className="flex items-center justify-between gap-3 border-t border-app bg-app-elevated/70 px-6 py-3 backdrop-blur-xl">
               <div className="text-[11px] text-muted">
                 Click a tile to apply. Your choice is remembered between sessions.
               </div>

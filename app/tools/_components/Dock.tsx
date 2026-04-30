@@ -37,10 +37,10 @@ interface Props {
   pinned: ToolItem[];
   windows: WindowState[];
   onLaunchpad: () => void;
-  onStore: () => void;
+  onStore?: () => void;
   onOpenTool: (slug: string, title: string) => void;
   onFocusWindow: (id: string) => void;
-  onUninstall: (slug: string) => void;
+  onUninstall?: (slug: string) => void;
   /* Cross-zone drop: an app dragged from Launchpad/Home was released on
    * the dock. The orchestrator pins it (and removes from Home if that's
    * the source). atIndex is the insertion point within pinnedSlugs;
@@ -317,7 +317,7 @@ export default function Dock({
             }
             onAppDroppedOnDock(payload, atIndex);
           }}
-          className="pointer-events-auto flex items-end gap-2 rounded-2xl border border-app bg-app-elevated/80 px-3 py-2 shadow-2xl backdrop-blur-xl"
+          className="sf-glass-strong pointer-events-auto flex items-end gap-2 rounded-2xl px-3 py-2"
         >
           {/* Launchpad — 9-dot mark, deliberately not a 4-pane Windows start
            * tile. Colour-shifts on hover. */}
@@ -378,7 +378,11 @@ export default function Dock({
                       ? onFocusWindow(openWindow.id)
                       : onOpenTool(t.slug, t.title)
                   }
-                  onContextMenu={(e) => openUninstallMenu(e, t.slug, t.title)}
+                  onContextMenu={
+                    onUninstall
+                      ? (e) => openUninstallMenu(e, t.slug, t.title)
+                      : undefined
+                  }
                   ariaLabel={t.title}
                   active={!!openWindow}
                   minimized={openWindow?.minimized}
@@ -399,7 +403,11 @@ export default function Dock({
               mouseX={mouseX}
               containerRef={containerRef}
               onClick={() => onFocusWindow(w.id)}
-              onContextMenu={(e) => openUninstallMenu(e, w.slug, w.title)}
+              onContextMenu={
+                onUninstall
+                  ? (e) => openUninstallMenu(e, w.slug, w.title)
+                  : undefined
+              }
               ariaLabel={w.title}
               active
               minimized={w.minimized}
@@ -411,31 +419,35 @@ export default function Dock({
           ))}
 
           {/* App Store */}
-          <div className="h-11 w-px bg-app" />
-          <DockIcon
-            mouseX={mouseX}
-            containerRef={containerRef}
-            onClick={onStore}
-            ariaLabel="Tool Store"
-            iconStyle={iconStyle}
-          >
-            <svg
-              width="20"
-              height="20"
-              viewBox="0 0 24 24"
-              fill="currentColor"
-              aria-hidden="true"
-              className={
-                iconStyle === "filled"
-                  ? "text-white"
-                  : iconStyle === "squircle"
-                    ? "text-tool-accent"
-                    : "text-secondary"
-              }
-            >
-              <path d="M4 7h16l-1.3 11.2a2 2 0 01-2 1.8H7.3a2 2 0 01-2-1.8L4 7zm3 0V5a5 5 0 0110 0v2h-2V5a3 3 0 10-6 0v2H7z" />
-            </svg>
-          </DockIcon>
+          {onStore && (
+            <>
+              <div className="h-11 w-px bg-app" />
+              <DockIcon
+                mouseX={mouseX}
+                containerRef={containerRef}
+                onClick={onStore}
+                ariaLabel="Tool Store"
+                iconStyle={iconStyle}
+              >
+                <svg
+                  width="20"
+                  height="20"
+                  viewBox="0 0 24 24"
+                  fill="currentColor"
+                  aria-hidden="true"
+                  className={
+                    iconStyle === "filled"
+                      ? "text-white"
+                      : iconStyle === "squircle"
+                        ? "text-tool-accent"
+                        : "text-secondary"
+                  }
+                >
+                  <path d="M4 7h16l-1.3 11.2a2 2 0 01-2 1.8H7.3a2 2 0 01-2-1.8L4 7zm3 0V5a5 5 0 0110 0v2h-2V5a3 3 0 10-6 0v2H7z" />
+                </svg>
+              </DockIcon>
+            </>
+          )}
         </motion.div>
       </motion.div>
 
@@ -446,23 +458,25 @@ export default function Dock({
         <div
           role="menu"
           onPointerDown={(e) => e.stopPropagation()}
-          className="pointer-events-auto fixed z-[60] rounded-lg border border-app bg-app-elevated p-1 shadow-2xl"
+          className="sf-glass-menu pointer-events-auto fixed z-[60] rounded-lg p-1"
           style={{ left: menu.x, top: menu.y }}
         >
           <div className="px-2 py-1 text-[0.6rem] uppercase tracking-[0.14em] text-muted">
             {menu.title}
           </div>
-          <button
-            type="button"
-            onClick={() => {
-              onUninstall(menu.slug);
-              setMenu(null);
-            }}
-            className="block w-full rounded px-2 py-1.5 text-left text-sm text-secondary hover:bg-surface hover:text-app transition-colors"
-            role="menuitem"
-          >
-            Uninstall
-          </button>
+          {onUninstall && (
+            <button
+              type="button"
+              onClick={() => {
+                onUninstall(menu.slug);
+                setMenu(null);
+              }}
+              className="block w-full rounded px-2 py-1.5 text-left text-sm text-secondary hover:bg-surface hover:text-app transition-colors"
+              role="menuitem"
+            >
+              Uninstall
+            </button>
+          )}
         </div>,
         document.body
       )}

@@ -154,7 +154,11 @@ function sortChannels(list: Channel[]): Channel[] {
   });
 }
 
-export default function ChatApp({ width }: NativeAppProps) {
+export default function ChatApp({
+  width,
+  initialParams,
+  initialParamsKey,
+}: NativeAppProps) {
   const supabase = useMemo(() => getSupabase(), []);
   const initial = useMemo(() => readActiveWorkspace(), []);
   const [activeId] = useState<string | null>(initial.id);
@@ -221,6 +225,13 @@ export default function ChatApp({ width }: NativeAppProps) {
   const messageListRef = useRef<HTMLDivElement | null>(null);
   const composerRef = useRef<HTMLTextAreaElement | null>(null);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    const prefill = initialParams?.prefill;
+    if (typeof prefill !== "string" || !prefill.trim()) return;
+    setComposer(prefill.trim());
+    window.setTimeout(() => composerRef.current?.focus(), 0);
+  }, [initialParamsKey, initialParams]);
 
   // Load channels.
   const refreshChannels = useCallback(async () => {

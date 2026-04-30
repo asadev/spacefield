@@ -177,7 +177,7 @@ export default function AppSwitcher({ windows, onFocus }: Props) {
             animate={{ scale: 1, opacity: 1 }}
             exit={{ scale: 0.96, opacity: 0 }}
             transition={{ type: "spring", stiffness: 360, damping: 28 }}
-            className="max-w-[92vw] overflow-x-auto rounded-2xl border border-app bg-app-elevated/95 px-4 py-4 shadow-2xl backdrop-blur"
+            className="sf-glass-window max-w-[92vw] overflow-x-auto rounded-2xl px-4 py-4"
           >
             <div className="flex items-end gap-2">
               {list.map((w, i) => {

@@ -24,10 +24,17 @@ import { useWorkspaceKey } from "./useWorkspaces";
  */
 
 const STORAGE_SUFFIX = "tools-desktop-hot-corners-v1";
+const ACTIONS_STORAGE_SUFFIX = "tools-desktop-hot-corner-actions-v1";
 const FIRE_DELAY_MS = 250;
 const PULSE_LEAD_MS = 100; // pulse appears this long before fire
 
 export type HotCorner = "tl" | "tr" | "bl" | "br";
+type HotCornerAction =
+  | "none"
+  | "launchpad"
+  | "notifications"
+  | "mission-control"
+  | "show-desktop";
 
 interface HotCornersProps {
   onLaunchpad: () => void;
@@ -41,6 +48,12 @@ interface PersistedState {
 }
 
 const DEFAULT_STATE: PersistedState = { enabled: true };
+const DEFAULT_ACTIONS: Record<HotCorner, HotCornerAction> = {
+  tl: "launchpad",
+  tr: "notifications",
+  bl: "mission-control",
+  br: "show-desktop",
+};
 
 function loadState(storageKey: string): PersistedState {
   if (typeof window === "undefined") return DEFAULT_STATE;
@@ -63,6 +76,33 @@ function saveState(storageKey: string, state: PersistedState) {
     window.localStorage.setItem(storageKey, JSON.stringify(state));
   } catch {
     /* SSR / quota / private mode — ignore */
+  }
+}
+
+function isAction(v: unknown): v is HotCornerAction {
+  return (
+    v === "none" ||
+    v === "launchpad" ||
+    v === "notifications" ||
+    v === "mission-control" ||
+    v === "show-desktop"
+  );
+}
+
+function loadActions(storageKey: string): Record<HotCorner, HotCornerAction> {
+  if (typeof window === "undefined") return DEFAULT_ACTIONS;
+  try {
+    const raw = window.localStorage.getItem(storageKey);
+    if (!raw) return DEFAULT_ACTIONS;
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return {
+      tl: isAction(parsed.tl) ? parsed.tl : DEFAULT_ACTIONS.tl,
+      tr: isAction(parsed.tr) ? parsed.tr : DEFAULT_ACTIONS.tr,
+      bl: isAction(parsed.bl) ? parsed.bl : DEFAULT_ACTIONS.bl,
+      br: isAction(parsed.br) ? parsed.br : DEFAULT_ACTIONS.br,
+    };
+  } catch {
+    return DEFAULT_ACTIONS;
   }
 }
 
@@ -94,7 +134,10 @@ export default function HotCorners({
   onShowDesktop,
 }: HotCornersProps) {
   const STORAGE_KEY = useWorkspaceKey(STORAGE_SUFFIX);
+  const ACTIONS_STORAGE_KEY = useWorkspaceKey(ACTIONS_STORAGE_SUFFIX);
   const [enabled, setEnabled] = useState<boolean>(true);
+  const [actions, setActions] =
+    useState<Record<HotCorner, HotCornerAction>>(DEFAULT_ACTIONS);
   const [armed, setArmed] = useState<HotCorner | null>(null);
   const timerRef = useRef<number | null>(null);
   const pulseTimerRef = useRef<number | null>(null);
@@ -103,7 +146,11 @@ export default function HotCorners({
   // same-tab event (View menu toggle).
   useEffect(() => {
     setEnabled(loadState(STORAGE_KEY).enabled);
-    const sync = () => setEnabled(loadState(STORAGE_KEY).enabled);
+    setActions(loadActions(ACTIONS_STORAGE_KEY));
+    const sync = () => {
+      setEnabled(loadState(STORAGE_KEY).enabled);
+      setActions(loadActions(ACTIONS_STORAGE_KEY));
+    };
     const onStorage = (e: StorageEvent) => {
       if (e.key === STORAGE_KEY) sync();
     };
@@ -113,7 +160,7 @@ export default function HotCorners({
       window.removeEventListener("storage", onStorage);
       window.removeEventListener("tools-desktop-hot-corners-changed", sync);
     };
-  }, [STORAGE_KEY]);
+  }, [ACTIONS_STORAGE_KEY, STORAGE_KEY]);
 
   // Always clean up timers on unmount / re-render.
   useEffect(() => {
@@ -144,19 +191,21 @@ export default function HotCorners({
     ) {
       return;
     }
-    switch (corner) {
-      case "tl":
+    switch (actions[corner]) {
+      case "none":
+        break;
+      case "launchpad":
         onLaunchpad();
         break;
-      case "tr":
+      case "notifications":
         onNotifications();
         break;
-      case "bl":
+      case "mission-control":
         // Mission Control if it ever ships; else minimize all (which is
         // also what Show Desktop maps to).
         (onMissionControl ?? onShowDesktop)();
         break;
-      case "br":
+      case "show-desktop":
         onShowDesktop();
         break;
     }

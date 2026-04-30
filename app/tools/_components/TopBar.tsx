@@ -153,7 +153,7 @@ export default function TopBar({
   return (
     <div
       ref={barRef}
-      className="fixed inset-x-0 top-0 z-[1] flex h-8 items-center gap-1 px-2 text-[0.72rem]"
+      className="sf-glass-bar fixed inset-x-0 top-0 z-[1] flex h-8 items-center gap-1 px-2 text-[0.72rem]"
     >
       {/* Mobile-only trigger. On <sm screens File/Window/View/Help don't
        * fit horizontally, so we collapse them behind a single button that
@@ -652,7 +652,7 @@ export default function TopBar({
                 Sign in
               </MenuItem>
             ) : (
-              <MenuLink href="/auth/sign-in">Sign in</MenuLink>
+              <MenuLink href="/signin">Sign in</MenuLink>
             )}
           </>
         )}
@@ -719,7 +719,7 @@ function Menu({
         <div
           role="menu"
           data-topbar-portal=""
-          className="fixed z-[60] min-w-[180px] rounded-lg border border-app bg-app-elevated p-1 shadow-menu"
+          className="sf-glass-menu fixed z-[60] min-w-[180px] rounded-lg p-1"
           style={{
             top: pos.top,
             left: pos.left,
@@ -822,7 +822,7 @@ function MobilePopover({
   return createPortal(
     <div
       data-topbar-portal=""
-      className="fixed inset-x-0 top-8 z-[60] mx-2 max-h-[calc(100dvh-3rem)] overflow-y-auto rounded-xl border border-app bg-app-elevated p-2 shadow-2xl sm:hidden"
+      className="sf-glass-menu fixed inset-x-0 top-8 z-[60] mx-2 max-h-[calc(100dvh-3rem)] overflow-y-auto rounded-xl p-2 sm:hidden"
       role="menu"
     >
       <button

@@ -321,15 +321,15 @@ export default function Window({
         win.maximized
           ? "overflow-hidden bg-app-elevated shadow-2xl"
           : win.pinned
-            ? "overflow-hidden rounded-xl border border-app bg-app-elevated shadow-2xl ring-1 ring-tool-accent-soft"
-            : "overflow-hidden rounded-xl border border-app bg-app-elevated shadow-2xl"
+            ? "sf-glass-window overflow-hidden rounded-xl ring-1 ring-tool-accent-soft"
+            : "sf-glass-window overflow-hidden rounded-xl"
       }
     >
       {/* Title bar */}
       <div
         onPointerDown={onDragStart}
         onDoubleClick={onMaximize}
-        className="flex h-9 select-none items-center gap-2 border-b border-app bg-app-elevated px-3"
+        className="sf-glass-titlebar flex h-9 select-none items-center gap-2 px-3"
         style={{ cursor: "grab" }}
       >
         {/* Traffic lights */}

@@ -370,7 +370,7 @@ export default function ScreenshotCapture() {
           {toasts.map((t) => (
             <div
               key={t.id}
-              className="pointer-events-auto flex w-[300px] items-start gap-3 rounded-xl border border-app bg-app-elevated/95 p-3 shadow-2xl backdrop-blur-xl"
+              className="sf-glass-menu pointer-events-auto flex w-[300px] items-start gap-3 rounded-xl p-3"
             >
               <div
                 className={
@@ -531,7 +531,7 @@ function SelectionOverlay({
       style={{ background: "rgba(0,0,0,0.25)" }}
     >
       {/* Instructional caption */}
-      <div className="pointer-events-none absolute left-1/2 top-6 -translate-x-1/2 rounded-full bg-app-elevated/95 px-3 py-1 text-[0.7rem] font-medium text-app shadow-lg backdrop-blur-xl">
+      <div className="sf-glass-menu pointer-events-none absolute left-1/2 top-6 -translate-x-1/2 rounded-full px-3 py-1 text-[0.7rem] font-medium text-app">
         Drag to select an area · Esc to cancel
       </div>
 

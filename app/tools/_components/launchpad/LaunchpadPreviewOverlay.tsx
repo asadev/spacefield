@@ -162,11 +162,11 @@ export default function LaunchpadPreviewOverlay({
           initial={{ scale: 0.96, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           exit={{ scale: 0.97, opacity: 0 }}
-          className="relative flex h-[85vh] w-[90vw] max-w-6xl flex-col overflow-hidden rounded-2xl border border-app/40 bg-app-elevated/90 shadow-2xl backdrop-blur-xl"
+          className="sf-glass-window relative flex h-[85vh] w-[90vw] max-w-6xl flex-col overflow-hidden rounded-2xl"
           onClick={(e) => e.stopPropagation()}
         >
           {/* Header */}
-          <div className="flex items-center gap-3 border-b border-app/40 bg-app-elevated/60 px-4 py-2.5">
+          <div className="sf-glass-titlebar flex items-center gap-3 px-4 py-2.5">
             <div className="min-w-0 flex-1">
               <div className="truncate text-[13px] font-semibold text-app">
                 {file.name}

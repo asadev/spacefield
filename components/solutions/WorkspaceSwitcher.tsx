@@ -82,15 +82,15 @@ export default function WorkspaceSwitcher() {
 
               <div className="my-1 border-t border-app" />
               <Link
-                href="/solutions/workspaces/new"
+                href="/"
                 className="block rounded-sm px-3 py-2 text-sm text-tool-accent hover:bg-surface"
                 onClick={() => setOpen(false)}
               >
-                + New workspace
+                Open workspace settings
               </Link>
               {!signedIn && (
                 <Link
-                  href="/auth/sign-in?next=/solutions/workspaces"
+                  href="/signin?next=/solutions/tools"
                   className="block rounded-sm px-3 py-2 text-xs text-muted hover:bg-surface"
                   onClick={() => setOpen(false)}
                 >

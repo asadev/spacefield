@@ -123,7 +123,7 @@ function DesktopPanel({
       data-control-center
       role="dialog"
       aria-label="Control Center"
-      className="fixed right-2 top-9 z-[79] w-[320px] overflow-hidden rounded-2xl border border-app bg-app-elevated/95 shadow-2xl backdrop-blur-2xl"
+      className="sf-glass-menu fixed right-2 top-9 z-[79] w-[320px] overflow-hidden rounded-2xl"
     >
       <Body
         onClose={onClose}
@@ -161,7 +161,7 @@ function MobilePanel({
       data-control-center
       role="dialog"
       aria-label="Control Center"
-      className="fixed inset-x-0 top-0 z-[79] mx-2 mt-2 overflow-hidden rounded-2xl border border-app bg-app-elevated/95 shadow-2xl backdrop-blur-2xl"
+      className="sf-glass-menu fixed inset-x-0 top-0 z-[79] mx-2 mt-2 overflow-hidden rounded-2xl"
       style={{ touchAction: "pan-y" }}
     >
       <div

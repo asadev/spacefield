@@ -44,6 +44,26 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+function readSafeNext(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const sp = new URLSearchParams(window.location.search);
+    const next = sp.get("next");
+    if (!next || !next.startsWith("/") || next.startsWith("//")) return null;
+    return next;
+  } catch {
+    return null;
+  }
+}
+
+function authCallbackUrl(): string | undefined {
+  if (typeof window === "undefined") return undefined;
+  const url = new URL("/auth/callback", window.location.origin);
+  const next = readSafeNext();
+  if (next) url.searchParams.set("next", next);
+  return url.toString();
+}
+
 export function useAuth(): AuthContextValue {
   const ctx = useContext(AuthContext);
   if (!ctx) throw new Error("useAuth must be used inside <AuthProvider>");
@@ -85,10 +105,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           // Magic links go through /auth/callback for the same reason as
           // OAuth: server-side code exchange so cookies are set on the
           // redirect response.
-          emailRedirectTo:
-            typeof window !== "undefined"
-              ? `${window.location.origin}/auth/callback`
-              : undefined,
+          emailRedirectTo: authCallbackUrl(),
         },
       });
       if (error) throw error;
@@ -107,9 +124,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       provider: "google",
       options: {
         redirectTo:
-          typeof window !== "undefined"
-            ? `${window.location.origin}/auth/callback`
-            : undefined,
+          authCallbackUrl(),
       },
     });
     if (error) throw error;

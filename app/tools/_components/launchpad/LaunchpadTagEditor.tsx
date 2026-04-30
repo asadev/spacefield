@@ -131,7 +131,7 @@ export default function LaunchpadTagEditor({ file, onClose, onSaved }: Props) {
         initial={{ scale: 0.96, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.96, opacity: 0 }}
-        className="w-full max-w-sm rounded-2xl border border-app bg-app-elevated/90 p-5 shadow-2xl backdrop-blur-xl"
+        className="sf-glass-window w-full max-w-sm rounded-2xl p-5"
       >
         <h3 className="text-base font-bold text-app">Tags</h3>
         <p className="mt-1 truncate text-xs text-muted">{file.name}</p>

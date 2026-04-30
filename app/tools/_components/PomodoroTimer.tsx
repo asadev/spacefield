@@ -399,7 +399,7 @@ export default function PomodoroTimer({
         createPortal(
           <div
             data-pomodoro-popover=""
-            className="fixed z-[70] w-[260px] rounded-xl border border-app bg-app-elevated p-3 shadow-2xl backdrop-blur-xl"
+            className="sf-glass-menu fixed z-[70] w-[260px] rounded-xl p-3"
             style={{ top: pos.top, right: pos.right }}
             role="dialog"
             aria-label="Pomodoro timer"
@@ -518,7 +518,7 @@ export default function PomodoroTimer({
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.18 }}
-            className="pointer-events-none fixed left-1/2 top-10 z-[80] -translate-x-1/2 rounded-lg border border-app bg-app-elevated px-3 py-1.5 text-[0.75rem] text-app shadow-2xl backdrop-blur"
+            className="sf-glass-menu pointer-events-none fixed left-1/2 top-10 z-[80] -translate-x-1/2 rounded-lg px-3 py-1.5 text-[0.75rem] text-app"
             role="status"
             aria-live="polite"
           >

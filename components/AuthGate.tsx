@@ -14,7 +14,9 @@ export default function AuthGate({ children }: AuthGateProps) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
   const pathname = usePathname();
-  const signInHref = pathname ? `/auth/sign-in?next=${encodeURIComponent(pathname)}` : "/auth/sign-in";
+  const signInHref = pathname
+    ? `/signin?next=${encodeURIComponent(pathname)}`
+    : "/signin";
 
   useEffect(() => {
     const supabase = createClient();

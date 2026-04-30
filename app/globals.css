@@ -82,6 +82,12 @@
   --shadow-card: 0 4px 14px rgba(0, 0, 0, 0.40);
   --shadow-elevated: 0 12px 28px rgba(0, 0, 0, 0.45);
   --shadow-hairline: inset 0 0 0 1px rgba(255, 255, 255, 0.04);
+  --chrome-glass: linear-gradient(135deg, rgba(28, 28, 32, 0.72), rgba(6, 6, 8, 0.54));
+  --chrome-glass-strong: linear-gradient(135deg, rgba(36, 36, 42, 0.82), rgba(10, 10, 12, 0.68));
+  --chrome-titlebar: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.035));
+  --chrome-border: rgba(255, 255, 255, 0.18);
+  --chrome-highlight: rgba(255, 255, 255, 0.22);
+  --chrome-shadow: 0 22px 70px rgba(0, 0, 0, 0.48), 0 8px 24px rgba(0, 0, 0, 0.34);
 
   /* Edge-fade base for marquees/masks — matches page bg */
   --edge-fade: #0a0a0a;
@@ -115,6 +121,12 @@
   --shadow-card: 0 1px 3px rgba(15, 23, 42, 0.04), 0 4px 10px rgba(15, 23, 42, 0.04);
   --shadow-elevated: 0 6px 18px rgba(15, 23, 42, 0.08), 0 2px 4px rgba(15, 23, 42, 0.04);
   --shadow-hairline: inset 0 0 0 1px rgba(15, 23, 42, 0.04);
+  --chrome-glass: linear-gradient(135deg, rgba(255, 255, 255, 0.76), rgba(245, 247, 251, 0.56));
+  --chrome-glass-strong: linear-gradient(135deg, rgba(255, 255, 255, 0.88), rgba(240, 243, 248, 0.70));
+  --chrome-titlebar: linear-gradient(180deg, rgba(255, 255, 255, 0.82), rgba(255, 255, 255, 0.48));
+  --chrome-border: rgba(15, 23, 42, 0.16);
+  --chrome-highlight: rgba(255, 255, 255, 0.92);
+  --chrome-shadow: 0 24px 70px rgba(15, 23, 42, 0.16), 0 8px 28px rgba(15, 23, 42, 0.10);
 
   --edge-fade: #f1f2f4;
 
@@ -755,6 +767,50 @@ body {
 .glass-panel {
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+/* ─── Spacefield OS chrome glass ───
+ * Scoped to desktop/mobile shell chrome. App interiors keep their own
+ * solid surfaces so calculators, CRM, docs, and sheets stay readable. */
+.sf-glass,
+.sf-glass-strong,
+.sf-glass-bar,
+.sf-glass-menu,
+.sf-glass-window {
+  border: 1px solid var(--chrome-border);
+  background: var(--chrome-glass);
+  backdrop-filter: blur(28px) saturate(175%);
+  -webkit-backdrop-filter: blur(28px) saturate(175%);
+  box-shadow:
+    var(--chrome-shadow),
+    inset 0 1px 0 var(--chrome-highlight),
+    inset 0 -1px 0 rgba(255, 255, 255, 0.04);
+}
+
+.sf-glass-strong,
+.sf-glass-window {
+  background: var(--chrome-glass-strong);
+}
+
+.sf-glass-bar {
+  border-left: 0;
+  border-right: 0;
+  border-top: 0;
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.07) inset,
+    0 10px 30px rgba(0, 0, 0, 0.16);
+}
+
+.sf-glass-menu {
+  box-shadow:
+    var(--shadow-menu),
+    inset 0 1px 0 var(--chrome-highlight);
+}
+
+.sf-glass-titlebar {
+  background: var(--chrome-titlebar);
+  border-bottom: 1px solid var(--chrome-border);
+  box-shadow: inset 0 1px 0 var(--chrome-highlight);
 }
 
 /* ─── Status pulse ─── */
@@ -1654,4 +1710,3 @@ html[data-tab-hidden="1"] *::after {
     display: none !important;
   }
 }
-

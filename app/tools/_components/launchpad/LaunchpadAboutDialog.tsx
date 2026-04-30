@@ -49,7 +49,7 @@ export default function LaunchpadAboutDialog({ open, onClose }: Props) {
       }}
     >
       <div
-        className="flex h-[220px] w-[320px] flex-col items-center justify-center gap-2 rounded-xl border border-app bg-app-elevated p-6 shadow-2xl"
+        className="sf-glass-window flex h-[220px] w-[320px] flex-col items-center justify-center gap-2 rounded-xl p-6"
         onPointerDown={(e) => e.stopPropagation()}
       >
         <div className="text-2xl font-semibold tracking-tight text-app">

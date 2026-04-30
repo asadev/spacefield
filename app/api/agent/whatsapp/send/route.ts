@@ -61,16 +61,35 @@ export async function POST(req: NextRequest) {
   }
   const payload = (await req.json().catch(() => ({}))) as {
     text?: string;
+    workspace_id?: string;
   };
   const text = payload.text?.trim();
+  const workspaceId = payload.workspace_id?.trim();
   if (!text) {
     return NextResponse.json({ error: "text required" }, { status: 400 });
+  }
+  if (!workspaceId) {
+    return NextResponse.json(
+      { error: "workspace_id required" },
+      { status: 400 }
+    );
+  }
+  const { data: role, error: roleErr } = await supabase.rpc(
+    "workspace_role_of",
+    { ws_id: workspaceId }
+  );
+  if (roleErr) {
+    return NextResponse.json({ error: roleErr.message }, { status: 400 });
+  }
+  if (role !== "owner" && role !== "admin" && role !== "member") {
+    return NextResponse.json({ error: "not_a_member" }, { status: 403 });
   }
   // Look up the caller's linked WhatsApp number.
   const { data: link } = await supabase
     .from("agent_whatsapp_links")
     .select("whatsapp_number")
     .eq("user_id", user.id)
+    .eq("workspace_id", workspaceId)
     .maybeSingle();
   if (!link) {
     return NextResponse.json(

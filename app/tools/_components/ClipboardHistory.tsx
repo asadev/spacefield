@@ -307,7 +307,7 @@ export default function ClipboardHistory() {
           onClick={() => setOpen(false)}
         >
           <motion.div
-            className="absolute w-[360px] overflow-hidden rounded-xl border border-app bg-app-elevated shadow-2xl"
+            className="sf-glass-menu absolute w-[360px] overflow-hidden rounded-xl"
             style={popoverStyle}
             initial={{ opacity: 0, scale: 0.97 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -315,7 +315,7 @@ export default function ClipboardHistory() {
             transition={{ duration: 0.12 }}
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between border-b border-app px-3 py-2">
+            <div className="sf-glass-titlebar flex items-center justify-between px-3 py-2">
               <div className="text-[0.7rem] uppercase tracking-[0.14em] text-muted">
                 Clipboard
               </div>

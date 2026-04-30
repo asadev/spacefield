@@ -184,7 +184,7 @@ export default function MobileNotifications({ open, onClose }: Props) {
             dragConstraints={{ top: 0, bottom: 0 }}
             dragElastic={0.3}
             onDragEnd={onDragEnd}
-            className="absolute inset-x-0 top-0 max-h-[88dvh] overflow-y-auto rounded-b-[24px] border-b border-app bg-app-elevated shadow-2xl"
+            className="sf-glass-window absolute inset-x-0 top-0 max-h-[88dvh] overflow-y-auto rounded-b-[24px]"
             style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}
           >
             <div className="flex items-center justify-between px-5 pb-2 pt-4">

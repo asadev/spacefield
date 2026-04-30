@@ -185,7 +185,7 @@ export default function CreateWorkspaceDialog({ open, onClose }: Props) {
               exit={{ scale: 0.96, opacity: 0, y: 8 }}
               transition={{ type: "spring", stiffness: 320, damping: 28 }}
               onSubmit={submit}
-              className="w-full max-w-md rounded-2xl border border-app bg-app-elevated p-6 shadow-2xl"
+              className="sf-glass-window w-full max-w-md rounded-2xl p-6"
             >
               <h2
                 id="create-workspace-title"

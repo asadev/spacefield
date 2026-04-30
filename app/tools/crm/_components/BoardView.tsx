@@ -29,7 +29,7 @@ export default function BoardView({ boardId, workspaceId, onBack }: Props) {
   // Pick the default view (or first) when the board loads.
   useEffect(() => {
     if (board.board && activeViewId === null) {
-      const views = board.board.views;
+      const views = board.board.views.filter((v) => v.view_type === "table");
       const def = views.find((v) => v.is_default) ?? views[0] ?? null;
       setActiveViewId(def?.id ?? null);
     }
@@ -37,7 +37,11 @@ export default function BoardView({ boardId, workspaceId, onBack }: Props) {
 
   const activeView = useMemo<CrmBoardView | null>(() => {
     if (!board.board || !activeViewId) return null;
-    return board.board.views.find((v) => v.id === activeViewId) ?? null;
+    return (
+      board.board.views.find(
+        (v) => v.id === activeViewId && v.view_type === "table"
+      ) ?? null
+    );
   }, [board.board, activeViewId]);
 
   // Records load against the active view so server-side filters apply.
@@ -140,32 +144,21 @@ export default function BoardView({ boardId, workspaceId, onBack }: Props) {
 
       {/* ── view tabs ─────────────────────────────────────────────── */}
       <div className="flex shrink-0 items-center gap-1 overflow-x-auto border-b border-app bg-app px-2 py-1.5">
-        {views.map((v) => {
+        {views.filter((v) => v.view_type === "table").map((v) => {
           const isActive = v.id === activeViewId;
-          const wired = v.view_type === "table";
           return (
             <button
               key={v.id}
               type="button"
-              disabled={!wired}
-              onClick={() => wired && setActiveViewId(v.id)}
+              onClick={() => setActiveViewId(v.id)}
               className={`rounded-md border px-2.5 py-1 font-mono text-[0.6rem] uppercase tracking-[0.16em] transition-colors ${
                 isActive
                   ? "border-tool-accent bg-tool-accent-soft text-tool-accent"
                   : "border-transparent text-secondary hover:bg-surface hover:text-app"
-              } disabled:cursor-not-allowed disabled:opacity-50`}
-              title={
-                wired
-                  ? v.name
-                  : `${v.view_type} view — coming soon`
-              }
+              }`}
+              title={v.name}
             >
               <span>{v.name}</span>
-              {!wired && (
-                <span className="ml-1 text-[0.5rem] uppercase">
-                  · soon
-                </span>
-              )}
             </button>
           );
         })}
@@ -185,15 +178,14 @@ export default function BoardView({ boardId, workspaceId, onBack }: Props) {
             onOptimisticRemove={recordsHook.optimisticRemove}
           />
         )}
-        {activeView && activeView.view_type !== "table" && (
+        {!activeView && (
           <div className="flex h-full items-center justify-center p-6">
             <div className="max-w-md rounded-lg border border-dashed border-app bg-app-elevated p-6 text-center">
               <p className="font-mono text-[0.6rem] uppercase tracking-[0.18em] text-tool-accent">
-                {activeView.view_type} view
+                No table view
               </p>
               <p className="mt-2 text-sm text-secondary">
-                Not wired yet — switch to the Table view to edit records.
-                Future agents will turn this on.
+                This board does not have an editable table view configured.
               </p>
             </div>
           </div>

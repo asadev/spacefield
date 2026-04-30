@@ -1379,25 +1379,6 @@ export default function PropertyPosterCreatorApp({
           <div className="flex items-center justify-between border-b border-app bg-app px-4 py-2 flex-shrink-0">
             <div className="flex items-center gap-1">
               <button
-                disabled
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-faint opacity-50"
-                title="Undo (coming soon)"
-              >
-                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M3 10h10a5 5 0 015 5v1a5 5 0 01-5 5H9m-6-11l4-4m-4 4l4 4" />
-                </svg>
-              </button>
-              <button
-                disabled
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-faint opacity-50"
-                title="Redo (coming soon)"
-              >
-                <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M21 10H11a5 5 0 00-5 5v1a5 5 0 005 5h4m6-11l-4-4m4 4l-4 4" />
-                </svg>
-              </button>
-              <span className="mx-1 h-4 w-px bg-[var(--border)]" />
-              <button
                 onClick={handleReset}
                 className="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-[0.7rem] text-secondary hover:bg-tool-accent-soft hover:text-tool-accent transition-colors"
                 title="Reset property fields"

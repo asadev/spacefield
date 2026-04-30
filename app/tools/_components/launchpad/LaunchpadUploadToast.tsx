@@ -61,7 +61,7 @@ export default function LaunchpadUploadToast({
         exit={{ y: 16, opacity: 0 }}
         // Sits inside the Launchpad window (positioned absolute), above
         // the status bar.
-        className="absolute bottom-10 right-4 z-[80] w-72 overflow-hidden rounded-xl border border-app/50 bg-app-elevated/85 shadow-2xl backdrop-blur-xl"
+        className="sf-glass-menu absolute bottom-10 right-4 z-[80] w-72 overflow-hidden rounded-xl"
       >
         <div className="flex items-center justify-between border-b border-app/40 px-3 py-1.5 text-[11px] uppercase tracking-wider text-muted">
           <span>

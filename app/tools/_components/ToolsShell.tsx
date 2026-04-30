@@ -147,8 +147,7 @@ function ProfileMenu({
             </div>
             <div className="truncate text-xs text-muted">{user.email}</div>
           </div>
-          <Link href="/dashboard" onClick={onClose} className="block rounded-md px-3 py-2 text-sm text-secondary hover:bg-surface hover:text-app transition-colors" role="menuitem">Dashboard</Link>
-          <Link href="/dashboard/profile" onClick={onClose} className="block rounded-md px-3 py-2 text-sm text-secondary hover:bg-surface hover:text-app transition-colors" role="menuitem">Profile</Link>
+          <Link href="/" onClick={onClose} className="block rounded-md px-3 py-2 text-sm text-secondary hover:bg-surface hover:text-app transition-colors" role="menuitem">Workspace</Link>
           <Link href="/" onClick={onClose} className="block rounded-md px-3 py-2 text-sm text-secondary hover:bg-surface hover:text-app transition-colors" role="menuitem">Back to site</Link>
           <button type="button" onClick={handleSignOut} className="mt-1 block w-full rounded-md px-3 py-2 text-left text-sm text-secondary hover:bg-surface hover:text-app transition-colors" role="menuitem">
             Sign out
@@ -156,7 +155,7 @@ function ProfileMenu({
         </>
       ) : (
         <>
-          <Link href="/auth/sign-in" onClick={onClose} className="block rounded-md px-3 py-2 text-sm font-medium text-app hover:bg-surface transition-colors" role="menuitem">Sign in</Link>
+          <Link href="/signin" onClick={onClose} className="block rounded-md px-3 py-2 text-sm font-medium text-app hover:bg-surface transition-colors" role="menuitem">Sign in</Link>
           <Link href="/" onClick={onClose} className="block rounded-md px-3 py-2 text-sm text-secondary hover:bg-surface hover:text-app transition-colors" role="menuitem">Back to site</Link>
         </>
       )}

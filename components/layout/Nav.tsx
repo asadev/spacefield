@@ -401,7 +401,7 @@ export default function Nav() {
             {/* Auth link — desktop */}
             {user ? (
               <Link
-                href="/dashboard"
+                href="/"
                 className="flex items-center gap-2"
               >
                 <span className="flex h-7 w-7 items-center justify-center rounded-full border border-app-strong bg-surface-strong text-[0.65rem] font-medium text-app transition-colors overflow-hidden ring-1 ring-white/20">
@@ -423,7 +423,7 @@ export default function Nav() {
               </Link>
             ) : (
               <Link
-                href={activeRegion === "uae" ? "/auth/sign-in" : `/auth/sign-in?next=${encodeURIComponent(homeByRegion[activeRegion])}`}
+                href={activeRegion === "uae" ? "/signin" : `/signin?next=${encodeURIComponent(homeByRegion[activeRegion])}`}
                 className="rounded-md bg-surface-strong border border-app-strong px-3 py-1.5 text-[0.75rem] uppercase tracking-[0.15em] text-app transition-colors duration-300 hover:opacity-90"
               >
                 Sign In
@@ -611,16 +611,16 @@ export default function Nav() {
               >
                 {user ? (
                   <Link
-                    href="/dashboard"
+                    href="/"
                     className={`text-lg uppercase tracking-[0.2em] transition-colors ${
-                      pathname === "/dashboard" ? "text-app" : "text-secondary"
+                      pathname === "/" ? "text-app" : "text-secondary"
                     }`}
                   >
                     Dashboard
                   </Link>
                 ) : (
                   <Link
-                    href={activeRegion === "uae" ? "/auth/sign-in" : `/auth/sign-in?next=${encodeURIComponent(homeByRegion[activeRegion])}`}
+                    href={activeRegion === "uae" ? "/signin" : `/signin?next=${encodeURIComponent(homeByRegion[activeRegion])}`}
                     className={`text-lg uppercase tracking-[0.2em] transition-colors ${
                       pathname.startsWith("/auth") ? "text-app" : "text-secondary"
                     }`}

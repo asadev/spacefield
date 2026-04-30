@@ -25,6 +25,8 @@ interface Props {
   onInstall: (slug: string) => void;
   onUninstall: (slug: string) => void;
   onOpenTool: (slug: string, title: string) => void;
+  canInstall: boolean;
+  canUninstall: boolean;
 }
 
 const ACCENT_BG: Partial<Record<ToolCategoryKey, string>> = {
@@ -59,6 +61,8 @@ export default function AppStore({
   onInstall,
   onUninstall,
   onOpenTool,
+  canInstall,
+  canUninstall,
 }: Props) {
   const [q, setQ] = useState("");
   const [filter, setFilter] = useState<ToolCategoryKey | "all">("all");
@@ -161,11 +165,11 @@ export default function AppStore({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ type: "spring", stiffness: 260, damping: 24 }}
-            className="relative z-10 mx-auto flex h-[min(86vh,760px)] max-w-5xl flex-col overflow-hidden rounded-2xl border border-app bg-app-elevated shadow-2xl"
+            className="sf-glass-window relative z-10 mx-auto flex h-[min(86vh,760px)] max-w-5xl flex-col overflow-hidden rounded-2xl"
             style={{ marginTop: "7vh" }}
           >
             {/* Header */}
-            <div className="flex items-center gap-3 border-b border-app bg-app-elevated px-6 py-4">
+            <div className="sf-glass-titlebar flex items-center gap-3 px-6 py-4">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-surface-strong text-app">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                   <path d={TOOL_ICONS.dots9} />
@@ -190,7 +194,7 @@ export default function AppStore({
             </div>
 
             {/* Search + filters */}
-            <div className="border-b border-app bg-app-elevated px-6 py-3">
+            <div className="border-b border-app bg-app-elevated/70 px-6 py-3 backdrop-blur-xl">
               <input
                 type="text"
                 value={q}
@@ -235,6 +239,8 @@ export default function AppStore({
                         onInstall={() => onInstall(t.slug)}
                         onUninstall={() => onUninstall(t.slug)}
                         onOpen={() => onOpenTool(t.slug, t.title)}
+                        canInstall={canInstall}
+                        canUninstall={canUninstall}
                       />
                     ))}
                   </div>
@@ -259,6 +265,8 @@ export default function AppStore({
                       onInstall={() => onInstall(t.slug)}
                       onUninstall={() => onUninstall(t.slug)}
                       onOpen={() => onOpenTool(t.slug, t.title)}
+                      canInstall={canInstall}
+                      canUninstall={canUninstall}
                     />
                   ))}
                   {tools.length === 0 && (
@@ -289,6 +297,8 @@ interface RowProps {
   onInstall: () => void;
   onUninstall: () => void;
   onOpen: () => void;
+  canInstall: boolean;
+  canUninstall: boolean;
 }
 
 function StoreRow({
@@ -302,7 +312,10 @@ function StoreRow({
   onInstall,
   onUninstall,
   onOpen,
+  canInstall,
+  canUninstall,
 }: RowProps) {
+  const canOpen = availability === "allowed";
   return (
     <div className="flex items-start gap-3 rounded-lg border border-app bg-app p-3 transition-colors hover:border-app-hover">
       {hasAppIcon(slug) ? (
@@ -322,23 +335,32 @@ function StoreRow({
         <div className="mt-2 flex items-center gap-2">
           {installed ? (
             <>
-              <button
-                type="button"
-                onClick={onOpen}
-                className="rounded-md bg-app px-2.5 py-1 text-[0.7rem] font-medium text-app hover:opacity-90 transition-opacity"
-              >
-                Open
-              </button>
-              <button
-                type="button"
-                onClick={onUninstall}
-                className="rounded-md border border-app bg-surface px-2.5 py-1 text-[0.7rem] text-secondary hover:text-app transition-colors"
-              >
-                Uninstall
-              </button>
+              {canOpen ? (
+                <button
+                  type="button"
+                  onClick={onOpen}
+                  className="rounded-md bg-app px-2.5 py-1 text-[0.7rem] font-medium text-app hover:opacity-90 transition-opacity"
+                >
+                  Open
+                </button>
+              ) : (
+                <InstallControl availability={availability} onInstall={onInstall} />
+              )}
+              {canUninstall && (
+                <button
+                  type="button"
+                  onClick={onUninstall}
+                  className="rounded-md border border-app bg-surface px-2.5 py-1 text-[0.7rem] text-secondary hover:text-app transition-colors"
+                >
+                  Uninstall
+                </button>
+              )}
             </>
           ) : (
-            <InstallControl availability={availability} onInstall={onInstall} />
+            <InstallControl
+              availability={canInstall ? availability : "permission_denied"}
+              onInstall={onInstall}
+            />
           )}
         </div>
       </div>
@@ -347,6 +369,7 @@ function StoreRow({
 }
 
 function FeatureRow(props: RowProps) {
+  const canOpen = props.availability === "allowed";
   return (
     <div className="flex items-center gap-3 rounded-xl border border-app bg-app p-4 shadow-card">
       {hasAppIcon(props.slug) ? (
@@ -372,25 +395,35 @@ function FeatureRow(props: RowProps) {
       </div>
       {props.installed ? (
         <div className="flex flex-col items-end gap-1 shrink-0">
-          <button
-            type="button"
-            onClick={props.onOpen}
-            className="rounded-full bg-app px-3 py-1 text-[0.7rem] font-medium text-app hover:opacity-90 transition-opacity"
-          >
-            Open
-          </button>
-          <button
-            type="button"
-            onClick={props.onUninstall}
-            className="text-[0.65rem] text-muted hover:text-app"
-          >
-            Uninstall
-          </button>
+          {canOpen ? (
+            <button
+              type="button"
+              onClick={props.onOpen}
+              className="rounded-full bg-app px-3 py-1 text-[0.7rem] font-medium text-app hover:opacity-90 transition-opacity"
+            >
+              Open
+            </button>
+          ) : (
+            <InstallControl
+              availability={props.availability}
+              onInstall={props.onInstall}
+              variant="featured"
+            />
+          )}
+          {props.canUninstall && (
+            <button
+              type="button"
+              onClick={props.onUninstall}
+              className="text-[0.65rem] text-muted hover:text-app"
+            >
+              Uninstall
+            </button>
+          )}
         </div>
       ) : (
         <div className="shrink-0">
           <InstallControl
-            availability={props.availability}
+            availability={props.canInstall ? props.availability : "permission_denied"}
             onInstall={props.onInstall}
             variant="featured"
           />
@@ -407,7 +440,7 @@ function InstallControl({
   onInstall,
   variant = "row",
 }: {
-  availability: ToolAvailability;
+  availability: ToolAvailability | "permission_denied";
   onInstall: () => void;
   variant?: "row" | "featured";
 }) {
@@ -447,6 +480,17 @@ function InstallControl({
         aria-disabled="true"
       >
         Not enabled for this workspace
+      </span>
+    );
+  }
+
+  if (availability === "permission_denied") {
+    return (
+      <span
+        className={`${base} cursor-not-allowed bg-surface text-muted opacity-80`}
+        aria-disabled="true"
+      >
+        Ask admin to install
       </span>
     );
   }

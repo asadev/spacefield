@@ -263,7 +263,10 @@ export default function AISection({
       const res = await fetch("/api/agent/whatsapp/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: testText.trim() }),
+        body: JSON.stringify({
+          text: testText.trim(),
+          workspace_id: workspaceId,
+        }),
       });
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
@@ -275,7 +278,7 @@ export default function AISection({
     } finally {
       setBusy(false);
     }
-  }, [testText, onError, onSuccess]);
+  }, [testText, workspaceId, onError, onSuccess]);
 
   // ── Telegram ──────────────────────────────────────────────────────
   const onMintTelegram = useCallback(async () => {
@@ -326,7 +329,10 @@ export default function AISection({
       const res = await fetch("/api/agent/telegram/send", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ text: testText.trim() }),
+        body: JSON.stringify({
+          text: testText.trim(),
+          workspace_id: workspaceId,
+        }),
       });
       if (!res.ok) {
         const err = (await res.json().catch(() => ({}))) as { error?: string };
@@ -338,7 +344,7 @@ export default function AISection({
     } finally {
       setBusy(false);
     }
-  }, [testText, onError, onSuccess]);
+  }, [testText, workspaceId, onError, onSuccess]);
 
   // ── Persona ──────────────────────────────────────────────────────
   const onSavePersona = useCallback(async () => {

@@ -70,6 +70,26 @@ function formatPercent(value: number): string {
   return value.toFixed(2) + "%";
 }
 
+function isProperty(value: unknown): value is Property {
+  if (!value || typeof value !== "object") return false;
+  const p = value as Partial<Property>;
+  return (
+    typeof p.id === "string" &&
+    typeof p.name === "string" &&
+    typeof p.area === "string" &&
+    typeof p.type === "string" &&
+    typeof p.purchasePrice === "number" &&
+    typeof p.currentValue === "number" &&
+    typeof p.monthlyRental === "number" &&
+    typeof p.annualServiceCharge === "number" &&
+    typeof p.annualMaintenance === "number" &&
+    typeof p.hasMortgage === "boolean" &&
+    typeof p.monthlyMortgage === "number" &&
+    typeof p.outstandingBalance === "number" &&
+    typeof p.status === "string"
+  );
+}
+
 type SortKey =
   | "name"
   | "area"
@@ -108,6 +128,10 @@ export default function PortfolioTrackerApp(props: NativeAppProps) {
   const [allocationView, setAllocationView] = useState<"area" | "type" | "status">("area");
   const [sortKey, setSortKey] = useState<SortKey>("name");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
+  const [importMessage, setImportMessage] = useState<{
+    kind: "ok" | "err";
+    text: string;
+  } | null>(null);
 
   const donutCanvasRef = useRef<HTMLCanvasElement>(null);
   const performanceCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -181,8 +205,34 @@ export default function PortfolioTrackerApp(props: NativeAppProps) {
       reader.onload = (ev) => {
         try {
           const data = JSON.parse(ev.target?.result as string);
-          if (Array.isArray(data)) setProperties(data);
-        } catch {}
+          if (!Array.isArray(data)) {
+            setImportMessage({
+              kind: "err",
+              text: "Import file must contain an array of properties.",
+            });
+            return;
+          }
+          const valid = data.filter(isProperty);
+          if (valid.length === 0) {
+            setImportMessage({
+              kind: "err",
+              text: `0 properties imported. ${data.length} rows were not valid.`,
+            });
+            return;
+          }
+          setProperties(valid);
+          setImportMessage({
+            kind: "ok",
+            text: `${valid.length} properties imported${
+              valid.length === data.length ? "" : `, ${data.length - valid.length} skipped`
+            }.`,
+          });
+        } catch (err) {
+          setImportMessage({
+            kind: "err",
+            text: err instanceof Error ? err.message : "Invalid JSON file.",
+          });
+        }
       };
       reader.readAsText(file);
     };
@@ -510,7 +560,21 @@ export default function PortfolioTrackerApp(props: NativeAppProps) {
               </p>
             </div>
 
-            <div className={`flex gap-2 items-center ${isMobile ? "w-full" : "flex-wrap"}`}>
+            <div className={`flex gap-2 items-center ${isMobile ? "w-full flex-wrap" : "flex-wrap"}`}>
+              {importMessage && (
+                <span
+                  role="status"
+                  className={`rounded-md border px-2.5 py-1.5 text-[11px] ${
+                    isMobile ? "w-full" : ""
+                  } ${
+                    importMessage.kind === "ok"
+                      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500"
+                      : "border-rose-500/30 bg-rose-500/10 text-rose-500"
+                  }`}
+                >
+                  {importMessage.text}
+                </span>
+              )}
               <button
                 onClick={handleImport}
                 className={`rounded-lg border border-app bg-app-elevated px-3 ${isMobile ? "min-h-[44px] flex-1 text-sm" : "py-1.5 text-xs"} font-medium text-secondary transition hover:border-tool-accent hover:text-app`}

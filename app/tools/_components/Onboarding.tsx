@@ -134,7 +134,7 @@ export default function Onboarding({ open, onComplete }: Props) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 10, scale: 0.97 }}
             transition={{ type: "spring", stiffness: 260, damping: 24 }}
-            className="relative z-10 flex h-[min(86vh,720px)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-app bg-app-elevated shadow-2xl"
+            className="sf-glass-window relative z-10 flex h-[min(86vh,720px)] w-full max-w-3xl flex-col overflow-hidden rounded-2xl"
           >
             <AnimatePresence mode="wait">
               {step === "welcome" && (

@@ -153,7 +153,7 @@ export default function BlogComments({ slug }: { slug: string }) {
       ) : (
         <div className="border border-white/[0.06] bg-white/[0.02] p-5 text-center">
           <p className="text-sm text-gray-500">
-            <a href="/auth/sign-in" className="text-gray-300 underline underline-offset-4 hover:text-white">
+            <a href="/signin" className="text-gray-300 underline underline-offset-4 hover:text-white">
               Sign in
             </a>{" "}
             to leave a comment.

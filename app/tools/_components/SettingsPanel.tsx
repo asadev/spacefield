@@ -19,9 +19,8 @@ import WorkspacesPane from "./WorkspacesPane";
  * hooks (useIconStyle / useDesktopSounds / useActiveWidgets) so we
  * deliberately don't add a new persistence layer here.
  *
- * Hot Corners and Accent Color are scaffolded as local-state
- * placeholders — when those agents land they'll swap in real hooks
- * without changing this surface. */
+ * Accent Color is scaffolded as local state; Hot Corners are wired to
+ * the workspace-scoped desktop preference hooks. */
 
 type SectionId =
   | "profile"
@@ -114,8 +113,7 @@ const ACCENTS: { id: AccentId; label: string; swatch: string }[] = [
   { id: "rose", label: "Rose", swatch: "#e11d48" },
 ];
 
-/* ───────── Hot Corners (scaffolded — will route to real handlers once
- *           the HotCorners agent lands). */
+/* ───────── Hot Corners. */
 
 type CornerAction =
   | "none"
@@ -206,6 +204,7 @@ function isCornerAction(v: unknown): v is CornerAction {
 function saveCornerActions(storageKey: string, corners: Record<CornerId, CornerAction>) {
   try {
     localStorage.setItem(storageKey, JSON.stringify(corners));
+    window.dispatchEvent(new CustomEvent("tools-desktop-hot-corners-changed"));
   } catch {}
 }
 
@@ -356,11 +355,11 @@ export default function SettingsPanel({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ type: "spring", stiffness: 260, damping: 24 }}
-            className="relative z-10 mx-auto flex h-[min(90vh,560px)] w-[min(94vw,720px)] flex-col overflow-hidden rounded-2xl border border-app bg-app-elevated shadow-2xl"
+            className="sf-glass-window relative z-10 mx-auto flex h-[min(90vh,560px)] w-[min(94vw,720px)] flex-col overflow-hidden rounded-2xl"
             style={{ marginTop: "8vh" }}
           >
             {/* Header */}
-            <div className="flex items-center gap-3 border-b border-app bg-app-elevated px-5 py-3">
+            <div className="sf-glass-titlebar flex items-center gap-3 px-5 py-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-surface-strong text-app">
                 <GearIcon size={16} />
               </div>
@@ -736,11 +735,6 @@ function DockPane({
 }: {
   onOpenDockCustomizer: () => void;
 }) {
-  // "Show on hover only" is wired but disabled — the dock is always
-  // visible today; keep the control here so the surface is settled and
-  // we can flip the behavior when it lands.
-  const [hoverOnly, setHoverOnly] = useState(false);
-
   return (
     <div>
       <PaneHeader
@@ -759,16 +753,9 @@ function DockPane({
         label="Show on hover only"
         description="Hide the dock until the cursor reaches the bottom edge. Currently always visible — this toggle is reserved."
       >
-        <div className="flex items-center gap-2">
-          <span className="text-[10px] uppercase tracking-[0.14em] text-faint">
-            Soon
-          </span>
-          <Toggle
-            on={hoverOnly}
-            onChange={() => setHoverOnly((v) => !v)}
-            label="Show on hover only"
-          />
-        </div>
+        <span className="rounded-full border border-app bg-app px-2 py-1 text-[10px] uppercase tracking-[0.14em] text-faint">
+          Coming soon
+        </span>
       </Row>
     </div>
   );
@@ -925,7 +912,7 @@ function HotCornersPane({
     <div>
       <PaneHeader
         title="Hot corners"
-        hint="Trigger an action by sliding the cursor into a screen corner. Wired into preferences — handlers ship with the HotCorners agent."
+        hint="Trigger an action by sliding the cursor into a screen corner."
       />
 
       <Row
@@ -1007,16 +994,9 @@ function KeyboardPane() {
         ))}
       </ul>
 
-      <div className="mt-4 flex justify-end">
-        <PaneButton
-          onClick={() => {
-            // Placeholder — current shortcut catalog is hard-coded in
-            // Desktop.tsx, so "reset" is a no-op until rebinding ships.
-          }}
-        >
-          Reset all
-        </PaneButton>
-      </div>
+      <p className="mt-4 text-right text-[0.68rem] uppercase tracking-[0.14em] text-faint">
+        Default shortcuts active
+      </p>
     </div>
   );
 }

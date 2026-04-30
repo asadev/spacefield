@@ -25,6 +25,34 @@ function bandFor(ratio: number): { label: string; tone: "low" | "mid" | "high" }
   return { label: "At market", tone: "mid" };
 }
 
+function parseCsvLine(line: string): string[] {
+  const out: string[] = [];
+  let cur = "";
+  let inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (inQuote) {
+      if (c === '"' && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else if (c === '"') {
+        inQuote = false;
+      } else {
+        cur += c;
+      }
+    } else if (c === '"') {
+      inQuote = true;
+    } else if (c === ",") {
+      out.push(cur.trim());
+      cur = "";
+    } else {
+      cur += c;
+    }
+  }
+  out.push(cur.trim());
+  return out;
+}
+
 type View = "single" | "bulk";
 
 export default function CompaRatioPage() {
@@ -51,7 +79,7 @@ export default function CompaRatioPage() {
     for (let i = 0; i < lines.length; i++) {
       const line = lines[i];
       if (!line.trim()) continue;
-      const parts = line.split(",").map((p) => p.trim());
+      const parts = parseCsvLine(line);
       if (i === 0 && /name/i.test(parts[0])) continue;
       const name = parts[0] || `Row ${i + 1}`;
       const sal = parseFloat(parts[1]);

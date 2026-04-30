@@ -204,7 +204,7 @@ export default function SavedLayouts({ windows, closeAll, open: openWin }: Props
             exit={{ scale: 0.96, opacity: 0, y: 8 }}
             transition={{ type: "spring", stiffness: 320, damping: 28 }}
             onClick={(e) => e.stopPropagation()}
-            className="w-[440px] max-w-[92vw] overflow-hidden rounded-2xl border border-app bg-app-elevated shadow-2xl"
+            className="sf-glass-window w-[440px] max-w-[92vw] overflow-hidden rounded-2xl"
           >
             <div className="border-b border-app px-5 py-3">
               <div className="text-sm font-semibold text-app">Window layouts</div>

@@ -261,14 +261,14 @@ export default function QuickNote() {
             onClick={handleCancel}
           >
             <motion.div
-              className="w-[min(560px,92vw)] overflow-hidden rounded-2xl border border-app bg-app-elevated shadow-2xl"
+              className="sf-glass-window w-[min(560px,92vw)] overflow-hidden rounded-2xl"
               initial={{ opacity: 0, y: 12, scale: 0.98 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 12, scale: 0.98 }}
               transition={{ duration: 0.14 }}
               onClick={(e) => e.stopPropagation()}
             >
-              <div className="flex items-center justify-between border-b border-app px-4 py-2">
+              <div className="sf-glass-titlebar flex items-center justify-between px-4 py-2">
                 <div className="text-[0.7rem] uppercase tracking-[0.14em] text-muted">
                   Quick Note
                 </div>
@@ -287,7 +287,7 @@ export default function QuickNote() {
                 placeholder="Quick note..."
                 className="block min-h-[220px] w-full resize-none bg-transparent px-4 py-3 text-sm text-app placeholder:text-muted focus:outline-none"
               />
-              <div className="flex items-center justify-between border-t border-app px-3 py-2">
+              <div className="flex items-center justify-between border-t border-app bg-app-elevated/45 px-3 py-2 backdrop-blur-xl">
                 <span className="text-[0.65rem] text-muted">
                   ⌘Enter saves · ESC cancels
                 </span>
@@ -321,7 +321,7 @@ export default function QuickNote() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 16 }}
             transition={{ duration: 0.18 }}
-            className="fixed bottom-24 left-1/2 z-[90] -translate-x-1/2 rounded-md border border-app bg-app-elevated px-3 py-2 text-xs text-app shadow-lg"
+            className="sf-glass-menu fixed bottom-24 left-1/2 z-[90] -translate-x-1/2 rounded-md px-3 py-2 text-xs text-app"
           >
             {toast}
           </motion.div>

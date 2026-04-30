@@ -99,11 +99,11 @@ export default function ShortcutsDialog({ open, onClose }: Props) {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ type: "spring", stiffness: 260, damping: 24 }}
-            className="relative z-10 mx-auto flex h-[min(78vh,680px)] max-w-4xl flex-col overflow-hidden rounded-2xl border border-app bg-app-elevated shadow-2xl"
+            className="sf-glass-window relative z-10 mx-auto flex h-[min(78vh,680px)] max-w-4xl flex-col overflow-hidden rounded-2xl"
             style={{ marginTop: "8vh" }}
           >
             {/* Header */}
-            <div className="flex items-center gap-3 border-b border-app bg-app-elevated px-6 py-4">
+            <div className="sf-glass-titlebar flex items-center gap-3 px-6 py-4">
               <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-tool-accent-soft text-app">
                 <svg
                   width="18"

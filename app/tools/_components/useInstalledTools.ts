@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { TOOLS } from "../_data/tools-list";
 import { useWorkspaceKey, useWorkspaces } from "./useWorkspaces";
+import { useWorkspaceRole } from "./useWorkspaceRole";
 
 const STORAGE_SUFFIX = "tools-desktop-install-v1";
 
@@ -73,7 +74,7 @@ function save(storageKey: string, state: InstallState) {
  * errors — the same RPC is enforced at the tool runtime layer, so a
  * stale or offline client can't actually use a forbidden tool.
  */
-async function checkAvailability(
+export async function checkToolAvailability(
   workspaceId: string,
   slug: string
 ): Promise<ToolAvailability> {
@@ -103,6 +104,7 @@ async function checkAvailability(
 export function useInstalledTools() {
   const STORAGE_KEY = useWorkspaceKey(STORAGE_SUFFIX);
   const { activeId } = useWorkspaces();
+  const { canInstallApps, canUninstallApps } = useWorkspaceRole();
   const [state, setState] = useState<InstallState>(DEFAULT_STATE);
   const [hydrated, setHydrated] = useState(false);
 
@@ -124,7 +126,17 @@ export function useInstalledTools() {
   const install = useCallback(
     (slug: string) => {
       void (async () => {
-        const verdict = await checkAvailability(activeId, slug);
+        if (!canInstallApps) {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(
+              new CustomEvent("tools:install-blocked", {
+                detail: { slug, reason: "permission_denied" },
+              })
+            );
+          }
+          return;
+        }
+        const verdict = await checkToolAvailability(activeId, slug);
         if (verdict !== "allowed") {
           if (typeof window !== "undefined") {
             window.dispatchEvent(
@@ -143,20 +155,35 @@ export function useInstalledTools() {
         });
       })();
     },
-    [STORAGE_KEY, activeId]
+    [STORAGE_KEY, activeId, canInstallApps]
   );
 
-  const uninstall = useCallback((slug: string) => {
-    setState((prev) => {
-      if (!prev.installed.includes(slug)) return prev;
-      const next = {
-        ...prev,
-        installed: prev.installed.filter((s) => s !== slug),
-      };
-      save(STORAGE_KEY, next);
-      return next;
-    });
-  }, [STORAGE_KEY]);
+  const uninstall = useCallback(
+    (slug: string) => {
+      void (async () => {
+        if (!canUninstallApps) {
+          if (typeof window !== "undefined") {
+            window.dispatchEvent(
+              new CustomEvent("tools:uninstall-blocked", {
+                detail: { slug, reason: "permission_denied" },
+              })
+            );
+          }
+          return;
+        }
+        setState((prev) => {
+          if (!prev.installed.includes(slug)) return prev;
+          const next = {
+            ...prev,
+            installed: prev.installed.filter((s) => s !== slug),
+          };
+          save(STORAGE_KEY, next);
+          return next;
+        });
+      })();
+    },
+    [STORAGE_KEY, canUninstallApps]
+  );
 
   const completeOnboarding = useCallback(
     (profession: string, installed: string[]) => {

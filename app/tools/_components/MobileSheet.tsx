@@ -98,13 +98,13 @@ export default function MobileSheet({
             onDragEnd={(_: unknown, info: PanInfo) => {
               if (info.offset.y > 80 || info.velocity.y > 600) onClose();
             }}
-            className="absolute inset-x-0 bottom-0 overflow-y-auto rounded-t-[24px] border-t border-app bg-app-elevated shadow-2xl"
+            className="sf-glass-window absolute inset-x-0 bottom-0 overflow-y-auto rounded-t-[24px]"
             style={{
               maxHeight,
               paddingBottom: "env(safe-area-inset-bottom, 0px)",
             }}
           >
-            <div className="sticky top-0 z-10 flex flex-col items-center bg-app-elevated/95 pt-2 backdrop-blur">
+            <div className="sf-glass-titlebar sticky top-0 z-10 flex flex-col items-center pt-2">
               <div
                 className="h-1 w-10 rounded-full bg-app/30"
                 aria-hidden="true"

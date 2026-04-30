@@ -588,7 +588,7 @@ export default function AmbientSounds() {
           type="button"
           onClick={() => setOpen(true)}
           aria-label="Ambient sounds"
-          className="fixed bottom-24 right-4 z-[55] flex h-10 w-10 items-center justify-center rounded-full border border-app bg-app-elevated/90 text-secondary shadow-lg backdrop-blur-xl transition-colors hover:text-app"
+          className="sf-glass fixed bottom-24 right-4 z-[55] flex h-10 w-10 items-center justify-center rounded-full text-secondary transition-colors hover:text-app"
         >
           <svg
             width="18"
@@ -613,7 +613,7 @@ export default function AmbientSounds() {
         <div
           role="dialog"
           aria-label="Ambient sounds"
-          className="fixed bottom-24 right-4 z-[58] w-[300px] rounded-2xl border border-app bg-app-elevated/95 p-4 shadow-2xl backdrop-blur-xl"
+          className="sf-glass-menu fixed bottom-24 right-4 z-[58] w-[300px] rounded-2xl p-4"
         >
           <div className="mb-3 flex items-center justify-between">
             <div>

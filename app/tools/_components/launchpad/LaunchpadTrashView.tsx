@@ -212,7 +212,7 @@ export default function LaunchpadTrashView({
             if (e.target === e.currentTarget) setConfirmingEmpty(false);
           }}
         >
-          <div className="w-full max-w-sm rounded-2xl border border-app bg-app-elevated/90 p-5 shadow-2xl backdrop-blur-xl">
+          <div className="sf-glass-window w-full max-w-sm rounded-2xl p-5">
             <h3 className="text-base font-bold text-app">Empty Trash?</h3>
             <p className="mt-1 text-xs text-secondary">
               This permanently removes every file currently in the Trash and

@@ -18,7 +18,10 @@ import NotificationCenter from "./NotificationCenter";
 import Onboarding from "./Onboarding";
 import SnapPreview from "./SnapPreview";
 import TopBar from "./TopBar";
-import { useInstalledTools } from "./useInstalledTools";
+import {
+  checkToolAvailability,
+  useInstalledTools,
+} from "./useInstalledTools";
 import { useDockOrder } from "./useDockOrder";
 import DockCustomizer from "./DockCustomizer";
 import IconStylePicker from "./IconStylePicker";
@@ -134,6 +137,7 @@ function NoWorkspacesScreen() {
 }
 
 function DesktopApp() {
+  const { activeId } = useWorkspaces();
   const {
     windows,
     hydrated: windowsHydrated,
@@ -264,7 +268,7 @@ function DesktopApp() {
   const [signInOpen, setSignInOpen] = useState(false);
   const { user: authUser, signOut: authSignOut } = useAuth();
   useWorkspaceSync();
-  const { canAdmin } = useWorkspaceRole();
+  const { canInstallApps, canUninstallApps } = useWorkspaceRole();
   const teamWorkspace = useTeamWorkspace();
   const teamWorkspaceId =
     teamWorkspace.current.kind === "team" ? teamWorkspace.current.id : null;
@@ -437,25 +441,48 @@ function DesktopApp() {
       sounds.tap();
       return;
     }
-    // Auto-install if user opens a tool from the Store
-    if (!isInstalled(slug)) install(slug);
-    // Close any open modal/overlay so the new window comes to the front
-    // instead of opening behind Settings / Launchpad / AppStore /
-    // Notifications / Mission Control / Wallpaper / etc.
-    setSettingsOpen(false);
-    setLaunchpadOpen(false);
-    setStoreOpen(false);
-    setNotificationsOpen(false);
-    setMissionControlOpen(false);
-    setDockCustomizerOpen(false);
-    setWidgetGalleryOpen(false);
-    setWallpaperPickerOpen(false);
-    setIconStylePickerOpen(false);
-    setSignInOpen(false);
-    setCreateWorkspaceOpen(false);
-    open(slug, title, params);
-    recordRecent({ kind: "tool", slug });
-    sounds.tap();
+    void (async () => {
+      const verdict = await checkToolAvailability(activeId, slug);
+      if (verdict !== "allowed") {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("tools:install-blocked", {
+              detail: { slug, reason: verdict },
+            })
+          );
+        }
+        return;
+      }
+      if (!isInstalled(slug) && !canInstallApps) {
+        if (typeof window !== "undefined") {
+          window.dispatchEvent(
+            new CustomEvent("tools:install-blocked", {
+              detail: { slug, reason: "permission_denied" },
+            })
+          );
+        }
+        return;
+      }
+      // Auto-install if user opens a tool from the Store or a cross-app CTA.
+      if (!isInstalled(slug)) install(slug);
+      // Close any open modal/overlay so the new window comes to the front
+      // instead of opening behind Settings / Launchpad / AppStore /
+      // Notifications / Mission Control / Wallpaper / etc.
+      setSettingsOpen(false);
+      setLaunchpadOpen(false);
+      setStoreOpen(false);
+      setNotificationsOpen(false);
+      setMissionControlOpen(false);
+      setDockCustomizerOpen(false);
+      setWidgetGalleryOpen(false);
+      setWallpaperPickerOpen(false);
+      setIconStylePickerOpen(false);
+      setSignInOpen(false);
+      setCreateWorkspaceOpen(false);
+      open(slug, title, params);
+      recordRecent({ kind: "tool", slug });
+      sounds.tap();
+    })();
   };
 
   // Shell API exposed to native apps via DesktopShellContext. openApp lets
@@ -665,7 +692,7 @@ function DesktopApp() {
         onOpenProfile={openProfile}
         onCreateWorkspace={() => setCreateWorkspaceOpen(true)}
         onOpenControlCenter={() => setControlCenterOpen((v) => !v)}
-        canAdmin={canAdmin}
+        canAdmin={canInstallApps || canUninstallApps}
       />
 
       {/* Onboarding takes priority when incomplete */}
@@ -741,8 +768,8 @@ function DesktopApp() {
         open={launchpadOpen}
         onClose={() => setLaunchpadOpen(false)}
         onOpenTool={handleOpenTool}
-        onUninstall={handleUninstall}
-        onStore={openStore}
+        onUninstall={canUninstallApps ? handleUninstall : undefined}
+        onStore={canInstallApps || canUninstallApps ? openStore : undefined}
         items={installedTools}
         onAppDroppedOnLaunchpad={moveAppToLaunchpad}
         onConnect={openWorkspacesSection}
@@ -760,6 +787,8 @@ function DesktopApp() {
         onInstall={handleInstall}
         onUninstall={handleUninstall}
         onOpenTool={handleOpenTool}
+        canInstall={canInstallApps}
+        canUninstall={canUninstallApps}
       />
 
       {/* Dock — always visible at the back layer (z-[1]). Any window covers it. */}
@@ -767,10 +796,10 @@ function DesktopApp() {
         pinned={dockPinned}
         windows={windows}
         onLaunchpad={openLaunchpad}
-        onStore={openStore}
+        onStore={canInstallApps || canUninstallApps ? openStore : undefined}
         onOpenTool={handleOpenTool}
         onFocusWindow={focus}
-        onUninstall={handleUninstall}
+        onUninstall={canUninstallApps ? handleUninstall : undefined}
         onAppDroppedOnDock={moveAppToDock}
       />
 

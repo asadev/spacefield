@@ -4,9 +4,9 @@
  * LeadSourcesAdmin — settings tab for plugging external lead sources
  * directly into the CRM.
  *
- * v1 ships three universal connectors (Webhook / Form / CSV); the rest
- * are stubbed as "Coming soon" cards backed by the same `kind` enum so
- * they can be enabled later without a migration.
+ * v1 ships three universal connectors (Webhook / Form / CSV). Roadmap
+ * connector kinds remain in the enum, but the picker only shows live
+ * options so the active flow never lands on a stub.
  *
  * Layout
  *   [Header: name + Add source]
@@ -497,25 +497,18 @@ function ConnectorPicker({
   return (
     <ModalShell title="Add a lead source" onClose={onClose}>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-        {CONNECTORS.map((c) => (
+        {CONNECTORS.filter((c) => c.available).map((c) => (
           <button
             key={c.kind}
             type="button"
-            disabled={!c.available}
             onClick={() => onPick(c.kind)}
-            className="flex flex-col items-start gap-1 rounded-md border border-app bg-app-elevated p-3 text-left transition-colors hover:border-tool-accent disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:border-app"
+            className="flex flex-col items-start gap-1 rounded-md border border-app bg-app-elevated p-3 text-left transition-colors hover:border-tool-accent"
           >
             <div className="flex w-full items-center justify-between gap-2">
               <span className="text-sm font-medium text-app">{c.label}</span>
-              {c.available ? (
-                <span className="rounded-md bg-tool-accent-soft px-1.5 py-0.5 font-mono text-[0.55rem] uppercase tracking-[0.14em] text-tool-accent">
-                  Available
-                </span>
-              ) : (
-                <span className="rounded-md border border-app px-1.5 py-0.5 font-mono text-[0.55rem] uppercase tracking-[0.14em] text-faint">
-                  Phase 5
-                </span>
-              )}
+              <span className="rounded-md bg-tool-accent-soft px-1.5 py-0.5 font-mono text-[0.55rem] uppercase tracking-[0.14em] text-tool-accent">
+                Available
+              </span>
             </div>
             <p className="text-xs text-secondary">{c.description}</p>
           </button>
@@ -540,10 +533,10 @@ function ConnectorModal(props: {
   if (props.kind === "form") return <FormModal {...props} kind="form" />;
   if (props.kind === "csv") return <CsvModal {...props} kind="csv" />;
   return (
-    <ModalShell title="Coming soon" onClose={props.onClose}>
+    <ModalShell title="Connector unavailable" onClose={props.onClose}>
       <p className="text-sm text-secondary">
-        This connector ships in Phase 5. Use Webhook for now — most
-        provider APIs can POST to a generic endpoint.
+        This connector is not enabled in the current build. Use Webhook,
+        Public form, or CSV import for active lead-source workflows.
       </p>
     </ModalShell>
   );
@@ -1533,4 +1526,3 @@ function ModalShell({
     </div>
   );
 }
-

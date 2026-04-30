@@ -17,6 +17,76 @@ const nextConfig: NextConfig = {
   async redirects() {
     return [
       {
+        source: '/auth/sign-in',
+        destination: '/signin',
+        permanent: false,
+      },
+      {
+        source: '/dashboard',
+        destination: '/',
+        permanent: false,
+      },
+      {
+        source: '/dashboard/:path*',
+        destination: '/',
+        permanent: false,
+      },
+      {
+        source: '/network',
+        destination: '/contact',
+        permanent: false,
+      },
+      {
+        source: '/network/apply',
+        destination: '/contact',
+        permanent: false,
+      },
+      {
+        source: '/community/events',
+        destination: '/',
+        permanent: false,
+      },
+      {
+        source: '/leaderboard',
+        destination: '/',
+        permanent: false,
+      },
+      {
+        source: '/games',
+        destination: '/',
+        permanent: false,
+      },
+      {
+        source: '/games/:path*',
+        destination: '/',
+        permanent: false,
+      },
+      {
+        source: '/learn',
+        destination: '/solutions/tools',
+        permanent: false,
+      },
+      {
+        source: '/learn/:path*',
+        destination: '/solutions/tools',
+        permanent: false,
+      },
+      {
+        source: '/market',
+        destination: '/tools/market-pulse',
+        permanent: false,
+      },
+      {
+        source: '/blog',
+        destination: '/about',
+        permanent: false,
+      },
+      {
+        source: '/tools/what-can-i-afford',
+        destination: '/tools/affordability',
+        permanent: true,
+      },
+      {
         // (Files Manager retirement, Round D) The standalone tool route
         // is gone — the Launchpad covers every Files Manager surface
         // (upload, trash, rename, tags, share, preview, storage bar).

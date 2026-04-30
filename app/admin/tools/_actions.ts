@@ -58,9 +58,12 @@ export async function setTierAllowedTools(
     // left empty in the DB and treated as "everything not disabled" via
     // the empty-list compat default — admin can opt them in explicitly
     // if they want to constrain.
+    const checkedTierIds = formData
+      .getAll("tier_id")
+      .map((v) => String(v).trim())
+      .filter(Boolean);
     const wantedSet = new Set(
-      tierIdsRaw
-        .split(",")
+      (checkedTierIds.length > 0 ? checkedTierIds : tierIdsRaw.split(","))
         .map((s) => s.trim())
         .filter(Boolean)
     );

@@ -225,7 +225,7 @@ function MobileNavBar({
 }) {
   return (
     <div
-      className="flex items-center justify-between border-b border-app bg-app-elevated/95 px-4 backdrop-blur"
+      className="sf-glass-titlebar flex items-center justify-between px-4"
       style={{ paddingTop: "env(safe-area-inset-top, 12px)", height: "calc(56px + env(safe-area-inset-top, 0px))" }}
     >
       <button
@@ -256,7 +256,7 @@ function MobileNavBar({
 
 function SectionGroup({ children }: { children: ReactNode }) {
   return (
-    <div className="mb-4 overflow-hidden rounded-2xl border border-app bg-app-elevated divide-y divide-[color:var(--border)]">
+    <div className="sf-glass mb-4 overflow-hidden rounded-2xl divide-y divide-[color:var(--border)]">
       {children}
     </div>
   );

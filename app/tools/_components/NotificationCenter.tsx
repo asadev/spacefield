@@ -185,7 +185,7 @@ export default function NotificationCenter({ open, onClose }: Props) {
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 380, opacity: 0 }}
             transition={{ type: "spring", stiffness: 340, damping: 32 }}
-            className="absolute right-0 top-8 flex h-[calc(100dvh-2rem)] w-[360px] max-w-[92vw] flex-col border-l border-app bg-app-elevated/85 shadow-2xl backdrop-blur-2xl"
+            className="sf-glass-window absolute right-0 top-8 flex h-[calc(100dvh-2rem)] w-[360px] max-w-[92vw] flex-col border-l"
             aria-label="Notifications"
           >
             {/* Header */}

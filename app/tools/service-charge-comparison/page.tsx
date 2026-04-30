@@ -945,7 +945,7 @@ function ServiceChargeComparisonInner() {
               Full community report → Neighborhood Report
             </Link>
             <Link
-              href="/tools/what-can-i-afford"
+              href="/tools/affordability"
               className="inline-flex items-center gap-2 text-[0.7rem] uppercase tracking-[0.15em] text-muted transition-colors hover:text-tool-accent"
             >
               <span className="h-px w-4 bg-tool-accent/70" />

@@ -52,7 +52,10 @@ export { BottomSheet, SheetList, SheetRow };
 import { useAuth } from "./useAuth";
 import { useDockBadges } from "./useDockBadges";
 import { useDockOrder } from "./useDockOrder";
-import { useInstalledTools } from "./useInstalledTools";
+import {
+  checkToolAvailability,
+  useInstalledTools,
+} from "./useInstalledTools";
 import { usePendingInvites } from "./usePendingInvites";
 import { useWindowManager, type WindowState } from "./useWindowManager";
 import { useWorkspaces } from "./useWorkspaces";
@@ -78,7 +81,7 @@ const EASE = [0.25, 0.46, 0.45, 0.94] as const;
 export default function MobileShell() {
   const { user, signOut } = useAuth();
   const { workspaces, activeId, switchWorkspace } = useWorkspaces();
-  const { canAdmin } = useWorkspaceRole();
+  const { canInstallApps, canUninstallApps } = useWorkspaceRole();
   const { resolved } = useTheme();
   // Pending workspace invites — drives the red dot on the status-bar bell.
   const { count: pendingInviteCount, refresh: refreshPendingInvites } =
@@ -166,19 +169,40 @@ export default function MobileShell() {
 
   const handleOpenTool = useCallback(
     (slug: string, title: string, params?: Record<string, unknown>) => {
-      if (!isInstalled(slug)) install(slug);
-      // Close any open sheet so the new app comes to the front.
-      setSettingsOpen(false);
-      setNotificationsOpen(false);
-      setControlCenterOpen(false);
-      setAppSwitcherOpen(false);
-      setAllAppsOpen(false);
-      setUserMenuOpen(false);
-      setWorkspaceMenuOpen(false);
-      setLaunchpadOpen(false);
-      open(slug, title, params);
+      void (async () => {
+        const verdict = await checkToolAvailability(activeId, slug);
+        if (verdict !== "allowed") {
+          window.dispatchEvent(
+            new CustomEvent("tools:install-blocked", {
+              detail: { slug, reason: verdict },
+            })
+          );
+          return;
+        }
+        if (!isInstalled(slug)) {
+          if (!canInstallApps) {
+            window.dispatchEvent(
+              new CustomEvent("tools:install-blocked", {
+                detail: { slug, reason: "permission_denied" },
+              })
+            );
+            return;
+          }
+          install(slug);
+        }
+        // Close any open sheet so the new app comes to the front.
+        setSettingsOpen(false);
+        setNotificationsOpen(false);
+        setControlCenterOpen(false);
+        setAppSwitcherOpen(false);
+        setAllAppsOpen(false);
+        setUserMenuOpen(false);
+        setWorkspaceMenuOpen(false);
+        setLaunchpadOpen(false);
+        open(slug, title, params);
+      })();
     },
-    [isInstalled, install, open]
+    [activeId, canInstallApps, isInstalled, install, open]
   );
 
   // Shell API — same shape native apps already expect on desktop. Crucially
@@ -275,7 +299,7 @@ export default function MobileShell() {
           <MobileHome
             tools={installedTools}
             onOpenTool={handleOpenTool}
-            onUninstall={uninstall}
+            onUninstall={canUninstallApps ? uninstall : undefined}
             onAllApps={() => setAllAppsOpen(true)}
           />
         )}
@@ -319,10 +343,11 @@ export default function MobileShell() {
           open={allAppsOpen}
           installed={installed}
           onInstall={install}
-          onUninstall={uninstall}
+          onUninstall={canUninstallApps ? uninstall : undefined}
           onOpenTool={handleOpenTool}
           onClose={() => setAllAppsOpen(false)}
-          canAdmin={canAdmin}
+          canInstall={canInstallApps}
+          canUninstall={canUninstallApps}
         />
 
         {/* App switcher — open windows as horizontally-scrolling cards */}
@@ -433,11 +458,15 @@ export default function MobileShell() {
           open={launchpadOpen}
           onClose={() => setLaunchpadOpen(false)}
           onOpenTool={handleOpenTool}
-          onUninstall={uninstall}
-          onStore={() => {
-            setLaunchpadOpen(false);
-            setAllAppsOpen(true);
-          }}
+          onUninstall={canUninstallApps ? uninstall : undefined}
+          onStore={
+            canInstallApps || canUninstallApps
+              ? () => {
+                  setLaunchpadOpen(false);
+                  setAllAppsOpen(true);
+                }
+              : undefined
+          }
           items={installedTools}
           onConnect={() => {
             setLaunchpadOpen(false);
@@ -490,7 +519,7 @@ function MobileStatusBar({
 
   return (
     <div
-      className="pointer-events-auto fixed inset-x-0 top-0 z-30 flex items-center justify-between px-4 text-app"
+      className="sf-glass-bar pointer-events-auto fixed inset-x-0 top-0 z-30 flex items-center justify-between px-4 text-app"
       style={{ height: STATUS_BAR_HEIGHT }}
     >
       <span className="text-[13px] font-semibold tabular-nums">{time}</span>
@@ -592,7 +621,7 @@ function MobileHome({
 }: {
   tools: ReturnType<typeof useInstalledTools>["installedTools"];
   onOpenTool: (slug: string, title: string) => void;
-  onUninstall: (slug: string) => void;
+  onUninstall?: (slug: string) => void;
   onAllApps: () => void;
 }) {
   const [page, setPage] = useState(0);
@@ -682,7 +711,7 @@ function MobileHome({
                 }}
                 onPressStart={() => startEditing()}
                 onPressEnd={cancelEditing}
-                onUninstall={() => onUninstall(t.slug)}
+                onUninstall={onUninstall ? () => onUninstall(t.slug) : undefined}
               />
             ))}
             {/* Empty state on first page when no tools installed */}
@@ -753,7 +782,7 @@ function HomeIcon({
   onTap: () => void;
   onPressStart: () => void;
   onPressEnd: () => void;
-  onUninstall: () => void;
+  onUninstall?: () => void;
 }) {
   const useLauncher = hasAppIcon(slug);
   return (
@@ -791,7 +820,7 @@ function HomeIcon({
             <path d={TOOL_ICONS[iconKey] ?? TOOL_ICONS.home} />
           </svg>
         )}
-        {editing && (
+        {editing && onUninstall && (
           <button
             type="button"
             onClick={(e) => {
@@ -846,7 +875,7 @@ function MobileDock({
         paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}
     >
-      <div className="pointer-events-auto mx-3 mb-4 flex w-full max-w-md items-center justify-around gap-2 rounded-[28px] border border-app bg-app-elevated/90 px-3 py-2 shadow-2xl backdrop-blur-xl">
+      <div className="sf-glass-strong pointer-events-auto mx-3 mb-4 flex w-full max-w-md items-center justify-around gap-2 rounded-[28px] px-3 py-2">
         {tools.map((t) => (
           <DockIcon
             key={t.slug}
@@ -1277,15 +1306,17 @@ function AllAppsSheet({
   onUninstall,
   onOpenTool,
   onClose,
-  canAdmin,
+  canInstall,
+  canUninstall,
 }: {
   open: boolean;
   installed: string[];
   onInstall: (slug: string) => void;
-  onUninstall: (slug: string) => void;
+  onUninstall?: (slug: string) => void;
   onOpenTool: (slug: string, title: string) => void;
   onClose: () => void;
-  canAdmin: boolean;
+  canInstall: boolean;
+  canUninstall: boolean;
 }) {
   const [q, setQ] = useState("");
 
@@ -1321,7 +1352,7 @@ function AllAppsSheet({
                   if (isOn) {
                     onOpenTool(t.slug, t.title);
                     onClose();
-                  } else if (canAdmin) {
+                  } else if (canInstall) {
                     onInstall(t.slug);
                   }
                 }}
@@ -1345,7 +1376,7 @@ function AllAppsSheet({
                     <path d={TOOL_ICONS[t.icon] ?? TOOL_ICONS.home} />
                   </svg>
                 )}
-                {!isOn && canAdmin && (
+                {!isOn && canInstall && (
                   <span className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full bg-app-elevated text-app shadow ring-1 ring-app">
                     <svg
                       width="10"
@@ -1366,7 +1397,7 @@ function AllAppsSheet({
               <span className="line-clamp-1 max-w-[68px] text-center text-[10px] text-app">
                 {t.title}
               </span>
-              {isOn && (
+              {isOn && canUninstall && onUninstall && (
                 <button
                   type="button"
                   onClick={() => onUninstall(t.slug)}
