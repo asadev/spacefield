@@ -23,6 +23,7 @@ Available skill ids and what they cover:
 - crm.activities: tasks, calls, meetings, emails
 - files: workspace file search and meta
 - boards: notion-like database boards
+- apps: Spacefield desktop apps, Tool Store, installed apps, app descriptions, Market Pulse dashboard/tool data
 - meta: help, balance, "what can you do"
 `.trim();
 
@@ -43,6 +44,8 @@ Rules:
 - "simple" = one skill, one tool call, deterministic.
 - "complex" = multiple steps, multiple tools, planning needed.
 - "off_topic" = not about the workspace. Set suggested_reply to a friendly redirect.
+- Questions about Spacefield itself, installed apps, the App Store/Tool Store, available tools, app descriptions, or Market Pulse are IN SCOPE. Route them to apps and/or meta; do not mark them off_topic.
+- Short in-app questions like "any new app installed?" usually refer to the Spacefield desktop. Route to apps.
 - Pick the FEWEST skills that could plausibly handle the request. Empty array is allowed for greetings.
 - Greetings, thanks, "hi", "what can you do" → intent="meta", skills=["meta"], complexity="simple".`;
 

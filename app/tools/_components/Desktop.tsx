@@ -893,7 +893,10 @@ function DesktopApp() {
        *  finish setup without a popup in their face. Requires a team
        *  workspace selection (the dispatch endpoint reads workspace_id). */}
       {windowsHydrated && onboarded && teamWorkspaceId && (
-        <AgentChatLauncher workspaceId={teamWorkspaceId} />
+        <AgentChatLauncher
+          workspaceId={teamWorkspaceId}
+          installedAppSlugs={installed}
+        />
       )}
 
       {/* Ambient sound mixer — floating button + panel. AudioContext is

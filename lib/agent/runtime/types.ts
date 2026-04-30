@@ -52,6 +52,20 @@ export interface UserContext {
   user: User;
   /** Channel the request came in on, for reply formatting heuristics. */
   channel: IncomingChannel;
+  /** Ephemeral UI state sent by the in-app client. Never persisted. */
+  clientContext?: AgentClientContext;
+}
+
+export interface AgentClientContext {
+  /** Tool slugs installed in the caller's current browser workspace. */
+  installedApps?: string[];
+  /** Tool slugs currently open in windows, when the client has them. */
+  openApps?: string[];
+  /** Current app slug/title, when the chat is launched from a specific app. */
+  activeApp?: {
+    slug?: string;
+    title?: string;
+  } | null;
 }
 
 export type JsonSchema = Record<string, unknown>;

@@ -9,6 +9,7 @@
  *      adding new skills so the classifier knows when to route to it.
  */
 
+import { appsSkill } from "./apps";
 import { boardsSkill } from "./boards";
 import { crmActivitiesSkill } from "./crm-activities";
 import { crmCompaniesSkill } from "./crm-companies";
@@ -35,6 +36,7 @@ export const ALL_SKILLS: SkillDefinition[] = [
   crmActivitiesSkill,
   filesSkill,
   boardsSkill,
+  appsSkill,
   metaSkill,
 ];
 

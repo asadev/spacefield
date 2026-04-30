@@ -94,6 +94,28 @@ function pickBucket(complexity: "simple" | "complex" | "off_topic"): "quick" | "
   return complexity === "complex" ? "deep" : "quick";
 }
 
+function isLikelySpacefieldProductQuestion(
+  text: string,
+  channel: IncomingMessage["channel"],
+  scope: DispatchScope
+): boolean {
+  const q = text.toLowerCase();
+  const productWords =
+    /\b(spacefield|workspace|app|apps|installed|install|uninstall|tool|tools|store|market pulse|market snapshot|dashboard|crm|files?|boards?)\b/;
+  if (!productWords.test(q)) return false;
+  return (
+    channel === "in_app" ||
+    scope !== null ||
+    /\b(spacefield|workspace|crm|files?|boards?|market pulse)\b/.test(q)
+  );
+}
+
+function isLikelyAppsQuestion(text: string): boolean {
+  return /\b(app|apps|installed|install|uninstall|tool|tools|store|market pulse|market snapshot|dashboard)\b/.test(
+    text.toLowerCase()
+  );
+}
+
 /** Restrict the skill catalog for a per-app scope. Always keeps `meta`. */
 function applyScope(
   skills: SkillDefinition[],
@@ -231,6 +253,29 @@ export async function dispatch(
   }
 
   const classification = await classify(message.text, history);
+  let classified = classification.result;
+  if (
+    isLikelyAppsQuestion(message.text) &&
+    classified.complexity !== "off_topic" &&
+    !classified.skills.includes("apps")
+  ) {
+    classified = {
+      ...classified,
+      skills: [...new Set([...classified.skills, "apps"])],
+    };
+  }
+  if (
+    classified.complexity === "off_topic" &&
+    isLikelySpacefieldProductQuestion(message.text, channel, scope)
+  ) {
+    classified = {
+      ...classified,
+      complexity: "simple",
+      requires_clarification: false,
+      suggested_reply: undefined,
+      skills: [...new Set([...classified.skills, "apps", "meta"])],
+    };
+  }
   usage.push({
     bucket: "quick",
     tokens: classification.tokens,
@@ -250,16 +295,16 @@ export async function dispatch(
   );
 
   // 2) Off-topic short-circuit.
-  if (classification.result.complexity === "off_topic") {
+  if (classified.complexity === "off_topic") {
     const reply =
-      classification.result.suggested_reply ??
+      classified.suggested_reply ??
       "I'm built for your Spacefield workspace — try 'show my pipeline' or 'what can you do'.";
     await appendHistory(ctx, channel, message.text, reply);
     return { reply, usage, creditUsed: totalDebit(usage) };
   }
 
   // 3) Bucket budget pre-check for the heavy call we're about to make.
-  const bucket = pickBucket(classification.result.complexity);
+  const bucket = pickBucket(classified.complexity);
   if (bucket === "deep") {
     const deepOk = await hasBudget(
       ctx.supabase,
@@ -271,7 +316,7 @@ export async function dispatch(
     if (!deepOk) {
       // Fall back to executor — better a partial answer than nothing.
       const skills = applyScope(
-        getSkillsByIds(classification.result.skills),
+        getSkillsByIds(classified.skills),
         scope
       );
       const exec = await runExecutor(message.text, history, skills, ctx, {
@@ -321,7 +366,7 @@ export async function dispatch(
   }
 
   // 4) Run the appropriate model branch.
-  const skills = applyScope(getSkillsByIds(classification.result.skills), scope);
+  const skills = applyScope(getSkillsByIds(classified.skills), scope);
   const branch =
     bucket === "deep"
       ? await runOrchestrator(message.text, history, skills, ctx, {

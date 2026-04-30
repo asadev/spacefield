@@ -7,7 +7,7 @@
  *
  * Body:
  *   { workspace_id, message, scope?: 'crm'|'files'|'boards'|null,
- *     conversation_id?: string }
+ *     conversation_id?: string, client_context?: { installed_apps?: string[] } }
  *
  * Returns the dispatch result, including any pending-approval flag the
  * UI can render as a "[Confirm] [Cancel]" callout.
@@ -17,7 +17,12 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { dispatch } from "@/lib/agent/runtime/dispatcher";
-import type { DispatchScope, Tier, UserContext } from "@/lib/agent/runtime/types";
+import type {
+  AgentClientContext,
+  DispatchScope,
+  Tier,
+  UserContext,
+} from "@/lib/agent/runtime/types";
 
 export const runtime = "nodejs";
 // Hybrid runtime can chain classifier → orchestrator → executor →
@@ -31,6 +36,41 @@ interface DispatchBody {
   message?: string;
   scope?: DispatchScope;
   conversation_id?: string;
+  client_context?: unknown;
+}
+
+function stringList(value: unknown, max = 120): string[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  return value
+    .filter((v): v is string => typeof v === "string")
+    .map((v) => v.trim())
+    .filter(Boolean)
+    .slice(0, max);
+}
+
+function sanitizeClientContext(value: unknown): AgentClientContext | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const obj = value as Record<string, unknown>;
+  const active =
+    obj.active_app && typeof obj.active_app === "object"
+      ? (obj.active_app as Record<string, unknown>)
+      : null;
+  return {
+    installedApps: stringList(obj.installed_apps),
+    openApps: stringList(obj.open_apps, 40),
+    activeApp: active
+      ? {
+          slug:
+            typeof active.slug === "string"
+              ? active.slug.slice(0, 120)
+              : undefined,
+          title:
+            typeof active.title === "string"
+              ? active.title.slice(0, 160)
+              : undefined,
+        }
+      : null,
+  };
 }
 
 export async function POST(req: NextRequest) {
@@ -108,6 +148,7 @@ export async function POST(req: NextRequest) {
     supabase,
     user,
     channel: "in_app",
+    clientContext: sanitizeClientContext(body.client_context),
   };
 
   try {

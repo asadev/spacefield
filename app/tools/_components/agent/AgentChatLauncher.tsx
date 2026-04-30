@@ -19,9 +19,13 @@ interface PersonaBody {
 
 interface Props {
   workspaceId: string;
+  installedAppSlugs?: string[];
 }
 
-export default function AgentChatLauncher({ workspaceId }: Props) {
+export default function AgentChatLauncher({
+  workspaceId,
+  installedAppSlugs = [],
+}: Props) {
   const [open, setOpen] = useState(false);
   const [botName, setBotName] = useState("Assistant");
 
@@ -93,6 +97,7 @@ export default function AgentChatLauncher({ workspaceId }: Props) {
         open={open}
         onClose={() => setOpen(false)}
         workspaceId={workspaceId}
+        installedAppSlugs={installedAppSlugs}
         botName={botName}
         initialPosition={{ x: 24, y: 96 }}
       />

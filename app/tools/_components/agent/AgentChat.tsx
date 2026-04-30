@@ -45,6 +45,7 @@ interface Props {
   onClose: () => void;
   workspaceId: string;
   scope?: AgentChatScope;
+  installedAppSlugs?: string[];
   /** Optional bot name override (Settings persona); falls back to "Assistant". */
   botName?: string;
   /** Initial position from the launcher. */
@@ -92,6 +93,7 @@ export default function AgentChat({
   onClose,
   workspaceId,
   scope = null,
+  installedAppSlugs = [],
   botName = "Assistant",
   initialPosition,
 }: Props) {
@@ -200,12 +202,14 @@ export default function AgentChat({
       );
     } else {
       lines.push(
-        "I can run things across CRM, files, boards, and workspace settings."
+        "I can run things across CRM, files, boards, apps, and workspace settings."
       );
     }
     lines.push("");
     lines.push("Try:");
     lines.push("- show my pipeline");
+    lines.push("- what apps are installed?");
+    lines.push("- summarize Market Pulse");
     lines.push("- create a deal called Acme Q4 for $25k");
     lines.push("- find the Q4 contract file");
     lines.push("- list my workspace members");
@@ -246,6 +250,9 @@ export default function AgentChat({
             workspace_id: workspaceId,
             message: trimmed,
             scope: scope ?? null,
+            client_context: {
+              installed_apps: installedAppSlugs,
+            },
           }),
         });
         if (!res.ok) {
@@ -282,7 +289,16 @@ export default function AgentChat({
         setBusy(false);
       }
     },
-    [busy, append, clearHistory, sendBalance, sendHelp, workspaceId, scope]
+    [
+      busy,
+      append,
+      clearHistory,
+      sendBalance,
+      sendHelp,
+      workspaceId,
+      scope,
+      installedAppSlugs,
+    ]
   );
 
   // Drag-to-move on the header. We track the pointer relative to the
