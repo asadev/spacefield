@@ -7,8 +7,8 @@
  * per-workspace in localStorage (capped at 50 messages). Sends through
  * /api/agent/dispatch with an optional scope.
  *
- * Liquid Glass styling matches the Launchpad — bg-app-elevated/70 +
- * backdrop-blur-2xl + a subtle specular highlight on the header.
+ * Solid panel — bg-app-elevated with a subtle specular highlight on the
+ * header. (Was glass; switched to solid to drop GPU cost.)
  *
  * Slash commands (handled locally without a model call):
  *   /clear     wipe local history
@@ -402,7 +402,7 @@ export default function AgentChat({
     <div
       role="dialog"
       aria-label="Spacefield Assistant chat"
-      className="pointer-events-auto fixed z-40 flex flex-col overflow-hidden rounded-2xl border border-app/60 bg-app-elevated/70 text-app shadow-2xl backdrop-blur-2xl"
+      className="pointer-events-auto fixed z-40 flex flex-col overflow-hidden rounded-2xl border border-app/60 bg-app-elevated text-app shadow-2xl"
       style={panelStyle}
     >
       {/* Specular highlight */}

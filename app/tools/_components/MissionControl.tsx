@@ -78,7 +78,7 @@ export default function MissionControl({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.18 }}
-            className="absolute inset-0 backdrop-blur-2xl"
+            className="absolute inset-0"
             style={{ background: "rgba(15, 23, 42, 0.45)" }}
           />
 
@@ -95,7 +95,7 @@ export default function MissionControl({
               type="button"
               onClick={onClose}
               aria-label="Close Mission Control"
-              className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white backdrop-blur-xl transition-colors hover:bg-white/20 sm:right-6 sm:top-6"
+              className="absolute right-4 top-4 z-10 flex h-9 w-9 items-center justify-center rounded-full border border-white/20 bg-white/10 text-white transition-colors hover:bg-white/20 sm:right-6 sm:top-6"
             >
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <path d="M18 6L6 18M6 6l12 12" />
@@ -156,7 +156,7 @@ export default function MissionControl({
                     onCloseAll();
                     onClose();
                   }}
-                  className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm text-white backdrop-blur-xl transition-colors hover:bg-white/20"
+                  className="inline-flex items-center gap-2 rounded-full border border-white/20 bg-white/10 px-4 py-2 text-sm text-white transition-colors hover:bg-white/20"
                 >
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <path d="M18 6L6 18M6 6l12 12" />
@@ -208,7 +208,7 @@ function WindowCard({
       <button
         type="button"
         onClick={onPick}
-        className="block w-full overflow-hidden rounded-2xl border border-white/15 bg-white/10 text-left text-white shadow-2xl backdrop-blur-xl transition-all duration-200 hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/15 hover:shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)]"
+        className="block w-full overflow-hidden rounded-2xl border border-white/15 bg-white/10 text-left text-white shadow-2xl transition-all duration-200 hover:-translate-y-0.5 hover:border-white/30 hover:bg-white/15 hover:shadow-[0_30px_60px_-15px_rgba(0,0,0,0.5)]"
       >
         {/* Faux titlebar — traffic lights + dimensions */}
         <div className="flex items-center justify-between gap-2 border-b border-white/10 bg-white/5 px-3 py-2">
@@ -224,7 +224,7 @@ function WindowCard({
 
         {/* Card body — icon + title + meta */}
         <div className="flex h-32 flex-col items-center justify-center gap-3 px-4 py-5">
-          <span className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-white backdrop-blur-xl">
+          <span className="flex h-14 w-14 items-center justify-center rounded-2xl border border-white/20 bg-white/10 text-white">
             <svg
               width="28"
               height="28"
@@ -291,9 +291,9 @@ function EmptyState() {
     <div className="flex h-full min-h-[40vh] flex-col items-center justify-center text-center">
       {/* Stylised illustration — three faded "windows" stacked */}
       <div className="relative mb-6 h-32 w-44">
-        <div className="absolute left-2 top-6 h-20 w-32 rounded-xl border border-white/15 bg-white/5 backdrop-blur-xl" />
-        <div className="absolute left-6 top-3 h-20 w-32 rounded-xl border border-white/20 bg-white/10 backdrop-blur-xl" />
-        <div className="absolute left-10 top-0 flex h-20 w-32 flex-col rounded-xl border border-white/30 bg-white/15 backdrop-blur-xl">
+        <div className="absolute left-2 top-6 h-20 w-32 rounded-xl border border-white/15 bg-white/5" />
+        <div className="absolute left-6 top-3 h-20 w-32 rounded-xl border border-white/20 bg-white/10" />
+        <div className="absolute left-10 top-0 flex h-20 w-32 flex-col rounded-xl border border-white/30 bg-white/15">
           <div className="flex items-center gap-1 border-b border-white/15 px-2 py-1.5">
             <span className="block h-1.5 w-1.5 rounded-full bg-[#ff5f57]" />
             <span className="block h-1.5 w-1.5 rounded-full bg-[#febc2e]" />

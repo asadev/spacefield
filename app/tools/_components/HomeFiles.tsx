@@ -146,7 +146,7 @@ export default function HomeFiles({ onOpenFile }: Props) {
             aria-label={f.name}
             title={`${f.name} — drag to reposition, right-click to remove from desktop`}
           >
-            <span className="pointer-events-none flex h-16 w-16 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white backdrop-blur-xl shadow-md transition-all duration-200 hover:bg-white/25">
+            <span className="pointer-events-none flex h-16 w-16 items-center justify-center rounded-2xl border border-white/15 bg-white/[0.18] text-white shadow-md transition-all duration-200 hover:bg-white/25">
               <FileGlyph name={f.name} contentType={f.contentType} />
             </span>
             <span className="pointer-events-none line-clamp-2 max-w-full text-center text-[0.72rem] font-medium leading-tight tracking-tight text-white/95 drop-shadow-md">

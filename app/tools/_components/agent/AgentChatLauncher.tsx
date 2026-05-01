@@ -62,7 +62,7 @@ export default function AgentChatLauncher({
         type="button"
         aria-label={open ? "Close assistant" : "Open assistant"}
         onClick={() => setOpen((v) => !v)}
-        className="pointer-events-auto fixed bottom-24 left-4 z-30 flex h-12 w-12 items-center justify-center rounded-full border border-app/40 bg-app-elevated/70 text-tool-accent shadow-xl backdrop-blur-2xl transition-transform hover:scale-105 active:scale-95"
+        className="pointer-events-auto fixed bottom-24 left-4 z-30 flex h-12 w-12 items-center justify-center rounded-full border border-app/40 bg-app-elevated text-tool-accent shadow-xl transition-transform hover:scale-105 active:scale-95"
       >
         <span
           aria-hidden="true"

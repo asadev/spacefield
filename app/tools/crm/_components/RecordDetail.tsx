@@ -235,7 +235,7 @@ export default function RecordDetail({
         type="button"
         aria-label="Close detail"
         onClick={onClose}
-        className="fixed inset-0 z-40 cursor-default bg-black/40 backdrop-blur-[1px]"
+        className="fixed inset-0 z-40 cursor-default bg-black/40"
       />
       <aside
         ref={panelRef}

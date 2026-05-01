@@ -101,7 +101,7 @@ export default function SignInDialog({ open, onClose }: Props) {
           aria-labelledby="sign-in-title"
         >
           <div
-            className="absolute inset-0 bg-black/55 backdrop-blur-sm"
+            className="absolute inset-0 bg-black/55"
             onClick={onClose}
             aria-hidden="true"
           />

@@ -292,7 +292,7 @@ function Widget({
       exit={{ opacity: 0, scale: 0.96 }}
       transition={{ type: "spring", stiffness: 260, damping: 22 }}
       onPointerDown={onPointerDown}
-      className="group/widget absolute overflow-hidden rounded-2xl border border-app bg-app-elevated/70 shadow-2xl backdrop-blur-xl select-none cursor-grab active:cursor-grabbing"
+      className="group/widget absolute overflow-hidden rounded-2xl border border-app bg-app-elevated/95 shadow-2xl select-none cursor-grab active:cursor-grabbing"
       style={{ left: rect.x, top: rect.y, width: rect.w, height: rect.h, zIndex: z }}
     >
       <div className="h-full p-4">{children}</div>

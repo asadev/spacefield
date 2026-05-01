@@ -73,7 +73,7 @@ export default function HomeApps({ onOpenTool }: Props) {
               />
             ) : (
               <span
-                className="pointer-events-none flex h-16 w-16 items-center justify-center rounded-2xl border border-white/15 bg-white/10 text-white backdrop-blur-xl shadow-md transition-all duration-200 hover:bg-white/25"
+                className="pointer-events-none flex h-16 w-16 items-center justify-center rounded-2xl border border-white/15 bg-white/[0.18] text-white shadow-md transition-all duration-200 hover:bg-white/25"
               >
                 <svg
                   width="28"
