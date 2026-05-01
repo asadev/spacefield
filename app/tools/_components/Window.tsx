@@ -295,20 +295,34 @@ export default function Window({
     <motion.div
       role="dialog"
       aria-label={win.title}
-      initial={{ opacity: 0, scale: 0.96, y: 8 }}
+      // Pure opacity fade on enter/exit. The earlier
+      // initial={{ scale: 0.96, y: 8 }} caused a one-frame
+      // transform/layout race that read as flicker — the motion.div
+      // mounted at its target left/top with a CSS transform from
+      // initial, the browser composited on the next frame, and any
+      // re-layout from sibling windows or the wallpaper canvas
+      // underneath repainted the new layer. Opacity-only on enter
+      // avoids any transform/layout work during mount.
+      // Scale + y still animate when MINIMIZED so the dock animation
+      // reads — that's a state-driven animate, not a mount race.
+      initial={{ opacity: 0 }}
       animate={{
         opacity: win.minimized ? 0 : 1,
         scale: win.minimized ? 0.85 : 1,
         y: win.minimized ? 40 : 0,
       }}
-      exit={{ opacity: 0, scale: 0.96, y: 8 }}
-      transition={{ type: "spring", stiffness: 320, damping: 28 }}
+      exit={{ opacity: 0 }}
+      transition={{ duration: 0.22, ease: [0.16, 1, 0.3, 1] }}
       style={{
         position: win.maximized || win.pinned ? "fixed" : "absolute",
         left: win.x,
         top: win.y,
         width: win.w,
         height: win.h,
+        // Promote to its own compositor layer so opening / closing
+        // doesn't repaint the wallpaper canvas underneath.
+        willChange: "opacity, transform",
+        contain: "layout paint",
         // Maximized windows render above the topbar (z-50) so true fullscreen
         // hides the menu bar. Pinned (PiP) windows float above all regular
         // windows but below modals (z-[80]). Non-maximized stack uses each
@@ -512,14 +526,51 @@ function NativeAppHost(props: {
     lazyCache.set(slug, App);
   }
   return (
-    <Suspense
-      fallback={
-        <div className="absolute inset-0 flex items-center justify-center text-xs text-muted">
-          Loading…
-        </div>
-      }
-    >
+    <Suspense fallback={<NativeAppLoadingFallback />}>
       <App {...rest} />
     </Suspense>
+  );
+}
+
+/* Loading fallback shown while the lazy tool chunk downloads + parses.
+ * A subtle skeleton frame + spinner + label so the user sees a clear
+ * "this is loading" signal instead of a blank window. Styled to match
+ * the rest of the OS chrome — same dark/light surface, native feel. */
+function NativeAppLoadingFallback() {
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      aria-label="Loading app"
+      className="absolute inset-0 flex flex-col bg-app"
+    >
+      {/* Skeleton toolbar */}
+      <div className="flex items-center gap-2 border-b border-app/60 bg-app-elevated/40 px-4 py-3">
+        <div className="h-6 w-6 rounded-md bg-surface" />
+        <div className="h-3 w-32 rounded-full bg-surface" />
+        <div className="ml-auto flex gap-1.5">
+          <div className="h-6 w-16 rounded-md bg-surface" />
+          <div className="h-6 w-6 rounded-md bg-surface" />
+        </div>
+      </div>
+      {/* Skeleton body */}
+      <div className="grid flex-1 grid-cols-[180px_1fr] gap-0">
+        <div className="border-r border-app/60 bg-app-elevated/30 p-3 space-y-2">
+          <div className="h-3 w-24 rounded-full bg-surface" />
+          <div className="h-3 w-20 rounded-full bg-surface" />
+          <div className="h-3 w-28 rounded-full bg-surface" />
+          <div className="h-3 w-16 rounded-full bg-surface" />
+        </div>
+        <div className="flex flex-col items-center justify-center gap-3 p-6">
+          <span
+            aria-hidden="true"
+            className="inline-block h-6 w-6 animate-spin rounded-full border-2 border-tool-accent-soft border-t-tool-accent"
+          />
+          <span className="text-[11px] uppercase tracking-[0.2em] text-muted">
+            Loading
+          </span>
+        </div>
+      </div>
+    </div>
   );
 }
