@@ -324,9 +324,10 @@ export default function AgentChat({
       if (!dragRef.current) return;
       const dx = e.clientX - dragRef.current.startX;
       const dy = e.clientY - dragRef.current.startY;
-      // Bottom-left anchor: x increases moving the panel right, y
-      // increases moving it up.
-      const nextX = Math.max(8, dragRef.current.basePos.x + dx);
+      // Bottom-right anchor: x is the offset from the right edge, y
+      // from the bottom. Dragging right (dx>0) reduces right offset;
+      // dragging down (dy>0) reduces bottom offset.
+      const nextX = Math.max(8, dragRef.current.basePos.x - dx);
       const nextY = Math.max(8, dragRef.current.basePos.y - dy);
       setPos({ x: nextX, y: nextY });
     },
@@ -367,7 +368,9 @@ export default function AgentChat({
   const onResizePointerMove = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       if (!resizeRef.current) return;
-      const dw = e.clientX - resizeRef.current.startX;
+      // Right-anchored panel + handle at bottom-left → dragging left
+      // (negative dx) grows width; dragging up grows height. Negate dx.
+      const dw = resizeRef.current.startX - e.clientX;
       const dh = resizeRef.current.startY - e.clientY;
       setSize({
         w: Math.max(PANEL_MIN_W, resizeRef.current.baseW + dw),
@@ -390,7 +393,7 @@ export default function AgentChat({
   if (!open) return null;
 
   const panelStyle: CSSProperties = {
-    left: pos.x,
+    right: pos.x,
     bottom: pos.y,
     width: size.w,
     height: size.h,
@@ -431,6 +434,7 @@ export default function AgentChat({
         <div className="flex-1 truncate text-[13px] font-semibold">{title}</div>
         <button
           type="button"
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={clearHistory}
           className="rounded-md px-1.5 py-0.5 text-[0.6rem] uppercase tracking-[0.16em] text-secondary hover:bg-surface hover:text-app"
           title="Clear local history"
@@ -439,6 +443,7 @@ export default function AgentChat({
         </button>
         <button
           type="button"
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={onClose}
           aria-label="Close chat"
           className="flex h-6 w-6 items-center justify-center rounded-md text-secondary hover:bg-surface hover:text-app"
@@ -536,17 +541,18 @@ export default function AgentChat({
         </div>
       </div>
 
-      {/* Resize handle (bottom-right corner). The panel grows up + right. */}
+      {/* Resize handle (bottom-left corner since panel is right-anchored).
+          Drag down-left to grow, up-right to shrink. */}
       <div
         onPointerDown={onResizePointerDown}
         onPointerMove={onResizePointerMove}
         onPointerUp={onResizePointerUp}
         onPointerCancel={onResizePointerUp}
         aria-label="Resize"
-        className="absolute bottom-0 right-0 h-3 w-3 cursor-nwse-resize"
+        className="absolute bottom-0 left-0 h-3 w-3 cursor-nesw-resize"
         style={{
           background:
-            "linear-gradient(135deg, transparent 50%, rgba(255,255,255,0.35) 50%)",
+            "linear-gradient(45deg, transparent 50%, rgba(255,255,255,0.35) 50%)",
         }}
       />
 
