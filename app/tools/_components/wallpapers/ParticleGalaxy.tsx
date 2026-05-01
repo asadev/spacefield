@@ -247,13 +247,27 @@ export default function ParticleGalaxy({ preview }: Props) {
     const LONG_PRESS_MS = 180;
     const DRAG_THRESHOLD_PX = 5;
 
+    /* Angular velocity tracker — captures the last few drag samples so
+     * we can hand off the user's "throw" to a damped free-spin when
+     * the pointer releases. Recent samples weighted more than old. */
+    interface VelSample {
+      t: number;
+      yaw: number;
+      pitch: number;
+    }
+    const velSamples: VelSample[] = [];
+    const velocity = { yaw: 0, pitch: 0 }; // rad/sec, decays over time
+    const VELOCITY_DAMPING = 0.93; // per-frame multiplier (≈ 1.4s to ~1% at 60fps)
+
     let curLevel: 0 | 1 | 2 | 3 = 0;
     let prevLevel: 0 | 1 | 2 | 3 = 0;
     let curPlanet = 2;
     let prevPlanet = 2;
     let inTransition = false;
     let transitionStart = 0;
-    const TRANSITION_MS = reduceMotion ? 1 : 950;
+    // Slower, more cinematic dive — was 950ms, felt rushed and made
+    // Earth blink in before you could appreciate the approach.
+    const TRANSITION_MS = reduceMotion ? 1 : 1800;
 
     function startTransition(toLevel: 0 | 1 | 2 | 3, toPlanet: number) {
       if (inTransition) return;
@@ -341,12 +355,23 @@ export default function ParticleGalaxy({ preview }: Props) {
         // Pixels → radians. A full canvas-width sweep = π rotation.
         const yawDelta = (dx / Math.max(1, pointerCanvasW)) * Math.PI;
         const pitchDelta = (dy / Math.max(1, pointerCanvasH)) * Math.PI;
-        // Apply directly to the active group's rotation. No reset
-        // each frame — the rotation IS the source of truth, the
-        // auto-idle just adds small per-frame deltas on top.
         const g = activeGroup(curLevel, curPlanet);
         g.rotation.y += yawDelta;
         g.rotation.x = Math.max(-1.4, Math.min(1.4, g.rotation.x + pitchDelta));
+
+        // Record sample so we can compute throw velocity on release.
+        velSamples.push({
+          t: performance.now(),
+          yaw: g.rotation.y,
+          pitch: g.rotation.x,
+        });
+        // Trim to the last 8 samples (avoids unbounded growth).
+        if (velSamples.length > 8) velSamples.shift();
+
+        // Cancel any inertial spin currently in progress when the
+        // user grabs again — they're taking over.
+        velocity.yaw = 0;
+        velocity.pitch = 0;
       }
     }
     function onWindowPointerUp(e: PointerEvent) {
@@ -357,16 +382,35 @@ export default function ParticleGalaxy({ preview }: Props) {
       window.removeEventListener("pointercancel", onWindowPointerUp);
       renderer.domElement.style.cursor = "grab";
 
+      // If the gesture was a drag, hand off velocity to inertial spin
+      // (so a fast flick keeps rotating after release, decaying).
       if (!wasDown || dragMode === "rotate") {
+        if (dragMode === "rotate") {
+          // Compute velocity from the last ≤120ms of drag samples.
+          const now = performance.now();
+          const recent = velSamples.filter((s) => now - s.t < 120);
+          if (recent.length >= 2) {
+            const a = recent[0];
+            const b = recent[recent.length - 1];
+            const elapsed = (b.t - a.t) / 1000; // seconds
+            if (elapsed > 0.001) {
+              velocity.yaw = (b.yaw - a.yaw) / elapsed;
+              velocity.pitch = (b.pitch - a.pitch) / elapsed;
+              // Cap so an unreasonable flick doesn't spin out of control.
+              const maxVel = 12; // rad/sec
+              velocity.yaw = Math.max(-maxVel, Math.min(maxVel, velocity.yaw));
+              velocity.pitch = Math.max(-maxVel, Math.min(maxVel, velocity.pitch));
+            }
+          }
+        }
+        velSamples.length = 0;
         dragMode = "none";
         return;
       }
 
-      // It was a click (no drag). Decide single vs double via
-      // a small grace timer — if a second click arrives within
-      // DBL_CLICK_MS we treat the pair as double; otherwise the
-      // single-click commits after the timer.
+      // It was a click (no drag).
       dragMode = "none";
+      velSamples.length = 0;
       const now = performance.now();
       const sinceLast = now - lastClickTime;
       const moveSinceLast = Math.hypot(
@@ -378,8 +422,24 @@ export default function ParticleGalaxy({ preview }: Props) {
       lastClickX = e.clientX;
       lastClickY = e.clientY;
 
+      // Planet hit-test FIRST. If the user clicked directly on a
+      // planet at the solar level, commit immediately — no
+      // double-click wait — so it dives to THAT planet, not Earth.
+      if (curLevel === 2) {
+        const idx = projectPlanetClick(e.clientX, e.clientY);
+        if (idx >= 0) {
+          // Cancel any pending click + treat this as a planet zoom.
+          if (pendingClickTimer) {
+            clearTimeout(pendingClickTimer);
+            pendingClickTimer = null;
+            pendingClick = null;
+          }
+          startTransition(3, idx);
+          return;
+        }
+      }
+
       if (isDouble) {
-        // Cancel any pending single-click commit; this counted as the second.
         if (pendingClickTimer) {
           clearTimeout(pendingClickTimer);
           pendingClickTimer = null;
@@ -389,14 +449,15 @@ export default function ParticleGalaxy({ preview }: Props) {
         return;
       }
 
-      // Hold the single-click for DBL_CLICK_MS in case a double is coming.
+      // Single click on empty space — hold for the double-click
+      // grace window in case a second click arrives.
       pendingClick = { x: e.clientX, y: e.clientY };
       if (pendingClickTimer) clearTimeout(pendingClickTimer);
       pendingClickTimer = setTimeout(() => {
-        if (pendingClick) {
-          commitClick(pendingClick.x, pendingClick.y);
-          pendingClick = null;
-        }
+        // Single click on empty space at the solar level is a no-op
+        // (we don't want a stray background click to fire a level
+        // advance — that's what double-click is for).
+        pendingClick = null;
         pendingClickTimer = null;
       }, DBL_CLICK_MS);
     }
@@ -488,18 +549,34 @@ export default function ParticleGalaxy({ preview }: Props) {
       }
       camera.lookAt(camPresets[curLevel].look);
 
-      // Auto-idle rotation accumulates onto the active group's
-      // rotation.y. User drag has ALREADY mutated the rotation
-      // directly via onWindowPointerMove; we just keep adding small
-      // per-frame deltas on top so a galaxy with no drag input still
-      // spins gently. This composes naturally — no per-frame reset,
-      // no userRot store fighting with .rotation.
+      // Inertial spin from a recent drag-release flick. Velocity
+      // decays each frame; once it's tiny, snap to 0. Auto-idle
+      // (galaxy/cluster spin) only resumes once velocity is fully
+      // decayed AND the user isn't holding the pointer.
       if (!pointerDown && !inTransition) {
-        if (curLevel === 0) curG.rotation.y += dt * 0.045;
-        else if (curLevel === 1) curG.rotation.y += dt * 0.03;
+        const spinning =
+          Math.abs(velocity.yaw) > 0.005 || Math.abs(velocity.pitch) > 0.005;
+        if (spinning) {
+          curG.rotation.y += velocity.yaw * dt;
+          curG.rotation.x = Math.max(
+            -1.4,
+            Math.min(1.4, curG.rotation.x + velocity.pitch * dt)
+          );
+          // Per-frame damping. Pow(damping, frames-this-frame) is
+          // fine for small dt at 60fps.
+          velocity.yaw *= Math.pow(VELOCITY_DAMPING, dt * 60);
+          velocity.pitch *= Math.pow(VELOCITY_DAMPING, dt * 60);
+          if (Math.abs(velocity.yaw) < 0.005) velocity.yaw = 0;
+          if (Math.abs(velocity.pitch) < 0.005) velocity.pitch = 0;
+        } else {
+          // Calm auto-idle so each level still feels alive when no
+          // drag is in progress.
+          if (curLevel === 0) curG.rotation.y += dt * 0.045;
+          else if (curLevel === 1) curG.rotation.y += dt * 0.03;
+        }
       }
 
-      // Solar system: planets orbit, sun rotates regardless of group rotation.
+      // Solar system: planets orbit, sun rotates, asteroids tumble.
       if (curLevel === 2) {
         for (const p of solarBuild.planets) {
           const a = uTime.value * p.speed + p.phase;
@@ -511,12 +588,31 @@ export default function ParticleGalaxy({ preview }: Props) {
           p.mesh.rotation.y += dt * 0.4;
         }
         if (solarBuild.sun) solarBuild.sun.rotation.y += dt * 0.06;
+        // Asteroid belt — slow orbits + irregular tumble around a
+        // random axis per rock so the field is alive but not busy.
+        for (const a of solarBuild.asteroids) {
+          const ang = uTime.value * a.speed + a.phase;
+          a.mesh.position.set(
+            Math.cos(ang) * a.orbit,
+            Math.sin(ang) * a.inclination * a.orbit,
+            Math.sin(ang) * a.orbit
+          );
+          a.mesh.rotateOnAxis(a.spinAxis, a.spinRate * dt);
+        }
       }
-      // Planet detail: focused planet rotates + each real moon orbits.
+      // Planet detail: surface + clouds are LOCKED together (same
+      // rotation rate) so the planet reads as a single coherent body
+      // rather than two layers gliding past each other. Clouds get a
+      // tiny extra delta — relative drift only, like real weather.
+      // Earth's spin is slow + stately (a full turn ≈ 60s) so it
+      // looks majestic rather than spinning like a top.
       if (curLevel === 3) {
         const d = detailBuilds[curPlanet];
-        if (d.planet) d.planet.rotation.y += dt * 0.18;
-        if (d.clouds) d.clouds.rotation.y += dt * 0.04; // clouds slightly faster than surface drift
+        const spinRate = 0.05; // rad/s — slow + cinematic
+        if (d.planet) d.planet.rotation.y += dt * spinRate;
+        // Clouds rotate at surface rate + a tiny relative drift
+        // (~6% extra) to feel like wind shear, not a separate layer.
+        if (d.clouds) d.clouds.rotation.y += dt * spinRate * 1.06;
         for (const m of d.moons) {
           const a = uTime.value * m.spec.speed + m.phase;
           m.mesh.position.set(
@@ -866,6 +962,74 @@ function buildSolarSystem(
     orbitGeoms.push(og);
   }
 
+  /* Asteroid belt — irregular low-poly rocks scattered between Mars
+   * and the outer dust ring. Each is an icosahedron with each vertex
+   * pushed by a small random amount along its normal so the silhouette
+   * isn't a clean sphere. They drift on their own slow orbits and
+   * tumble on a random axis so the field feels populated and alive
+   * without competing visually with the planets. */
+  const asteroidCount = isPreview ? 0 : 14;
+  const asteroidMeshes: Array<{
+    mesh: THREE.Mesh;
+    geom: THREE.BufferGeometry;
+    mat: THREE.MeshStandardMaterial;
+    orbit: number;
+    speed: number;
+    phase: number;
+    inclination: number;
+    spinAxis: THREE.Vector3;
+    spinRate: number;
+  }> = [];
+  // Soft hemisphere light just for the asteroids — picks up the warm
+  // sun-side and cool night-side without lighting the rest of the scene.
+  const beltLight = new THREE.HemisphereLight(0xffe4a3, 0x10131d, 0.85);
+  beltLight.position.set(0, 1, 0);
+  group.add(beltLight);
+  for (let i = 0; i < asteroidCount; i++) {
+    const radius = 0.16 + Math.random() * 0.32;
+    const detail = Math.random() > 0.5 ? 1 : 0;
+    const geom = new THREE.IcosahedronGeometry(radius, detail);
+    // Jitter vertices for an irregular silhouette.
+    const pos = geom.getAttribute("position") as THREE.BufferAttribute;
+    const arr = pos.array as Float32Array;
+    for (let v = 0; v < arr.length; v += 3) {
+      const len = Math.hypot(arr[v], arr[v + 1], arr[v + 2]);
+      const j = 1 + (Math.random() - 0.5) * 0.55;
+      arr[v] = (arr[v] / len) * radius * j;
+      arr[v + 1] = (arr[v + 1] / len) * radius * j;
+      arr[v + 2] = (arr[v + 2] / len) * radius * j;
+    }
+    geom.computeVertexNormals();
+    const tone = 0.45 + Math.random() * 0.25;
+    const mat = new THREE.MeshStandardMaterial({
+      color: new THREE.Color(tone, tone * 0.95, tone * 0.85),
+      roughness: 0.95,
+      metalness: 0.05,
+      flatShading: true,
+      transparent: true,
+      opacity: 0,
+    });
+    const mesh = new THREE.Mesh(geom, mat);
+    group.add(mesh);
+    // Distribute mostly between Mars (10.6) and the outer dust shell.
+    const orbit = 12.5 + Math.random() * 4.5;
+    asteroidMeshes.push({
+      mesh,
+      geom,
+      mat,
+      orbit,
+      speed: 0.15 + Math.random() * 0.18,
+      phase: Math.random() * Math.PI * 2,
+      inclination: (Math.random() - 0.5) * 0.4,
+      spinAxis: new THREE.Vector3(
+        Math.random() - 0.5,
+        Math.random() - 0.5,
+        Math.random() - 0.5
+      ).normalize(),
+      spinRate: (Math.random() - 0.5) * 1.4,
+    });
+  }
+
   // Background dust
   const dustN = isPreview ? 80 : 220;
   const dPos = new Float32Array(dustN * 3);
@@ -905,6 +1069,7 @@ function buildSolarSystem(
   return {
     sun,
     planets,
+    asteroids: asteroidMeshes,
     dispose: () => {
       sunGeom.dispose();
       sunMat.dispose();
@@ -913,6 +1078,10 @@ function buildSolarSystem(
       for (const p of planets) {
         p.geom.dispose();
         p.mat.dispose();
+      }
+      for (const a of asteroidMeshes) {
+        a.geom.dispose();
+        a.mat.dispose();
       }
       for (const og of orbitGeoms) og.dispose();
       for (const om of orbitMats) om.dispose();
@@ -1167,7 +1336,7 @@ const SUN_VERT = /* glsl */ `
   }
 `;
 const SUN_FRAG = /* glsl */ `
-  precision mediump float;
+  precision highp float;
   varying vec3 vNormal;
   varying vec3 vWorldPos;
   uniform float uTime;
@@ -1186,14 +1355,37 @@ const SUN_FRAG = /* glsl */ `
           mix(hash(i+vec3(0,1,1)), hash(i+vec3(1,1,1)), f.x), f.y),
       f.z);
   }
+  /* Layered noise — fast small-scale "boiling" + slow large-scale
+   * convection cells. Scrolled in opposite directions so they shear
+   * across each other and read as a turbulent surface, not a static
+   * speckle pattern. */
+  float surface(vec3 p, float t) {
+    float n = 0.0;
+    n += 0.50 * vnoise(p * 1.6 + vec3(t * 0.18, t * 0.12, 0.0));
+    n += 0.30 * vnoise(p * 3.4 + vec3(-t * 0.32, 0.0, t * 0.22));
+    n += 0.20 * vnoise(p * 6.8 + vec3(0.0, t * 0.5, -t * 0.4));
+    return n;
+  }
   void main() {
-    float n = vnoise(vWorldPos * 1.6 + vec3(uTime * 0.3, 0.0, 0.0));
-    n += 0.5 * vnoise(vWorldPos * 4.0 - vec3(uTime * 0.5));
-    vec3 hot = vec3(1.0, 0.9, 0.55);
-    vec3 cool = vec3(1.0, 0.45, 0.15);
-    vec3 c = mix(cool, hot, smoothstep(0.4, 1.4, n));
-    float rim = pow(1.0 - max(dot(vNormal, vec3(0,0,1)), 0.0), 1.6);
-    c += rim * vec3(1.0, 0.7, 0.3);
+    float n = surface(vWorldPos, uTime);
+    /* Granulation cells — adds dark thin lacing between hot bright
+     * patches, like real solar granulation. */
+    float cells = smoothstep(0.42, 0.58, vnoise(vWorldPos * 9.0 + uTime * 0.3));
+    /* Hot core / cool shell colour palette pushed redder than before. */
+    vec3 hot = vec3(1.0, 0.92, 0.55);
+    vec3 mid = vec3(1.0, 0.62, 0.20);
+    vec3 cool = vec3(0.96, 0.30, 0.06);
+    vec3 c = mix(cool, mid, smoothstep(0.30, 0.70, n));
+    c = mix(c, hot, smoothstep(0.65, 1.15, n));
+    /* Granulation darkens the lacing slightly. */
+    c *= 0.88 + 0.12 * cells;
+    /* Limb-brightening rim. The pow() input is now clamped to [0,1]
+     * so there's no NaN risk on back-facing normals. */
+    float rim = pow(max(0.0, 1.0 - max(dot(vNormal, vec3(0,0,1)), 0.0)), 1.4);
+    c += rim * vec3(1.0, 0.55, 0.20) * 1.1;
+    /* Tiny pulsing prominences — flares peak occasionally. */
+    float flare = pow(max(0.0, vnoise(vWorldPos * 2.0 + uTime * 0.6)), 6.0);
+    c += flare * vec3(1.0, 0.8, 0.4) * 0.6;
     gl_FragColor = vec4(c, uOpacity);
   }
 `;
@@ -1236,22 +1428,60 @@ const PLANET_FRAG = /* glsl */ `
     return v;
   }
   void main() {
+    vec3 N = normalize(vNormal);
     vec3 sunDir = normalize(vec3(1.0, 0.6, 0.5));
-    float ndotl = max(0.0, dot(normalize(vNormal), sunDir));
+    float ndotl = max(0.0, dot(N, sunDir));
+    /* Half-Lambert wraparound makes the night side fall off softer
+     * than the harsh terminator from raw Lambert. */
+    float wrap = ndotl * 0.6 + 0.4;
     vec3 baseCol = uColor;
+    float roughness = 0.65;
     if (uType == 2) {
+      // Mars — multi-octave fbm + dark mineral patches + ice cap mix
+      // toward the poles.
       float n = fbm(vWorldPos * 2.2);
-      baseCol = mix(vec3(0.5, 0.18, 0.08), vec3(0.85, 0.42, 0.22), n);
+      float fine = fbm(vWorldPos * 6.0);
+      vec3 lo = vec3(0.45, 0.16, 0.06);
+      vec3 hi = vec3(0.86, 0.46, 0.22);
+      baseCol = mix(lo, hi, n);
+      // Dark patch noise.
+      baseCol *= 0.78 + 0.22 * fine;
+      // Polar caps (subtle frost).
+      float polar = smoothstep(0.78, 0.95, abs(N.y));
+      baseCol = mix(baseCol, vec3(0.94, 0.92, 0.88), polar * 0.55);
+      roughness = 0.88;
     } else if (uType == 3) {
+      // Moon — gray with crater pock-noise.
       float n = fbm(vWorldPos * 5.0);
       baseCol = mix(vec3(0.55, 0.55, 0.6), vec3(0.85, 0.85, 0.9), n);
       float pits = vnoise(vWorldPos * 12.0);
       baseCol *= 0.85 + 0.15 * pits;
+      roughness = 0.95;
     } else {
+      // Generic rocky (Mercury / Venus). Mercury-like rough cratering
+      // for darker base; Venus-like banded clouds for warmer colors.
       float n = fbm(vWorldPos * 3.0);
-      baseCol = mix(uColor * 0.7, uColor * 1.1, n);
+      float bands = 0.5 + 0.5 * sin(vWorldPos.y * 6.0 + n * 4.0);
+      vec3 darker = uColor * 0.55;
+      vec3 lighter = uColor * 1.18;
+      // Use bands more for warm tones (Venus), less for cold (Mercury).
+      float warmth = clamp(uColor.r - uColor.b + 0.3, 0.0, 1.0);
+      vec3 mottled = mix(darker, lighter, n);
+      vec3 banded = mix(darker, lighter, bands);
+      baseCol = mix(mottled, banded, warmth);
+      roughness = 0.75 - warmth * 0.25;
     }
-    vec3 lit = baseCol * (0.18 + 0.82 * ndotl);
+    /* Diffuse + subtle specular (Blinn-Phong-ish) so lit edges glint
+     * a little and the body reads as 3D, not painted. */
+    vec3 lit = baseCol * (0.16 + 0.84 * wrap);
+    /* Specular only on the lit hemisphere, attenuated by roughness. */
+    vec3 viewDir = vec3(0.0, 0.0, 1.0);
+    vec3 halfDir = normalize(sunDir + viewDir);
+    float spec = pow(max(0.0, dot(N, halfDir)), 28.0);
+    lit += spec * (1.0 - roughness) * 0.4;
+    /* Fresnel rim for a touch of atmospheric edge brightness. */
+    float rim = pow(1.0 - max(dot(N, viewDir), 0.0), 3.0);
+    lit += rim * baseCol * 0.18;
     gl_FragColor = vec4(lit, uOpacity);
   }
 `;
@@ -1269,7 +1499,12 @@ const ATMO_FRAG = /* glsl */ `
   uniform vec3 uColor;
   varying vec3 vNormal;
   void main() {
-    float intensity = pow(0.7 - dot(normalize(vNormal), vec3(0.0, 0.0, 1.0)), 2.5);
+    /* Clamp the input to [0,1] before pow() — the previous form
+     * produced NaN on back-facing normals and banded the silhouette.
+     * The result is the classic Rayleigh-style halo that's brightest
+     * at the limb and fades into the planet. */
+    float fresnel = clamp(0.85 - dot(normalize(vNormal), vec3(0.0, 0.0, 1.0)), 0.0, 1.0);
+    float intensity = pow(fresnel, 2.0);
     gl_FragColor = vec4(uColor, intensity * uOpacity);
   }
 `;
