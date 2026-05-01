@@ -877,14 +877,31 @@ function buildSolarSystem(
   const sky = new THREE.Mesh(skyGeom, skyMat);
   group.add(sky);
 
-  /* PointLight at the Sun's position lights all planets and asteroids
-   * with proper inverse-square falloff. Mercury (close) is brightest;
-   * Mars (far) is dimmer. */
-  const sunLight = new THREE.PointLight(0xfff5e5, 3.2, 0, 1.7);
+  /* Sun lighting — multiple sources so every planet reads clearly
+   * regardless of its orbital position relative to the camera.
+   *
+   *   1. PointLight at the Sun, decay 0 (no falloff) so planets
+   *      receive consistent illumination on their sun-side rather
+   *      than dimming to black with distance. Real inverse-square
+   *      makes Mars vanish.
+   *   2. HemisphereLight gives a soft sky/ground gradient so the
+   *      shaded hemisphere isn't pitch black — it reads as
+   *      "shaded" rather than "missing".
+   *   3. A weak fill light from camera direction so we ALWAYS see
+   *      something on the side of the planet we're looking at,
+   *      even during transit when its sun-side faces away. This is
+   *      key+fill lighting; physically inaccurate but essential for
+   *      a wallpaper where every planet must always be legible. */
+  const sunLight = new THREE.PointLight(0xfff5e5, 2.6, 0, 0);
   sunLight.position.set(0, 0, 0);
   group.add(sunLight);
-  const ambient = new THREE.AmbientLight(0x202938, 0.18);
-  group.add(ambient);
+  const hemi = new THREE.HemisphereLight(0xc8d4ff, 0x1a1830, 0.35);
+  group.add(hemi);
+  // Fill light positioned where the camera is — points inward so
+  // planets in transit (between camera and sun) still read.
+  const fillLight = new THREE.DirectionalLight(0xb0c5e5, 0.55);
+  fillLight.position.set(0, 7, 24);
+  group.add(fillLight);
 
   /* The Sun itself. MeshBasicMaterial so it's self-luminous regardless
    * of the PointLight (which is positioned inside it anyway). The base
@@ -1127,13 +1144,21 @@ function buildPlanetDetail(
   uTime: { value: number },
   textures: Textures | null
 ) {
-  /* Sun simulated by a DirectionalLight plus a soft AmbientLight.
-   * Off-axis position so the terminator is visible (day on the
-   * "front" half, night on the "back"). */
-  const sunLight = new THREE.DirectionalLight(0xffffff, 1.7);
+  /* Detail-view lighting. DirectionalLight stands in for the Sun
+   * (off-axis so the terminator is visible across the textured
+   * surface). HemisphereLight + AmbientLight + a fill from camera
+   * direction guarantee the planet reads brightly even when the
+   * "sun" is on the far side; without the fill, Asad reported the
+   * zoomed view felt dim. */
+  const sunLight = new THREE.DirectionalLight(0xffffff, 2.6);
   sunLight.position.set(8, 4, 6);
   group.add(sunLight);
-  const ambient = new THREE.AmbientLight(0x202938, 0.26);
+  const hemi = new THREE.HemisphereLight(0xb8c8ff, 0x1c1a30, 0.45);
+  group.add(hemi);
+  const fillLight = new THREE.DirectionalLight(0xb0c5e5, 0.55);
+  fillLight.position.set(0, 0, 9);
+  group.add(fillLight);
+  const ambient = new THREE.AmbientLight(0x303848, 0.45);
   group.add(ambient);
 
   /* Skybox same as solar level — keeps continuity when zooming in. */
