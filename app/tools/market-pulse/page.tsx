@@ -1126,7 +1126,7 @@ function ShareExport() {
 
   const handleCopy = useCallback(() => {
     const summary = MARKET_SUMMARY.map((k) => `${k.label}: ${k.value} (${k.change})`).join("\n");
-    const text = `Dubai Market Pulse - Q1 2026\n\n${summary}\n\nFull dashboard: https://example.com/tools/market-pulse`;
+    const text = `Dubai Market Pulse - Q1 2026\n\n${summary}\n\nFull dashboard: https://spacefield.co/tools/market-pulse`;
     navigator.clipboard.writeText(text);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
@@ -1134,7 +1134,7 @@ function ShareExport() {
 
   const handleWhatsApp = useCallback(() => {
     const text = encodeURIComponent(
-      "Check out the Dubai Real Estate Market Pulse dashboard:\nhttps://example.com/tools/market-pulse",
+      "Check out the Dubai Real Estate Market Pulse dashboard:\nhttps://spacefield.co/tools/market-pulse",
     );
     window.open(`https://wa.me/?text=${text}`, "_blank");
   }, []);

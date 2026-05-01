@@ -276,7 +276,7 @@ function buildHtml(s: StatusState): string {
     archiveMonths === 1 ? "" : "s"
   }.</p>
 
-  <footer>Generated with example.com/solutions</footer>
+  <footer>Generated with spacefield.co/solutions</footer>
 </div>
 </body>
 </html>`;

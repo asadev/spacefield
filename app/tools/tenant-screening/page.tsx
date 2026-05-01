@@ -331,7 +331,7 @@ export default function TenantScreeningPage() {
     report += `  Renewal Rate: ${areaData.renewalRate}%\n\n`;
     report += `INSIGHTS:\n`;
     areaData.insights.forEach((i) => (report += `  - ${i}\n`));
-    report += `\n— Generated via example.com/tools/tenant-screening`;
+    report += `\n— Generated via spacefield.co/tools/tenant-screening`;
     return report;
   }, [areaData, screeningScore]);
 

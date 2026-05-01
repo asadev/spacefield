@@ -17,7 +17,7 @@ function escapeWifi(v: string) {
 
 export default function QrCodeGeneratorPage() {
   const [mode, setMode] = useState<Mode>("url");
-  const [text, setText] = useState("https://example.com");
+  const [text, setText] = useState("https://spacefield.co");
   const [size, setSize] = useState("320");
   const [margin, setMargin] = useState("2");
   const [ecl, setEcl] = useState<"L" | "M" | "Q" | "H">("M");

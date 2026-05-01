@@ -671,7 +671,7 @@ function MortgageCalculatorInner() {
       `Monthly Payment: ${fmt(results.monthly)}`,
       `Total Interest: ${fmt(results.totalInterest)}`,
       ``,
-      `Calculate yours: https://example.com/tools/mortgage-calculator`,
+      `Calculate yours: https://spacefield.co/tools/mortgage-calculator`,
     ].join("\n");
   }, [results, propertyValue, termYears]);
 

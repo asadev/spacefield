@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     title: "Property Poster Creator – Real Estate Marketing Tool",
     description:
       "Create stunning property posters with professional templates. Upload photos, customize details, download in high resolution.",
-    url: "https://example.com/tools/property-poster-creator",
+    url: "https://spacefield.co/tools/property-poster-creator",
   },
   twitter: {
     card: "summary_large_image",
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     description: "Create professional property marketing posters in minutes. 6 premium templates, instant high-res download.",
   },
   alternates: {
-    canonical: "https://example.com/tools/property-poster-creator",
+    canonical: "https://spacefield.co/tools/property-poster-creator",
   },
 };
 

@@ -146,7 +146,7 @@ function toIcs(shifts: Shift[]): string {
   ];
   shifts.forEach((s, i) => {
     lines.push("BEGIN:VEVENT");
-    lines.push(`UID:oncall-${i}-${s.start.getTime()}@example.com`);
+    lines.push(`UID:oncall-${i}-${s.start.getTime()}@spacefield.co`);
     lines.push(`DTSTAMP:${fmt(new Date())}`);
     lines.push(`DTSTART:${fmt(s.start)}`);
     lines.push(`DTEND:${fmt(s.end)}`);

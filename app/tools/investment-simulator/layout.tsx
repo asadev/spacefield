@@ -17,7 +17,7 @@ export const metadata: Metadata = {
       "What if you bought property in Dubai? See actual returns based on historical data.",
   },
   alternates: {
-    canonical: "https://example.com/tools/investment-simulator",
+    canonical: "https://spacefield.co/tools/investment-simulator",
   },
 };
 

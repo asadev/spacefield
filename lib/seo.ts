@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { buildOgUrl, type OgAccent, type OgType } from "@/lib/seo/og";
 
-const BASE_URL = "https://example.com";
+const BASE_URL = "https://spacefield.co";
 
 function ogImageUrl(type: OgType, title: string, subtitle: string, accent: OgAccent = "violet"): string {
   return buildOgUrl({ type, title, subtitle, accent });
@@ -13,7 +13,7 @@ export function toolMeta(slug: string, title: string, description: string): Meta
     title,
     description,
     openGraph: {
-      title: `${title} | example.com`,
+      title: `${title} | Space Field`,
       description,
       url: `${BASE_URL}/tools/${slug}`,
       type: "website",
@@ -37,7 +37,7 @@ export function gameMeta(slug: string, title: string, description: string): Meta
     title,
     description,
     openGraph: {
-      title: `${title} | example.com`,
+      title: `${title} | Space Field`,
       description,
       url: `${BASE_URL}/games/${slug}`,
       type: "website",
@@ -61,7 +61,7 @@ export function pageMeta(path: string, title: string, description: string): Meta
     title,
     description,
     openGraph: {
-      title: `${title} | example.com`,
+      title: `${title} | Space Field`,
       description,
       url: `${BASE_URL}${path}`,
       type: "website",

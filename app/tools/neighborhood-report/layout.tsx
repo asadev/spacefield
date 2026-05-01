@@ -7,7 +7,7 @@ export const metadata: Metadata = {
     title: "Dubai Neighborhood Quality Report — 50 Communities Scored",
     description: "Compare 50 Dubai communities across investment potential, livability, connectivity, and more. Free, data-driven neighborhood quality reports.",
     type: "website",
-    url: "https://example.com/tools/neighborhood-report",
+    url: "https://spacefield.co/tools/neighborhood-report",
   },
   twitter: {
     card: "summary_large_image",
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
     description: "Compare 50 Dubai communities across investment potential, livability, connectivity, and more.",
   },
   alternates: {
-    canonical: "https://example.com/tools/neighborhood-report",
+    canonical: "https://spacefield.co/tools/neighborhood-report",
   },
 };
 

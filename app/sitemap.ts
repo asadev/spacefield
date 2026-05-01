@@ -1,26 +1,23 @@
 import type { MetadataRoute } from "next";
 
-const BASE = "https://example.com";
+const BASE = "https://spacefield.co";
 
 /**
- * Sitemap index. Next renders this file as /sitemap.xml, but we point it at
- * dedicated child sitemap routes so crawlers can fetch each section (core,
- * tools, blog, network) independently. Splitting is the recommended layout
- * once the combined URL count passes a few hundred — it makes incremental
- * re-crawls cheaper and surfaces "last modified" signals more reliably.
- *
- * Child sitemaps live at:
- *   /sitemap-core    — home + region homes + marketing / section roots
- *   /sitemap-blog    — static + DB-authored blog posts across all regions
- *   /sitemap-network — verified broker directory + profile pages
- *   /sitemap-seo     — programmatic SEO pages (city landings, region comparisons, migration corridors)
+ * Public surface only. Apps run inside the OS shell at "/" — the workspace
+ * desktop, dock, launchpad, and the apps themselves are not SEO surfaces.
+ * /tools/* and /solutions/tools/* redirect to /?app=<slug> (middleware) and
+ * are explicitly disallowed in robots.ts.
  */
 export default function sitemap(): MetadataRoute.Sitemap {
   const now = new Date().toISOString();
   return [
-    { url: `${BASE}/sitemap-core.xml`, lastModified: now },
-    { url: `${BASE}/sitemap-blog.xml`, lastModified: now },
-    { url: `${BASE}/sitemap-network.xml`, lastModified: now },
-    { url: `${BASE}/sitemap-seo.xml`, lastModified: now },
+    { url: `${BASE}/`, lastModified: now, changeFrequency: "weekly", priority: 1.0 },
+    { url: `${BASE}/about`, lastModified: now, changeFrequency: "monthly", priority: 0.7 },
+    { url: `${BASE}/pricing`, lastModified: now, changeFrequency: "monthly", priority: 0.8 },
+    { url: `${BASE}/contact`, lastModified: now, changeFrequency: "monthly", priority: 0.5 },
+    { url: `${BASE}/signin`, lastModified: now, changeFrequency: "monthly", priority: 0.4 },
+    { url: `${BASE}/privacy`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
+    { url: `${BASE}/terms`, lastModified: now, changeFrequency: "yearly", priority: 0.3 },
+    { url: `${BASE}/refund`, lastModified: now, changeFrequency: "yearly", priority: 0.2 },
   ];
 }

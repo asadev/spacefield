@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     description:
       "Compare service charges across 60+ Dubai communities and buildings. Find out what you'll really pay beyond your mortgage.",
     type: "website",
-    url: "https://example.com/tools/service-charge-comparison",
+    url: "https://spacefield.co/tools/service-charge-comparison",
   },
   twitter: {
     card: "summary_large_image",
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     description: "Compare service charges across 60+ Dubai communities and buildings. Find out what you'll really pay.",
   },
   alternates: {
-    canonical: "https://example.com/tools/service-charge-comparison",
+    canonical: "https://spacefield.co/tools/service-charge-comparison",
   },
 };
 

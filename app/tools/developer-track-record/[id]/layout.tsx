@@ -20,7 +20,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title: `${dev.name} — Dubai Developer Track Record`,
       description: `${dev.knownFor} Overall score: ${dev.overallScore}/10. ${dev.completedProjects} completed projects.`,
       type: "article",
-      url: `https://example.com/tools/developer-track-record/${id}`,
+      url: `https://spacefield.co/tools/developer-track-record/${id}`,
     },
   };
 }

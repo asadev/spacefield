@@ -479,7 +479,7 @@ export default function DLDFeeCalculatorApp(props: NativeAppProps) {
       result.sellerPays > 0 ? `Seller Pays: ${fmt(result.sellerPays)}` : "",
       `Fees as % of Property: ${((result.totalCost / val) * 100).toFixed(2)}%`,
       "",
-      "Calculate yours at example.com/tools/dld-fee-calculator",
+      "Calculate yours at spacefield.co/tools/dld-fee-calculator",
     ].filter(Boolean);
     return lines.join("\n");
   }, [result, propertyValue, allFeeLines, refNumber]);

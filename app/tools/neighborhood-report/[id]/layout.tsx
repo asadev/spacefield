@@ -23,7 +23,7 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
       title: `${community.name} — Dubai Neighborhood Quality Report`,
       description: `${community.description} Rental yield: ${yieldRange}. Comprehensive quality report.`,
       type: "article",
-      url: `https://example.com/tools/neighborhood-report/${id}`,
+      url: `https://spacefield.co/tools/neighborhood-report/${id}`,
     },
   };
 }

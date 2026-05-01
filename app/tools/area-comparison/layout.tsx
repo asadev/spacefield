@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     description:
       "Compare Dubai neighborhoods across price per sqft, rental yield, schools, commute times, walkability, and 20+ metrics. Free, data-driven tool.",
     type: "website",
-    url: "https://example.com/tools/area-comparison",
+    url: "https://spacefield.co/tools/area-comparison",
   },
   twitter: {
     card: "summary_large_image",
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     description: "Pick 2-3 Dubai areas and compare them side-by-side across price, yield, schools, commute, and more.",
   },
   alternates: {
-    canonical: "https://example.com/tools/area-comparison",
+    canonical: "https://spacefield.co/tools/area-comparison",
   },
 };
 

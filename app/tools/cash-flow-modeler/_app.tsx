@@ -663,7 +663,7 @@ export default function CashFlowModelerApp(props: NativeAppProps) {
       `Total Return: AED ${fmtFull(summary.totalReturn)}`,
       `Equity Multiple: ${summary.equityMultiple.toFixed(2)}x`,
       ``,
-      `Generated at example.com/tools/cash-flow-modeler`,
+      `Generated at spacefield.co/tools/cash-flow-modeler`,
     ].join("\n");
     navigator.clipboard.writeText(text);
   }, [inputs, summary]);
@@ -674,7 +674,7 @@ export default function CashFlowModelerApp(props: NativeAppProps) {
       `Property: AED ${fmt(num(inputs.purchasePrice))}\n` +
       `IRR: ${pct(summary.irr)} | CoC: ${pct(summary.avgCashOnCash)}\n` +
       `Total Return: AED ${fmt(summary.totalReturn)}\n\n` +
-      `example.com/tools/cash-flow-modeler`
+      `spacefield.co/tools/cash-flow-modeler`
     );
     window.open(`https://wa.me/?text=${text}`, "_blank");
   }, [inputs, summary]);

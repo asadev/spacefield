@@ -958,7 +958,7 @@ export default function NeighborhoodDetailPage() {
           {/* Print-only footer — visible in PDF, hidden on screen */}
           <div className="hidden print:block mt-12 pt-6 border-t border-white/[0.10] text-center">
             <p className="text-sm text-gray-400">
-              Source: example.com | Visit example.com for more tools | Data as of {DATA_UPDATED}
+              Source: spacefield.co | Visit spacefield.co for more tools | Data as of {DATA_UPDATED}
             </p>
           </div>
         </div>

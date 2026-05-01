@@ -20,11 +20,8 @@ export default function robots(): MetadataRoute.Robots {
       },
     ],
     sitemap: [
-      "https://example.com/sitemap.xml",
-      "https://example.com/sitemap-core.xml",
-      "https://example.com/sitemap-blog.xml",
-      "https://example.com/sitemap-network.xml",
+      "https://spacefield.co/sitemap.xml",
     ],
-    host: "https://example.com",
+    host: "https://spacefield.co",
   };
 }

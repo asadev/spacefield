@@ -447,7 +447,7 @@ function RentVsBuyInner() {
   const getShareText = useCallback(() => {
     if (!lastRow) return "";
     const lines = [
-      "Rent vs Buy Analysis — example.com/tools/rent-vs-buy",
+      "Rent vs Buy Analysis — spacefield.co/tools/rent-vs-buy",
       "",
       `Verdict: ${verdict}${breakeven ? ` (crossover Y${breakeven})` : ""}`,
       "",
@@ -459,7 +459,7 @@ function RentVsBuyInner() {
       `Buy Net Wealth (Y${horizon}): ${fmtAED(lastRow.buyNetWealth)}`,
       `Difference: ${fmtAED(Math.abs(lastRow.buyNetWealth - lastRow.rentNetWealth))} in favor of ${lastRow.buyNetWealth > lastRow.rentNetWealth ? "buying" : "renting"}`,
       "",
-      "Calculate yours at example.com/tools/rent-vs-buy",
+      "Calculate yours at spacefield.co/tools/rent-vs-buy",
     ];
     return lines.join("\n");
   }, [lastRow, verdict, breakeven, price, monthlyRent, horizon]);

@@ -891,7 +891,7 @@ function OffplanAnalyzerInner() {
 
   const getShareText = useCallback(() => {
     if (results.length === 0) return "";
-    const lines = ["Off-Plan Payment Plan Analysis", "via example.com/tools/offplan-analyzer", ""];
+    const lines = ["Off-Plan Payment Plan Analysis", "via spacefield.co/tools/offplan-analyzer", ""];
     results.forEach((r) => {
       lines.push(`--- ${r.label} ---`);
       lines.push(`Property: ${fmt(r.propertyPrice)}`);

@@ -382,7 +382,7 @@ function PropertyValuationInner() {
       `Confidence: ${valuation.confidence}`,
       valuation.verdict ? `Asking Price Verdict: ${valuation.verdict}` : "",
       ``,
-      `Generated at example.com/tools/property-valuation`,
+      `Generated at spacefield.co/tools/property-valuation`,
     ]
       .filter(Boolean)
       .join("\n");
@@ -392,7 +392,7 @@ function PropertyValuationInner() {
   const shareWhatsApp = useCallback(() => {
     if (!valuation) return;
     const text = encodeURIComponent(
-      `Property Valuation: ${propertyType} in ${selectedArea}\nEstimated: AED ${formatNumber(Math.round(valuation.estimatedValue))}\nRange: AED ${formatNumber(Math.round(valuation.lowEstimate))} - AED ${formatNumber(Math.round(valuation.highEstimate))}\n\nFull tool: https://example.com/tools/property-valuation`
+      `Property Valuation: ${propertyType} in ${selectedArea}\nEstimated: AED ${formatNumber(Math.round(valuation.estimatedValue))}\nRange: AED ${formatNumber(Math.round(valuation.lowEstimate))} - AED ${formatNumber(Math.round(valuation.highEstimate))}\n\nFull tool: https://spacefield.co/tools/property-valuation`
     );
     window.open(`https://wa.me/?text=${text}`, "_blank");
   }, [valuation, selectedArea, propertyType]);

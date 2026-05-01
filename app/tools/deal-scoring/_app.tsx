@@ -537,7 +537,7 @@ export default function DealScoringApp(props: NativeAppProps) {
       `- Risk Score: ${Math.round(result.riskScore)}/20`,
       `Verdict: ${verdictMap[result.label] || result.label}`,
       `---`,
-      `Score your deals at example.com/tools/deal-scoring`,
+      `Score your deals at spacefield.co/tools/deal-scoring`,
     ];
     return lines.join("\n");
   }, [result, inputs.price]);

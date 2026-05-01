@@ -404,7 +404,7 @@ function GoldenVisaCheckerInner() {
       lines.push(`Documents Required: ${total}`);
     }
     lines.push(`---`);
-    lines.push(`Check your eligibility at example.com/tools/golden-visa-checker`);
+    lines.push(`Check your eligibility at spacefield.co/tools/golden-visa-checker`);
     return lines.join("\n");
   }, [result, propertyValue]);
 

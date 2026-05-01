@@ -18,7 +18,7 @@ import {
   SAUDI_TOOL_SLUGS,
 } from "@/lib/region";
 
-export const BASE_URL = "https://example.com";
+export const BASE_URL = "https://spacefield.co";
 
 export type SitemapEntry = {
   loc: string;

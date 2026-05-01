@@ -226,7 +226,7 @@ function CommissionCalculatorInner() {
     if (result.dldFee > 0) lines.push(`DLD Fee (4%): ${fmt(result.dldFee)}`);
     if (result.nocFee > 0) lines.push(`NOC Fee: ${fmt(result.nocFee)}`);
     lines.push(`---`);
-    lines.push(`Calculate yours at example.com/tools/commission-calculator`);
+    lines.push(`Calculate yours at spacefield.co/tools/commission-calculator`);
     return lines.join("\n");
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [result, currency]);

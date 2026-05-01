@@ -18,7 +18,7 @@ A lightweight **GFM-flavored** preview. Type on the left, see HTML on the right.
 - [x] Task items
 - [ ] Checkboxes
 - \`inline code\` and fenced code blocks
-- [Links](https://example.com) and images
+- [Links](https://spacefield.co) and images
 - Tables
 
 \`\`\`js

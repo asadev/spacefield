@@ -8,7 +8,7 @@ export const metadata: Metadata = {
     title: "Global Market Comparison – Real-Time Real Estate Data",
     description:
       "Compare property markets across 60+ countries. Live price indices, affordability ratios, GDP, population, and more.",
-    url: "https://example.com/tools/global-market-comparison",
+    url: "https://spacefield.co/tools/global-market-comparison",
   },
   twitter: {
     card: "summary_large_image",
@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     description: "Compare real estate markets across 60+ countries with live data from BIS, OECD, and World Bank.",
   },
   alternates: {
-    canonical: "https://example.com/tools/global-market-comparison",
+    canonical: "https://spacefield.co/tools/global-market-comparison",
   },
 };
 

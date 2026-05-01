@@ -704,13 +704,13 @@ function DeveloperPipelineInner() {
     );
     const text = `Dubai Developer Scorecards\n${"=".repeat(40)}\n${lines.join(
       "\n"
-    )}\n\nGenerated on example.com/tools/developer-pipeline`;
+    )}\n\nGenerated on spacefield.co/tools/developer-pipeline`;
     navigator.clipboard.writeText(text);
   }, []);
 
   const shareWhatsApp = useCallback(() => {
     const text = encodeURIComponent(
-      `Check out the Dubai Developer Pipeline Tracker - track construction progress, handover timelines & developer reliability scores:\nhttps://example.com/tools/developer-pipeline`
+      `Check out the Dubai Developer Pipeline Tracker - track construction progress, handover timelines & developer reliability scores:\nhttps://spacefield.co/tools/developer-pipeline`
     );
     window.open(`https://wa.me/?text=${text}`, "_blank");
   }, []);

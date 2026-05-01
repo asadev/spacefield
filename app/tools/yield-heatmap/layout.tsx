@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     description:
       "Interactive rental yield map for Dubai investors. Compare yields, rents, and prices across Marina, Downtown, JVC, and 40+ other communities.",
     type: "website",
-    url: "https://example.com/tools/yield-heatmap",
+    url: "https://spacefield.co/tools/yield-heatmap",
   },
   twitter: {
     card: "summary_large_image",
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     description: "Interactive rental yield map for Dubai investors. Compare yields across Marina, Downtown, JVC, and 40+ communities.",
   },
   alternates: {
-    canonical: "https://example.com/tools/yield-heatmap",
+    canonical: "https://spacefield.co/tools/yield-heatmap",
   },
 };
 

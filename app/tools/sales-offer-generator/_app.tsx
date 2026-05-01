@@ -435,7 +435,7 @@ export default function SalesOfferGeneratorApp(props: NativeAppProps) {
         form.agentPhone || "",
         form.companyName || "Acme Properties",
         ``,
-        `Generate yours at example.com/tools/sales-offer-generator`,
+        `Generate yours at spacefield.co/tools/sales-offer-generator`,
       ]
         .filter((l) => l !== null)
         .join("\n"),

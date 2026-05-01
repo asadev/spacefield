@@ -9,7 +9,7 @@ export const metadata: Metadata = {
     description:
       "Compare Dubai developers on delivery, quality, and appreciation. Data-driven scores for Emaar, DAMAC, Sobha, Nakheel, Azizi, Danube, and 25+ more.",
     type: "website",
-    url: "https://example.com/tools/developer-track-record",
+    url: "https://spacefield.co/tools/developer-track-record",
   },
   twitter: {
     card: "summary_large_image",
@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     description: "Compare Dubai developers on delivery, quality, and appreciation. Data-driven scores for 30+ developers.",
   },
   alternates: {
-    canonical: "https://example.com/tools/developer-track-record",
+    canonical: "https://spacefield.co/tools/developer-track-record",
   },
 };
 

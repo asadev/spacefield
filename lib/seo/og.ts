@@ -11,7 +11,7 @@
 
 import type { Region } from "@/lib/region";
 
-const BASE_URL = "https://example.com";
+const BASE_URL = "https://spacefield.co";
 
 export type OgType = "default" | "tool" | "region" | "blog" | "broker" | "network";
 export type OgAccent = "violet" | "emerald" | "purple" | "blue" | "rose" | "amber";
