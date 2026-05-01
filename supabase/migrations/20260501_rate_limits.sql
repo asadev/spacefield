@@ -43,32 +43,32 @@ security definer
 set search_path = public
 as $$
 declare
-  v_allowed boolean;
+  v_now   timestamptz := now();
+  v_count int;
 begin
+  -- Atomic upsert: reset window if expired, else increment. The
+  -- counter ALWAYS ticks for the current call (even denied ones) so
+  -- the original "cap-at-p_max" idea (which made the returning check
+  -- always-true once the cap was hit) is gone. The counter is now
+  -- bounded by RPS × window_seconds per key — fits well inside int4
+  -- even under heavy abuse.
   insert into public.rate_limit_buckets as b (id, count, window_start)
-  values (p_key, 1, now())
+  values (p_key, 1, v_now)
   on conflict (id) do update
     set
       count = case
-        when now() - b.window_start > make_interval(secs => p_window_seconds)
+        when v_now - b.window_start > make_interval(secs => p_window_seconds)
           then 1
-        when b.count < p_max
-          then b.count + 1
-        else b.count
+        else b.count + 1
       end,
       window_start = case
-        when now() - b.window_start > make_interval(secs => p_window_seconds)
-          then now()
+        when v_now - b.window_start > make_interval(secs => p_window_seconds)
+          then v_now
         else b.window_start
       end
-  returning
-    case
-      when count <= p_max then true
-      else false
-    end
-  into v_allowed;
+  returning b.count into v_count;
 
-  return coalesce(v_allowed, true);
+  return coalesce(v_count, 1) <= p_max;
 end;
 $$;
 
