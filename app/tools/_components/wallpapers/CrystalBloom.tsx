@@ -1,251 +1,375 @@
 "use client";
 
-/* CrystalBloom — soft pastel polygonal crystals that drift, rotate, and
- * glow. Each crystal has a halo gradient behind a translucent fill and
- * a thin bright stroke. Subtle mouse parallax shifts the whole field. */
+/* CrystalBloom — Three.js cloud of low-poly crystal meshes that drift
+ * and rotate in space, lit so faces catch the light.
+ *
+ * Inspired by Mamboleoo's DecorativeBackgrounds demo5 (the broken-apart
+ * polygonal sphere) and the holographic-crystal aesthetic from
+ * particlegalaxy.webflow.io / brainit.es. Replaces the original
+ * 2D-canvas implementation, which couldn't sell the faceted-3D look.
+ *
+ *   - 24 crystal meshes (6 in preview), each one of Icosahedron /
+ *     Octahedron / Dodecahedron / Tetrahedron geometry so the scene
+ *     isn't monotonous. flatShading: true on a MeshStandardMaterial
+ *     gives the low-poly faceted look.
+ *   - Distributed in a roughly spherical cloud around the origin via
+ *     random spherical coords with a Math.cbrt() radius bias so they
+ *     don't cluster at the center.
+ *   - Holographic palette (pastel pink, lavender, mint, soft yellow,
+ *     cyan) — one tint per crystal so each face catches a different
+ *     hue under the directional light.
+ *   - HemisphereLight (sky/ground) for ambient lift + DirectionalLight
+ *     for the catch-light on faces.
+ *   - Each crystal owns its own angular velocity (gentle, scaled in the
+ *     frame loop) and a per-axis sine drift around its base position so
+ *     they bob asynchronously, never in sync.
+ *   - Slow Y auto-rotation of the whole group + mouse-driven camera
+ *     tilt. Group is at rest when the pointer is idle.
+ *   - Per-crystal additive Sprite halo for the luminous look + a
+ *     wireframe overlay in a brighter tint for the "crystal facet" edge
+ *     glow.
+ *
+ * Lazy-loads Three via DesktopBackground's Suspense boundary. Pauses on
+ * visibilitychange. Respects prefers-reduced-motion (one static frame).
+ */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import * as THREE from "three";
 
 interface Props {
   preview?: { w: number; h: number };
 }
 
-interface Crystal {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  r: number;
-  rot: number;
-  vRot: number;
-  verts: Array<{ ang: number; rad: number }>; // unit polygon
-  color: string; // pastel
+const PALETTE = [
+  "#fbcfe8", // pastel pink
+  "#c4b5fd", // lavender
+  "#a7f3d0", // mint
+  "#fef3c7", // soft yellow
+  "#a5f3fc", // cyan
+];
+
+type GeomKind = "ico" | "octa" | "dodeca" | "tetra";
+const GEOM_KINDS: GeomKind[] = ["ico", "octa", "dodeca", "tetra"];
+
+function makeGeometry(kind: GeomKind, size: number): THREE.BufferGeometry {
+  switch (kind) {
+    case "ico":
+      return new THREE.IcosahedronGeometry(size, 0);
+    case "octa":
+      return new THREE.OctahedronGeometry(size, 0);
+    case "dodeca":
+      return new THREE.DodecahedronGeometry(size, 0);
+    case "tetra":
+      return new THREE.TetrahedronGeometry(size, 0);
+  }
 }
 
-const PALETTE = ["#fbcfe8", "#c4b5fd", "#a7f3d0", "#fef3c7"];
+/* Tiny radial-gradient sprite texture used for the per-crystal halo.
+ * Drawn once on a 64×64 canvas — cheap, cached by the GPU. */
+function makeHaloTexture(): THREE.CanvasTexture {
+  const size = 64;
+  const c = document.createElement("canvas");
+  c.width = c.height = size;
+  const ctx = c.getContext("2d");
+  if (ctx) {
+    const grad = ctx.createRadialGradient(
+      size / 2,
+      size / 2,
+      0,
+      size / 2,
+      size / 2,
+      size / 2
+    );
+    grad.addColorStop(0, "rgba(255,255,255,0.85)");
+    grad.addColorStop(0.4, "rgba(255,255,255,0.25)");
+    grad.addColorStop(0.75, "rgba(255,255,255,0.06)");
+    grad.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+  }
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
 
 export default function CrystalBloom({ preview }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Reduce density when used as a thumbnail.
+  const crystalCount = useMemo(() => (preview ? 6 : 24), [preview]);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const container = containerRef.current;
+    if (!container) return;
 
-    let dpr = Math.min(window.devicePixelRatio || 1, 2);
-    let cssW = preview?.w ?? canvas.clientWidth;
-    let cssH = preview?.h ?? canvas.clientHeight;
-    let raf = 0;
-    let running = true;
-    let t = 0;
-    const mouse = { x: 0, y: 0, tx: 0, ty: 0 };
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-    const reduced =
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    /* ─── Scene setup ────────────────────────────────────────────── */
+    const w = preview?.w ?? container.clientWidth;
+    const h = preview?.h ?? container.clientHeight;
 
-    const COUNT = preview ? 5 : 14;
-    const crystals: Crystal[] = [];
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: false,
+      powerPreference: "low-power",
+    });
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    renderer.setPixelRatio(dpr);
+    renderer.setSize(w, h, false);
+    renderer.setClearColor(0x0a0420, 1);
+    container.appendChild(renderer.domElement);
+    Object.assign(renderer.domElement.style, {
+      width: "100%",
+      height: "100%",
+      display: "block",
+    });
 
-    const seed = (n: number) => {
-      const s = Math.sin(n * 9301 + 49297) * 233280;
-      return s - Math.floor(s);
-    };
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 2000);
+    camera.position.set(0, 0, 60);
+    camera.lookAt(0, 0, 0);
 
-    const buildCrystals = () => {
-      crystals.length = 0;
-      for (let i = 0; i < COUNT; i++) {
-        const verts: Array<{ ang: number; rad: number }> = [];
-        const vCount = 3 + Math.floor(seed(i + 7) * 5); // 3..7
-        // generate angles in sorted order with slight jitter, plus per-vertex radius variance
-        for (let v = 0; v < vCount; v++) {
-          const baseAng = (v / vCount) * Math.PI * 2;
-          const jitter = (seed(i * 31 + v + 13) - 0.5) * 0.5;
-          verts.push({
-            ang: baseAng + jitter,
-            rad: 0.7 + seed(i * 41 + v + 19) * 0.4, // 0.7..1.1
-          });
-        }
-        const speed = 0.012 + seed(i + 23) * 0.022;
-        const dir = seed(i + 29) * Math.PI * 2;
-        crystals.push({
-          x: seed(i + 31) * cssW,
-          y: seed(i + 37) * cssH,
-          vx: Math.cos(dir) * speed,
-          vy: Math.sin(dir) * speed,
-          r: 60 + seed(i + 41) * 100,
-          rot: seed(i + 43) * Math.PI * 2,
-          vRot: (seed(i + 47) - 0.5) * 0.0006,
-          verts,
-          color: PALETTE[i % PALETTE.length],
-        });
-      }
-    };
+    const group = new THREE.Group();
+    scene.add(group);
 
-    const resize = () => {
-      cssW = preview?.w ?? canvas.clientWidth;
-      cssH = preview?.h ?? canvas.clientHeight;
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.floor(cssW * dpr);
-      canvas.height = Math.floor(cssH * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      buildCrystals();
-    };
+    /* ─── Lights ─────────────────────────────────────────────────── */
+    const hemi = new THREE.HemisphereLight(0xc4b5fd, 0x1e1b4b, 0.55);
+    scene.add(hemi);
+    const dir = new THREE.DirectionalLight(0xfbcfe8, 0.7);
+    dir.position.set(5, 8, 5);
+    scene.add(dir);
 
-    resize();
-    const ro = preview ? null : new ResizeObserver(resize);
-    if (ro) ro.observe(canvas);
+    /* ─── Crystal cloud ──────────────────────────────────────────── */
+    const haloTex = makeHaloTexture();
 
-    const onMouse = (e: MouseEvent) => {
-      mouse.tx = e.clientX / window.innerWidth;
-      mouse.ty = e.clientY / window.innerHeight;
-    };
-    if (!preview) window.addEventListener("mousemove", onMouse);
-
-    const drawBg = () => {
-      const g = ctx.createLinearGradient(0, 0, 0, cssH);
-      g.addColorStop(0, "#0a0420");
-      g.addColorStop(1, "#1a0a3a");
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, cssW, cssH);
-    };
-
-    const hexToRgb = (hex: string) => {
-      const h = hex.replace("#", "");
-      return {
-        r: parseInt(h.substring(0, 2), 16),
-        g: parseInt(h.substring(2, 4), 16),
-        b: parseInt(h.substring(4, 6), 16),
-      };
-    };
-
-    const drawCrystal = (c: Crystal, parallaxX: number, parallaxY: number) => {
-      const cx = c.x + parallaxX;
-      const cy = c.y + parallaxY;
-      const rgb = hexToRgb(c.color);
-      const rgbStr = `${rgb.r},${rgb.g},${rgb.b}`;
-
-      // Glow halo (skip in preview to keep thumbnails clean and cheap)
-      if (!preview) {
-        const halo = ctx.createRadialGradient(cx, cy, 0, cx, cy, c.r * 1.7);
-        halo.addColorStop(0, `rgba(${rgbStr},0.35)`);
-        halo.addColorStop(0.5, `rgba(${rgbStr},0.12)`);
-        halo.addColorStop(1, `rgba(${rgbStr},0)`);
-        ctx.fillStyle = halo;
-        ctx.fillRect(
-          cx - c.r * 1.7,
-          cy - c.r * 1.7,
-          c.r * 3.4,
-          c.r * 3.4
-        );
-      }
-
-      // Build polygon path (rotation applied)
-      ctx.beginPath();
-      for (let i = 0; i < c.verts.length; i++) {
-        const v = c.verts[i];
-        const a = v.ang + c.rot;
-        const px = cx + Math.cos(a) * c.r * v.rad;
-        const py = cy + Math.sin(a) * c.r * v.rad;
-        if (i === 0) ctx.moveTo(px, py);
-        else ctx.lineTo(px, py);
-      }
-      ctx.closePath();
-
-      // Translucent fill — gradient gives a holographic feel
-      const fill = ctx.createLinearGradient(
-        cx - c.r,
-        cy - c.r,
-        cx + c.r,
-        cy + c.r
-      );
-      fill.addColorStop(0, `rgba(${rgbStr},0.22)`);
-      fill.addColorStop(1, `rgba(${rgbStr},0.1)`);
-      ctx.fillStyle = fill;
-      ctx.fill();
-
-      // Bright thin stroke
-      ctx.strokeStyle = `rgba(${rgbStr},0.6)`;
-      ctx.lineWidth = 1;
-      ctx.stroke();
-    };
-
-    const renderAll = (parallaxX: number, parallaxY: number) => {
-      drawBg();
-      for (let i = 0; i < crystals.length; i++) {
-        drawCrystal(crystals[i], parallaxX, parallaxY);
-      }
-    };
-
-    if (reduced) {
-      renderAll(0, 0);
-      return () => {
-        ro?.disconnect();
-        if (!preview) window.removeEventListener("mousemove", onMouse);
-      };
+    interface Crystal {
+      group: THREE.Group;
+      base: THREE.Vector3;
+      // per-axis drift amplitude (units) and frequency (rad / ms)
+      ampX: number;
+      ampY: number;
+      ampZ: number;
+      freqX: number;
+      freqY: number;
+      freqZ: number;
+      phaseX: number;
+      phaseY: number;
+      phaseZ: number;
+      // angular velocities (rad / s) — applied scaled in the frame loop
+      rotXVel: number;
+      rotYVel: number;
     }
+
+    // Track resources for clean disposal.
+    const ownedGeoms: THREE.BufferGeometry[] = [];
+    const ownedMats: THREE.Material[] = [];
+    const ownedTextures: THREE.Texture[] = [haloTex];
+
+    const crystals: Crystal[] = [];
+    const cloudRadius = preview ? 24 : 40;
+
+    for (let i = 0; i < crystalCount; i++) {
+      // Random spherical coord with cube-root radius bias so they fill
+      // the volume rather than clustering at the origin.
+      const u = Math.random();
+      const radius = cloudRadius * (0.4 + 0.6 * Math.cbrt(u));
+      const theta = Math.random() * Math.PI * 2;
+      const phi = Math.acos(2 * Math.random() - 1);
+      const bx = radius * Math.sin(phi) * Math.cos(theta);
+      const by = radius * Math.sin(phi) * Math.sin(theta);
+      const bz = radius * Math.cos(phi);
+
+      const size = 0.6 + Math.random() * 1.8; // 0.6..2.4
+      const kind = GEOM_KINDS[i % GEOM_KINDS.length];
+      const colorHex = PALETTE[i % PALETTE.length];
+      const color = new THREE.Color(colorHex);
+
+      const geom = makeGeometry(kind, size);
+      ownedGeoms.push(geom);
+
+      const mat = new THREE.MeshStandardMaterial({
+        color,
+        flatShading: true,
+        metalness: 0.1,
+        roughness: 0.55,
+      });
+      ownedMats.push(mat);
+      const mesh = new THREE.Mesh(geom, mat);
+
+      // Wireframe overlay in a brighter tint — the "facet edge glow".
+      const wireColor = color.clone().lerp(new THREE.Color(0xffffff), 0.45);
+      const wireMat = new THREE.MeshBasicMaterial({
+        color: wireColor,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.45,
+        depthWrite: false,
+      });
+      ownedMats.push(wireMat);
+      // Tiny scale-up so wireframe sits just outside the solid mesh and
+      // doesn't z-fight the shaded faces.
+      const wire = new THREE.Mesh(geom, wireMat);
+      wire.scale.setScalar(1.02);
+
+      // Soft additive halo behind the crystal.
+      const haloMat = new THREE.SpriteMaterial({
+        map: haloTex,
+        color,
+        transparent: true,
+        depthWrite: false,
+        blending: THREE.AdditiveBlending,
+        opacity: 0.55,
+      });
+      ownedMats.push(haloMat);
+      const halo = new THREE.Sprite(haloMat);
+      halo.scale.set(size * 3, size * 3, 1);
+
+      const cGroup = new THREE.Group();
+      cGroup.add(halo);
+      cGroup.add(mesh);
+      cGroup.add(wire);
+      cGroup.position.set(bx, by, bz);
+      // Random initial orientation so faces aren't all aligned.
+      cGroup.rotation.set(
+        Math.random() * Math.PI * 2,
+        Math.random() * Math.PI * 2,
+        Math.random() * Math.PI * 2
+      );
+      group.add(cGroup);
+
+      crystals.push({
+        group: cGroup,
+        base: new THREE.Vector3(bx, by, bz),
+        ampX: 1 + Math.random() * 2, // 1..3
+        ampY: 1 + Math.random() * 2,
+        ampZ: 1 + Math.random() * 2,
+        freqX: 0.0003 + Math.random() * 0.0005, // 0.0003..0.0008
+        freqY: 0.0003 + Math.random() * 0.0005,
+        freqZ: 0.0003 + Math.random() * 0.0005,
+        phaseX: Math.random() * Math.PI * 2,
+        phaseY: Math.random() * Math.PI * 2,
+        phaseZ: Math.random() * Math.PI * 2,
+        // -0.4..+0.4 rad/s (gentle when scaled by 0.2 in frame loop)
+        rotXVel: (Math.random() - 0.5) * 0.8,
+        rotYVel: (Math.random() - 0.5) * 0.8,
+      });
+    }
+
+    /* ─── Mouse-driven camera tilt ──────────────────────────────── */
+    const targetCam = new THREE.Vector2(0, 0);
+    const curCam = new THREE.Vector2(0, 0);
+    const onPointerMove = (e: PointerEvent) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+      const ny = ((e.clientY - rect.top) / rect.height) * 2 - 1;
+      // ±6 in X, ±4 in Y.
+      targetCam.x = nx * 6;
+      targetCam.y = -ny * 4;
+    };
+    const onPointerLeave = () => targetCam.set(0, 0);
+    if (!preview) {
+      window.addEventListener("pointermove", onPointerMove, { passive: true });
+      window.addEventListener("pointerleave", onPointerLeave);
+    }
+
+    /* ─── Render loop ────────────────────────────────────────────── */
+    let rafId = 0;
+    let running = true;
+    let last = performance.now();
+    const baseCamX = camera.position.x;
+    const baseCamY = camera.position.y;
 
     const onVis = () => {
       running = document.visibilityState !== "hidden";
       if (running) {
         last = performance.now();
-        raf = requestAnimationFrame(frame);
+        rafId = requestAnimationFrame(frame);
       } else {
-        cancelAnimationFrame(raf);
+        cancelAnimationFrame(rafId);
       }
     };
     document.addEventListener("visibilitychange", onVis);
 
-    let last = performance.now();
-    const frame = (now: number) => {
+    function frame(now: number) {
       if (!running) return;
-      const dt = Math.min(48, now - last);
+      const dt = Math.min(50, now - last) / 1000; // seconds
       last = now;
-      t += dt;
-      mouse.x += (mouse.tx - mouse.x) * 0.04;
-      mouse.y += (mouse.ty - mouse.y) * 0.04;
 
-      // Update positions and rotations
+      // Slow auto-rotation of the whole crystal cloud around Y.
+      group.rotation.y += dt * 0.04;
+
+      // Smooth camera follow.
+      curCam.x += (targetCam.x - curCam.x) * Math.min(1, dt * 3);
+      curCam.y += (targetCam.y - curCam.y) * Math.min(1, dt * 3);
+      camera.position.x = baseCamX + curCam.x;
+      camera.position.y = baseCamY + curCam.y;
+      camera.lookAt(0, 0, 0);
+
+      // Per-crystal drift + spin. Angular velocities scaled by 0.2 so
+      // the spin reads as gentle even at the upper end of the range.
       for (let i = 0; i < crystals.length; i++) {
         const c = crystals[i];
-        c.x += c.vx * dt;
-        c.y += c.vy * dt;
-        if (!preview) c.rot += c.vRot * dt;
-
-        // Wrap around edges (with margin so crystals don't pop in/out abruptly)
-        const margin = c.r * 1.2;
-        if (c.x < -margin) c.x = cssW + margin;
-        else if (c.x > cssW + margin) c.x = -margin;
-        if (c.y < -margin) c.y = cssH + margin;
-        else if (c.y > cssH + margin) c.y = -margin;
+        const ox = c.ampX * Math.sin(now * c.freqX + c.phaseX);
+        const oy = c.ampY * Math.sin(now * c.freqY + c.phaseY);
+        const oz = c.ampZ * Math.sin(now * c.freqZ + c.phaseZ);
+        c.group.position.set(c.base.x + ox, c.base.y + oy, c.base.z + oz);
+        c.group.rotation.x += c.rotXVel * dt * 0.2;
+        c.group.rotation.y += c.rotYVel * dt * 0.2;
       }
 
-      const px = (mouse.x - 0.5) * 30;
-      const py = (mouse.y - 0.5) * 30;
+      renderer.render(scene, camera);
+      if (!reduceMotion) rafId = requestAnimationFrame(frame);
+    }
 
-      renderAll(px, py);
+    if (reduceMotion) {
+      // Render one static frame and stop.
+      renderer.render(scene, camera);
+    } else {
+      rafId = requestAnimationFrame(frame);
+    }
 
-      raf = requestAnimationFrame(frame);
-    };
-    raf = requestAnimationFrame(frame);
+    /* ─── Resize ─────────────────────────────────────────────────── */
+    let ro: ResizeObserver | null = null;
+    if (!preview) {
+      ro = new ResizeObserver(() => {
+        const nw = container.clientWidth;
+        const nh = container.clientHeight;
+        if (nw === 0 || nh === 0) return;
+        renderer.setSize(nw, nh, false);
+        camera.aspect = nw / nh;
+        camera.updateProjectionMatrix();
+      });
+      ro.observe(container);
+    }
 
+    /* ─── Cleanup ────────────────────────────────────────────────── */
     return () => {
       running = false;
-      cancelAnimationFrame(raf);
+      cancelAnimationFrame(rafId);
       document.removeEventListener("visibilitychange", onVis);
-      if (!preview) window.removeEventListener("mousemove", onMouse);
+      if (!preview) {
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerleave", onPointerLeave);
+      }
       ro?.disconnect();
+      for (const g of ownedGeoms) g.dispose();
+      for (const m of ownedMats) m.dispose();
+      for (const t of ownedTextures) t.dispose();
+      renderer.dispose();
+      if (renderer.domElement.parentNode === container) {
+        container.removeChild(renderer.domElement);
+      }
     };
-  }, [preview]);
+  }, [preview, crystalCount]);
 
   return (
-    <canvas
-      ref={canvasRef}
+    <div
+      ref={containerRef}
       style={{
         width: preview ? `${preview.w}px` : "100%",
         height: preview ? `${preview.h}px` : "100%",
-        display: "block",
       }}
     />
   );
