@@ -24,6 +24,7 @@ import { ICON_STYLES } from "./icon-styles";
 import { useActiveWidgets, WIDGET_REGISTRY } from "./Widgets";
 import ProfilePane from "./ProfilePane";
 import WorkspacesPane from "./WorkspacesPane";
+import WorkspaceScopedSection from "./workspace-settings/WorkspaceScopedSection";
 import { useWorkspaces } from "./useWorkspaces";
 
 const EASE = [0.25, 0.46, 0.45, 0.94] as const;
@@ -91,11 +92,6 @@ const SECTIONS: SectionDef[] = [
 
 export default function MobileSettings({ open, initialSection = "profile", onClose }: Props) {
   const [section, setSection] = useState<MobileSettingsSection | null>(null);
-  // Used by the "AI Assistant" sub-screen to deep-link straight into
-  // the active workspace's AI tab without making the user drill in
-  // through Workspaces → tap row → tap AI tab.
-  const { activeId } = useWorkspaces();
-
   useEffect(() => {
     if (!open) return;
     setSection(initialSection);
@@ -188,11 +184,8 @@ export default function MobileSettings({ open, initialSection = "profile", onClo
                     </div>
                   )}
                   {section === "ai" && (
-                    <div className="rounded-2xl border border-app bg-app-elevated p-1">
-                      <WorkspacesPane
-                        initialExpandedId={activeId}
-                        initialSection="ai"
-                      />
+                    <div className="rounded-2xl border border-app bg-app-elevated p-3">
+                      <WorkspaceScopedSection section="ai" />
                     </div>
                   )}
                   {section === "appearance" && <AppearanceSection />}

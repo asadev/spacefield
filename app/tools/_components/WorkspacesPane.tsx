@@ -1,16 +1,14 @@
 "use client";
 
-/* WorkspacesPane — Settings → Workspaces section.
+/* WorkspacesPane — Settings → All workspaces.
  *
- * Outer shell for the rebuilt workspace settings experience. Each row
- * (owned + joined + pending invites) is collapsible. Expanding a row
- * mounts WorkspaceSettingsView which handles everything else through
- * its own tabs:
+ * List view only. Switch active workspace, accept invites, leave.
+ * Workspace settings (Members, AI, Storage, Permissions, etc.) are now
+ * separate top-level entries in SettingsPanel that operate on the
+ * active workspace via WorkspaceScopedSection — no more inline tabs
+ * here.
  *
- *   General | Storage | Members | Permissions | Activity | Danger
- *
- * Pending invites still get their accept/decline shortcut at the top
- * since those don't need a settings view.
+ * Pending invites still get their accept/decline shortcut at the top.
  */
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -19,10 +17,7 @@ import { useWorkspaces } from "./useWorkspaces";
 import {
   formatStorageBytes,
 } from "@/app/_data/storage-addons";
-import WorkspaceSettingsView from "./workspace-settings/WorkspaceSettingsView";
 import type {
-  SectionId,
-  WorkspaceFullRow,
   WorkspaceRole,
   WorkspaceSummary,
 } from "./workspace-settings/types";
@@ -38,26 +33,12 @@ interface PendingInvite {
   inviter_name?: string;
 }
 
-interface WorkspacesPaneProps {
-  /** Auto-expand this workspace row on first render. Used by the mobile
-   *  Settings deep-link to drop the user straight into a workspace's
-   *  settings without an extra tap. */
-  initialExpandedId?: string;
-  /** Inside the auto-expanded row, jump to this section first. Currently
-   *  used by the mobile Settings "AI Assistant" entry to land on the
-   *  AI tab. */
-  initialSection?: SectionId;
-}
-
-export default function WorkspacesPane({
-  initialExpandedId,
-  initialSection,
-}: WorkspacesPaneProps = {}) {
+export default function WorkspacesPane() {
   const { user, supabase, enabled } = useAuth();
   const {
     workspaces: localWs,
+    activeId,
     switchWorkspace,
-    deleteWorkspace: deleteLocalWorkspace,
   } = useWorkspaces();
 
   const [rows, setRows] = useState<WorkspaceSummary[]>([]);
@@ -67,28 +48,9 @@ export default function WorkspacesPane({
   const [msg, setMsg] = useState<
     { type: "success" | "error"; text: string } | null
   >(null);
-  const [expandedId, setExpandedId] = useState<string | null>(
-    initialExpandedId ?? null
-  );
 
-  // If the deep-linked workspace appears later (loaded after first
-  // render) re-apply expansion. Skip if user already toggled something.
-  const userToggledRef = useMemo(() => ({ current: false }), []);
-  useEffect(() => {
-    if (userToggledRef.current) return;
-    if (!initialExpandedId) return;
-    if (rows.some((r) => r.id === initialExpandedId)) {
-      setExpandedId(initialExpandedId);
-    }
-  }, [initialExpandedId, rows, userToggledRef]);
-
-  // Tier base + name from /api/me. Used by StorageSection.
-  const [tierBaseMb, setTierBaseMb] = useState<number | null>(null);
-  const [tierName, setTierName] = useState<string>("Free");
-
-  // Lightweight storage summary (cap + used) shown in the row header so
-  // the user can see usage without expanding. Backed by the same RPC the
-  // detailed view uses.
+  // Lightweight storage summary (cap + used) shown in each row so the
+  // user can see usage at a glance.
   const [rowStorage, setRowStorage] = useState<
     Record<string, { capBytes: number; usedBytes: number }>
   >({});
@@ -154,25 +116,6 @@ export default function WorkspacesPane({
         );
       } else {
         setPending([]);
-      }
-
-      // Tier base.
-      try {
-        const meRes = await fetch("/api/me", { cache: "no-store" });
-        if (meRes.ok) {
-          const meBody = (await meRes.json()) as {
-            tier_config?: {
-              name?: string | null;
-              max_storage_per_workspace_mb?: number | null;
-            } | null;
-          };
-          setTierBaseMb(
-            meBody.tier_config?.max_storage_per_workspace_mb ?? null
-          );
-          setTierName(meBody.tier_config?.name ?? "Free");
-        }
-      } catch {
-        // ignore — fall back to RPC-only cap rendering
       }
 
       // Per-row storage summary for ALL workspaces (members can see
@@ -286,33 +229,6 @@ export default function WorkspacesPane({
     }
   };
 
-  const onWorkspaceDeleted = (id: string) => {
-    setRows((prev) => prev.filter((r) => r.id !== id));
-    setPending((prev) => prev.filter((p) => p.workspace_id !== id));
-    deleteLocalWorkspace(id);
-    setExpandedId(null);
-  };
-
-  const onWorkspaceChanged = (
-    id: string,
-    patch: Partial<WorkspaceFullRow>
-  ) => {
-    if (typeof patch.name === "string") {
-      setRows((prev) =>
-        prev.map((r) => (r.id === id ? { ...r, name: patch.name as string } : r))
-      );
-    }
-  };
-
-  const onError = useCallback(
-    (text: string) => setMsg({ type: "error", text }),
-    []
-  );
-  const onSuccess = useCallback(
-    (text: string) => setMsg({ type: "success", text }),
-    []
-  );
-
   /* ───────── Render ───────── */
 
   if (!enabled) {
@@ -400,6 +316,14 @@ export default function WorkspacesPane({
         </div>
       )}
 
+      {/* Hint pointing to per-workspace settings sections in the rail */}
+      <p className="text-xs text-muted">
+        Switch to a workspace by clicking its name. Workspace settings —
+        Members, AI Assistant, Storage, Permissions, Activity, Danger zone —
+        each have their own entry in the sidebar and operate on whichever
+        workspace is currently active.
+      </p>
+
       {/* Owned workspaces */}
       <Section
         title="My workspaces"
@@ -411,27 +335,14 @@ export default function WorkspacesPane({
           ) : null
         }
       >
-        <ul className="mt-3 space-y-3">
+        <ul className="mt-3 space-y-2">
           {ownedRows.map((w) => (
             <WorkspaceRow
               key={w.id}
               workspace={w}
               storage={rowStorage[w.id]}
-              expanded={expandedId === w.id}
-              onToggle={() => {
-                userToggledRef.current = true;
-                setExpandedId((cur) => (cur === w.id ? null : w.id));
-              }}
-              initialSection={
-                expandedId === w.id ? initialSection : undefined
-              }
+              isActive={w.id === activeId}
               onSwitch={() => switchWorkspace(w.id)}
-              tierBaseMb={tierBaseMb}
-              tierName={tierName}
-              onError={onError}
-              onSuccess={onSuccess}
-              onWorkspaceDeleted={onWorkspaceDeleted}
-              onWorkspaceChanged={onWorkspaceChanged}
             />
           ))}
         </ul>
@@ -449,27 +360,14 @@ export default function WorkspacesPane({
           ) : null
         }
       >
-        <ul className="mt-3 space-y-3">
+        <ul className="mt-3 space-y-2">
           {joinedRows.map((w) => (
             <WorkspaceRow
               key={w.id}
               workspace={w}
               storage={rowStorage[w.id]}
-              expanded={expandedId === w.id}
-              onToggle={() => {
-                userToggledRef.current = true;
-                setExpandedId((cur) => (cur === w.id ? null : w.id));
-              }}
-              initialSection={
-                expandedId === w.id ? initialSection : undefined
-              }
+              isActive={w.id === activeId}
               onSwitch={() => switchWorkspace(w.id)}
-              tierBaseMb={tierBaseMb}
-              tierName={tierName}
-              onError={onError}
-              onSuccess={onSuccess}
-              onWorkspaceDeleted={onWorkspaceDeleted}
-              onWorkspaceChanged={onWorkspaceChanged}
               onLeave={() => handleLeave(w.id)}
               busy={busy === w.id}
             />
@@ -512,33 +410,17 @@ function Section({
 function WorkspaceRow({
   workspace,
   storage,
-  expanded,
-  onToggle,
+  isActive,
   onSwitch,
-  tierBaseMb,
-  tierName,
-  onError,
-  onSuccess,
-  onWorkspaceDeleted,
-  onWorkspaceChanged,
   onLeave,
   busy,
-  initialSection,
 }: {
   workspace: WorkspaceSummary;
   storage: { capBytes: number; usedBytes: number } | undefined;
-  expanded: boolean;
-  onToggle: () => void;
+  isActive: boolean;
   onSwitch: () => void;
-  tierBaseMb: number | null;
-  tierName: string;
-  onError: (msg: string) => void;
-  onSuccess: (msg: string) => void;
-  onWorkspaceDeleted: (id: string) => void;
-  onWorkspaceChanged: (id: string, patch: Partial<WorkspaceFullRow>) => void;
   onLeave?: () => void;
   busy?: boolean;
-  initialSection?: SectionId;
 }) {
   const cap = storage?.capBytes ?? 0;
   const used = storage?.usedBytes ?? 0;
@@ -553,59 +435,59 @@ function WorkspaceRow({
   );
 
   return (
-    <li className="rounded-xl border border-app bg-app">
-      <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0 flex-1">
-          <button
-            type="button"
-            onClick={onSwitch}
-            className="block text-left text-sm font-medium text-app transition-colors hover:text-tool-accent"
-            title="Open this workspace"
-          >
-            {workspace.name}
-          </button>
-          <div className="mt-0.5 text-xs text-muted">
-            <span className="capitalize text-secondary">{workspace.role}</span>{" "}
-            · {workspace.member_count}{" "}
-            {workspace.member_count === 1 ? "member" : "members"} · {usageLabel}
-          </div>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {workspace.role !== "owner" && onLeave && (
-            <button
-              type="button"
-              className={`${PILL} border-rose-400/30 bg-rose-400/10 text-rose-400 hover:bg-rose-400/20`}
-              disabled={busy}
-              onClick={onLeave}
-            >
-              Leave
-            </button>
+    <li
+      className={`flex flex-col gap-3 rounded-xl border bg-app p-3 transition-colors sm:flex-row sm:items-center sm:justify-between ${
+        isActive
+          ? "border-tool-accent bg-tool-accent-soft/20"
+          : "border-app hover:bg-surface/40"
+      }`}
+    >
+      <div className="min-w-0 flex-1">
+        <button
+          type="button"
+          onClick={onSwitch}
+          disabled={isActive}
+          className={`block text-left text-sm font-medium transition-colors ${
+            isActive
+              ? "text-tool-accent"
+              : "text-app hover:text-tool-accent"
+          }`}
+          title={isActive ? "Currently active workspace" : "Switch to this workspace"}
+        >
+          {workspace.name}
+          {isActive && (
+            <span className="ml-2 rounded-md border border-tool-accent bg-tool-accent-soft px-1.5 py-0.5 text-[0.55rem] uppercase tracking-[0.14em] text-tool-accent">
+              Active
+            </span>
           )}
+        </button>
+        <div className="mt-0.5 text-xs text-muted">
+          <span className="capitalize text-secondary">{workspace.role}</span>{" "}
+          · {workspace.member_count}{" "}
+          {workspace.member_count === 1 ? "member" : "members"} · {usageLabel}
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        {!isActive && (
           <button
             type="button"
             className={PILL}
-            onClick={onToggle}
-            aria-expanded={expanded}
+            onClick={onSwitch}
           >
-            {expanded ? "Close settings" : "Settings"}
+            Switch
           </button>
-        </div>
+        )}
+        {workspace.role !== "owner" && onLeave && (
+          <button
+            type="button"
+            className={`${PILL} border-rose-400/30 bg-rose-400/10 text-rose-400 hover:bg-rose-400/20`}
+            disabled={busy}
+            onClick={onLeave}
+          >
+            {busy ? "Leaving…" : "Leave"}
+          </button>
+        )}
       </div>
-
-      {expanded && (
-        <div className="border-t border-app p-3">
-          <WorkspaceSettingsView
-            workspace={workspace}
-            tierBaseMb={tierBaseMb}
-            tierName={tierName}
-            onError={onError}
-            onSuccess={onSuccess}
-            onWorkspaceDeleted={onWorkspaceDeleted}
-            onWorkspaceChanged={onWorkspaceChanged}
-            initialSection={initialSection}
-          />
-        </div>
-      )}
     </li>
   );
 }

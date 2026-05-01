@@ -11,6 +11,7 @@ import { useHotCornersEnabled } from "./HotCorners";
 import { useWorkspaceKey } from "./useWorkspaces";
 import ProfilePane from "./ProfilePane";
 import WorkspacesPane from "./WorkspacesPane";
+import WorkspaceScopedSection from "./workspace-settings/WorkspaceScopedSection";
 
 /* SettingsPanel — single-pane macOS-style System Settings clone.
  *
@@ -23,73 +24,154 @@ import WorkspacesPane from "./WorkspacesPane";
  * the workspace-scoped desktop preference hooks. */
 
 type SectionId =
+  // Account
   | "profile"
+  // Workspace-scoped (operate on the active workspace)
+  | "workspace-info"
+  | "members"
+  | "permissions"
+  | "ai"
+  | "storage"
+  | "activity"
+  | "danger"
+  // Workspaces list (manage / switch / archive)
   | "workspaces"
+  // Desktop chrome
   | "appearance"
   | "dock"
   | "widgets"
   | "sounds"
   | "hot-corners"
   | "keyboard"
+  // About
   | "reset";
 
 interface SectionDef {
   id: SectionId;
+  group: string;
   label: string;
   description: string;
   iconPath: string;
 }
 
 const SECTIONS: SectionDef[] = [
+  // Account
   {
+    group: "Account",
     id: "profile",
     label: "Profile",
     description: "Username, name, designation, bio, social links, account.",
     iconPath: TOOL_ICONS.users,
   },
+
+  // Active workspace settings — each lifted to top level so AI / Members /
+  // Storage / etc. are reachable in one click instead of tabs-inside-rows.
   {
-    id: "workspaces",
-    label: "Workspaces",
-    description: "Your workspaces, members, invites.",
-    iconPath: TOOL_ICONS.dashboard,
+    group: "Workspace",
+    id: "workspace-info",
+    label: "Workspace info",
+    description: "Name, description, avatar, default member role.",
+    iconPath: TOOL_ICONS.home,
   },
   {
+    group: "Workspace",
+    id: "members",
+    label: "Members",
+    description: "Invite people, manage roles, leave the workspace.",
+    iconPath: TOOL_ICONS.users,
+  },
+  {
+    group: "Workspace",
+    id: "permissions",
+    label: "Permissions",
+    description: "Who can invite, install, uninstall apps.",
+    iconPath: TOOL_ICONS.shield,
+  },
+  {
+    group: "Workspace",
+    id: "ai",
+    label: "AI Assistant",
+    description: "Persona, skills, balance, WhatsApp + Telegram channels.",
+    iconPath: TOOL_ICONS.message,
+  },
+  {
+    group: "Workspace",
+    id: "storage",
+    label: "Storage",
+    description: "Quota, usage, top files, add-ons.",
+    iconPath: TOOL_ICONS.document,
+  },
+  {
+    group: "Workspace",
+    id: "activity",
+    label: "Activity",
+    description: "Recent member, role, and settings changes.",
+    iconPath: TOOL_ICONS.pulse,
+  },
+  {
+    group: "Workspace",
+    id: "danger",
+    label: "Danger zone",
+    description: "Archive, transfer ownership, delete the workspace.",
+    iconPath: TOOL_ICONS.lock,
+  },
+
+  // List of all workspaces — switch / create / archive / accept invites.
+  {
+    group: "Manage",
+    id: "workspaces",
+    label: "All workspaces",
+    description: "Switch between workspaces, accept invites, leave.",
+    iconPath: TOOL_ICONS.grid,
+  },
+
+  // Desktop / shell preferences
+  {
+    group: "Desktop",
     id: "appearance",
     label: "Appearance",
     description: "Theme, wallpaper, icons, accent.",
     iconPath: TOOL_ICONS.palette,
   },
   {
+    group: "Desktop",
     id: "dock",
     label: "Dock",
     description: "What's pinned and how it shows up.",
     iconPath: TOOL_ICONS.dots9,
   },
   {
+    group: "Desktop",
     id: "widgets",
     label: "Widgets",
     description: "Live tiles on your desktop.",
-    iconPath: TOOL_ICONS.dashboard,
+    iconPath: TOOL_ICONS.chart,
   },
   {
+    group: "Desktop",
     id: "sounds",
     label: "Sounds",
     description: "UI feedback and chimes.",
     iconPath: TOOL_ICONS.bell,
   },
   {
+    group: "Desktop",
     id: "hot-corners",
     label: "Hot corners",
     description: "Toss the cursor into a corner to trigger an action.",
-    iconPath: TOOL_ICONS.grid,
+    iconPath: TOOL_ICONS.target,
   },
   {
+    group: "Desktop",
     id: "keyboard",
     label: "Keyboard",
     description: "Shortcuts you can press anywhere on the desktop.",
     iconPath: TOOL_ICONS.code,
   },
+
+  // About
   {
+    group: "About",
     id: "reset",
     label: "Reset",
     description: "Wipe and start over.",
@@ -355,8 +437,8 @@ export default function SettingsPanel({
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 12, scale: 0.98 }}
             transition={{ type: "spring", stiffness: 260, damping: 24 }}
-            className="sf-glass-window relative z-10 mx-auto flex h-[min(90vh,560px)] w-[min(94vw,720px)] flex-col overflow-hidden rounded-2xl"
-            style={{ marginTop: "8vh" }}
+            className="sf-glass-window relative z-10 mx-auto flex h-[min(92vh,720px)] w-[min(96vw,1024px)] flex-col overflow-hidden rounded-2xl"
+            style={{ marginTop: "4vh" }}
           >
             {/* Header */}
             <div className="sf-glass-titlebar flex items-center gap-3 px-5 py-3">
@@ -392,45 +474,58 @@ export default function SettingsPanel({
             </div>
 
             {/* Body — sidebar + pane */}
-            <div className="grid flex-1 grid-cols-[200px_1fr] overflow-hidden">
-              {/* Sidebar */}
+            <div className="grid flex-1 grid-cols-[220px_1fr] overflow-hidden">
+              {/* Sidebar — sections grouped with subtle headers, all
+                  reachable in one click (macOS System Settings style). */}
               <nav
                 aria-label="Settings sections"
                 className="flex min-h-0 flex-col overflow-y-auto border-r border-app bg-surface/40 p-2"
               >
-                {SECTIONS.map((s) => {
+                {SECTIONS.map((s, i) => {
                   const active = s.id === section;
+                  const showGroup =
+                    i === 0 || SECTIONS[i - 1].group !== s.group;
                   return (
-                    <button
-                      key={s.id}
-                      type="button"
-                      onClick={() => setSection(s.id)}
-                      aria-current={active ? "page" : undefined}
-                      className={`mb-0.5 flex items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[0.78rem] transition-colors ${
-                        active
-                          ? "bg-surface-strong text-app"
-                          : "text-secondary hover:bg-surface hover:text-app"
-                      }`}
-                    >
-                      <span
-                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${
+                    <div key={s.id}>
+                      {showGroup && (
+                        <div
+                          className={`px-2 ${
+                            i === 0 ? "pt-1" : "pt-3"
+                          } pb-1 text-[0.58rem] font-semibold uppercase tracking-[0.2em] text-faint`}
+                        >
+                          {s.group}
+                        </div>
+                      )}
+                      <button
+                        type="button"
+                        onClick={() => setSection(s.id)}
+                        aria-current={active ? "page" : undefined}
+                        className={`mb-0.5 flex w-full items-center gap-2.5 rounded-md px-2 py-1.5 text-left text-[0.78rem] transition-colors ${
                           active
-                            ? "bg-app text-app"
-                            : "bg-surface text-secondary"
+                            ? "bg-surface-strong text-app"
+                            : "text-secondary hover:bg-surface hover:text-app"
                         }`}
                       >
-                        <svg
-                          width="12"
-                          height="12"
-                          viewBox="0 0 24 24"
-                          fill="currentColor"
-                          aria-hidden="true"
+                        <span
+                          className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md ${
+                            active
+                              ? "bg-app text-app"
+                              : "bg-surface text-secondary"
+                          }`}
                         >
-                          <path d={s.iconPath} />
-                        </svg>
-                      </span>
-                      <span className="truncate">{s.label}</span>
-                    </button>
+                          <svg
+                            width="12"
+                            height="12"
+                            viewBox="0 0 24 24"
+                            fill="currentColor"
+                            aria-hidden="true"
+                          >
+                            <path d={s.iconPath} />
+                          </svg>
+                        </span>
+                        <span className="truncate">{s.label}</span>
+                      </button>
+                    </div>
                   );
                 })}
               </nav>
@@ -438,6 +533,32 @@ export default function SettingsPanel({
               {/* Pane */}
               <div className="min-h-0 overflow-y-auto px-6 py-5">
                 {section === "profile" && <ProfilePane />}
+
+                {/* Workspace-scoped sections — each is a top-level
+                    setting; the wrapper handles the active-workspace
+                    fetch + an inline switcher. */}
+                {section === "workspace-info" && (
+                  <WorkspaceScopedSection section="general" />
+                )}
+                {section === "members" && (
+                  <WorkspaceScopedSection section="members" />
+                )}
+                {section === "permissions" && (
+                  <WorkspaceScopedSection section="permissions" />
+                )}
+                {section === "ai" && (
+                  <WorkspaceScopedSection section="ai" />
+                )}
+                {section === "storage" && (
+                  <WorkspaceScopedSection section="storage" />
+                )}
+                {section === "activity" && (
+                  <WorkspaceScopedSection section="activity" />
+                )}
+                {section === "danger" && (
+                  <WorkspaceScopedSection section="danger" />
+                )}
+
                 {section === "workspaces" && <WorkspacesPane />}
                 {section === "appearance" && (
                   <AppearancePane
