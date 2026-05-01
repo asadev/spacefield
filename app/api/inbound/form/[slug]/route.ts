@@ -14,6 +14,7 @@
  * ───────────────────────────────────────────────────────────────────── */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
 import {
   ingestFormSubmission,
   loadLeadSourceBySlug,
@@ -58,6 +59,28 @@ export async function POST(
   ctx: { params: Promise<{ slug: string }> }
 ) {
   const { slug } = await ctx.params;
+
+  // 10 submissions/min per IP. This route is auth-less and CORS-open,
+  // so it's the most exposed surface — gate before we hit the DB to
+  // resolve the slug. Use the rate-limit jsonResponse helper below so
+  // the 429 still carries CORS headers; bots may not care, but legit
+  // browser clients shouldn't see CORS errors instead of a 429.
+  const ip = getClientIp(req);
+  const allowed = await checkRateLimit(`ip:${ip}:inbound-form`, 10, 60);
+  if (!allowed) {
+    return new NextResponse(
+      JSON.stringify({ ok: false, error: "rate_limited" }),
+      {
+        status: 429,
+        headers: {
+          ...CORS_HEADERS,
+          "content-type": "application/json",
+          "Retry-After": "60",
+        },
+      }
+    );
+  }
+
   const source = await loadLeadSourceBySlug(slug);
   if (!source) return jsonResponse({ ok: false, error: "not_found" }, 404);
   if (source.kind !== "form") {
@@ -90,6 +113,20 @@ export async function POST(
   } catch {
     return jsonResponse({ ok: false, error: "invalid_body" }, 422);
   }
+
+  // Honeypot — `_hp_company` is a hidden field on the rendered form that
+  // real users never see (and never fill). Spam bots auto-fill every input
+  // they find. If it's non-empty, silently pretend the submission worked
+  // so the bot moves on; never log verbosely or 4xx — bots learn from
+  // rejections and tune around them.
+  const hp = fieldValues["_hp_company"];
+  const hpValue = Array.isArray(hp) ? hp.join("") : hp;
+  if (typeof hpValue === "string" && hpValue.trim().length > 0) {
+    console.warn(`[form/${slug}] honeypot tripped, dropping submission`);
+    return jsonResponse({ ok: true }, 200);
+  }
+  // Strip the honeypot key so it never reaches the schema validator.
+  delete fieldValues["_hp_company"];
 
   const meta = {
     ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,

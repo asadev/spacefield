@@ -16,6 +16,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { dispatch } from "@/lib/agent/runtime/dispatcher";
 import type {
   AgentClientContext,
@@ -81,6 +82,16 @@ export async function POST(req: NextRequest) {
   if (!user) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
+
+  // 30 req/min per user. Guards the heavy classifier→executor chain
+  // and downstream model spend before we touch the DB or AI providers.
+  const limited = await enforceRateLimit(
+    `user:${user.id}:agent-dispatch`,
+    30,
+    60
+  );
+  if (limited) return limited;
+
   const body = (await req.json().catch(() => ({}))) as DispatchBody;
   const workspaceId = body.workspace_id;
   const messageText = body.message?.trim();

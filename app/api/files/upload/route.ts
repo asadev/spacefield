@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { enforceRateLimit } from "@/lib/rate-limit";
 import { buildR2Key, presignedUploadUrl } from "@/lib/r2";
 
 /* POST /api/files/upload
@@ -25,6 +26,15 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  // 20 uploads/min per user. Stops abusive bursts before we burn R2
+  // presign calls and the storage quota lookup.
+  const limited = await enforceRateLimit(
+    `user:${user.id}:files-upload`,
+    20,
+    60
+  );
+  if (limited) return limited;
 
   let body: {
     workspaceId?: string;
