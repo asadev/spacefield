@@ -2,29 +2,39 @@
 
 import { useEffect, useState } from "react";
 
-/* useIsMobile — true when the viewport width is below the Tailwind `md`
- * breakpoint (768px). SSR-safe: returns false until the first client-side
- * effect runs, then tracks `resize` events.
+/* useIsMobile — true when the device should render the iOS-style
+ * MobileShell instead of the desktop OS chrome.
  *
- * Used to swap the desktop OS shell for the iOS-style MobileShell in
- * Desktop.tsx. The window manager, install hook, dock-order hook, etc.
- * stay identical — only the chrome differs. */
-const BREAKPOINT = 768;
+ * Two breakpoints. Mouse/trackpad devices ("(pointer: fine)") flip at
+ * 768px — the Tailwind `md` line. Touch-primary devices ("(pointer:
+ * coarse)") flip at 1024px so iPad portrait (820×1180) gets mobile
+ * chrome instead of cramped desktop chrome; iPad landscape (≥1180) still
+ * gets desktop. Touch-screen laptops usually report `pointer: fine` for
+ * the primary pointer (trackpad), so they keep the desktop chrome.
+ *
+ * SSR-safe: returns false until the first client-side effect runs, then
+ * tracks resize, orientationchange, and pointer-mode changes. */
+const BREAKPOINT_FINE = 768;
+const BREAKPOINT_COARSE = 1024;
 
 export function useIsMobile(): boolean {
   const [isMobile, setIsMobile] = useState(false);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const compute = () => setIsMobile(window.innerWidth < BREAKPOINT);
+    const coarseQuery = window.matchMedia?.("(pointer: coarse)");
+    const compute = () => {
+      const breakpoint = coarseQuery?.matches ? BREAKPOINT_COARSE : BREAKPOINT_FINE;
+      setIsMobile(window.innerWidth < breakpoint);
+    };
     compute();
     window.addEventListener("resize", compute);
-    // Some mobile browsers fire `orientationchange` without `resize` while
-    // the viewport actually changes — listen to both for safety.
     window.addEventListener("orientationchange", compute);
+    coarseQuery?.addEventListener?.("change", compute);
     return () => {
       window.removeEventListener("resize", compute);
       window.removeEventListener("orientationchange", compute);
+      coarseQuery?.removeEventListener?.("change", compute);
     };
   }, []);
 

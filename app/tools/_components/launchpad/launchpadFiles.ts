@@ -152,6 +152,7 @@ export async function fetchLaunchpadFiles(opts: {
 }
 
 export const FILE_LIST_PREFIX = "/api/files/list";
+export const STORAGE_STATS_PREFIX = "/api/workspaces/storage-stats";
 
 /* Path-tree helpers for the Home view. v1 derives the folder structure
  * from the file's `name` — if the name contains a slash, everything

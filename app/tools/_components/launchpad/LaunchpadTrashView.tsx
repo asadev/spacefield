@@ -39,6 +39,7 @@ interface Props {
 }
 
 const FILES_LIST_PREFIX = "/api/files/list";
+const STORAGE_STATS_PREFIX = "/api/workspaces/storage-stats";
 
 export default function LaunchpadTrashView({
   workspaceId,
@@ -86,6 +87,7 @@ export default function LaunchpadTrashView({
           body: JSON.stringify({ fileId: id }),
         });
         invalidate({ prefix: FILES_LIST_PREFIX });
+        invalidate({ prefix: STORAGE_STATS_PREFIX });
       } catch {
         // Re-pull on failure so the row reappears if restore didn't land.
         await refresh();
@@ -107,6 +109,7 @@ export default function LaunchpadTrashView({
           body: JSON.stringify({ fileId: id }),
         });
         invalidate({ prefix: FILES_LIST_PREFIX });
+        invalidate({ prefix: STORAGE_STATS_PREFIX });
       } catch {
         await refresh();
       } finally {
@@ -129,6 +132,7 @@ export default function LaunchpadTrashView({
         body: JSON.stringify({ workspaceId, days: 0 }),
       });
       invalidate({ prefix: FILES_LIST_PREFIX });
+      invalidate({ prefix: STORAGE_STATS_PREFIX });
     } finally {
       void refresh();
     }

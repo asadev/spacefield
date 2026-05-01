@@ -76,6 +76,7 @@ import {
   fileKind,
   fmtSize,
   FILE_LIST_PREFIX,
+  STORAGE_STATS_PREFIX,
   type LaunchpadFile,
   type LaunchpadFileKind,
 } from "./launchpad/launchpadFiles";
@@ -932,6 +933,7 @@ export default function Launchpad({
   const handleRefresh = useCallback(() => {
     invalidate({ prefix: FILE_LIST_PREFIX });
     invalidate({ prefix: FAVORITES_PREFIX });
+    invalidate({ prefix: STORAGE_STATS_PREFIX });
     invalidate({ prefix: "/api/crm/tags" });
     favoritesState.refresh();
     setRefreshTick((n) => n + 1);
@@ -1589,6 +1591,7 @@ export default function Launchpad({
                 }
                 invalidate({ prefix: FILE_LIST_PREFIX });
                 invalidate({ prefix: FAVORITES_PREFIX });
+                invalidate({ prefix: STORAGE_STATS_PREFIX });
                 favoritesState.refresh();
                 setRefreshTick((n) => n + 1);
                 showToast("Deleted");

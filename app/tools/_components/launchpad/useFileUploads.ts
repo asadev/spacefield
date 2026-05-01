@@ -281,6 +281,7 @@ export function useFileUploads(opts: UseFileUploadsOpts): UseFileUploadsReturn {
             if (invalidatePrefix) {
               invalidate({ prefix: invalidatePrefix });
             }
+            invalidate({ prefix: "/api/workspaces/storage-stats" });
 
             updateJob(job.id, { status: "done" });
             // Auto-dismiss successful job after a short window so the
