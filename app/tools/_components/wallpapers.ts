@@ -119,33 +119,130 @@ export const WALLPAPERS: Wallpaper[] = [
       "linear-gradient(135deg, #451a03 0%, #b45309 55%, #fcd34d 100%)",
   },
 
-  /* ─── Interactive canvas (placeholder gradients for now) ─── */
+  /* ─── Interactive canvas — animated wallpapers ──────────────────────
+   * Each entry's `value` is a key into INTERACTIVE_COMPONENTS in
+   * `./wallpapers/index.ts`. The DesktopBackground component looks up
+   * the matching React component and mounts it as the live
+   * background; the `preview` gradient is shown in the picker tile. */
+
+  // Premium animated themes — Mamboleoo / particlegalaxy.webflow / etc inspired.
   {
-    id: "interactive-particles",
-    name: "Particle Field",
+    id: "interactive-galaxy",
+    name: "Particle Galaxy",
     type: "interactive",
-    value: "particles",
+    value: "galaxy",
     preview:
-      "radial-gradient(circle at 30% 30%, #312e81 0%, #0f172a 70%), radial-gradient(circle at 70% 60%, #4338ca 0%, transparent 60%)",
+      "radial-gradient(ellipse at 30% 30%, #1e1b4b 0%, #020617 65%), radial-gradient(circle at 75% 60%, rgba(124,58,237,0.45) 0%, transparent 55%)",
   },
   {
-    id: "interactive-aurora",
-    name: "Aurora Flow",
+    id: "interactive-mesh",
+    name: "Network Mesh",
     type: "interactive",
-    value: "aurora",
+    value: "mesh",
     preview:
-      "linear-gradient(135deg, #064e3b 0%, #1e3a8a 50%, #4c1d95 100%)",
+      "radial-gradient(circle at 50% 50%, #1a1a2e 0%, #060611 75%), repeating-linear-gradient(45deg, rgba(203,213,225,0.04) 0 1px, transparent 1px 36px)",
+  },
+  {
+    id: "interactive-metaballs",
+    name: "Liquid Metaballs",
+    type: "interactive",
+    value: "metaballs",
+    preview:
+      "radial-gradient(circle at 25% 30%, rgba(217,70,239,0.55) 0%, transparent 45%), radial-gradient(circle at 75% 65%, rgba(6,182,212,0.5) 0%, transparent 50%), linear-gradient(135deg, #0c0420 0%, #1a0635 100%)",
+  },
+  {
+    id: "interactive-synthwave",
+    name: "Neon Synthwave",
+    type: "interactive",
+    value: "synthwave",
+    preview:
+      "linear-gradient(180deg, #1a0020 0%, #ff006e 55%, #ffaa00 75%, #00d4ff 100%)",
+  },
+  {
+    id: "interactive-crystals",
+    name: "Crystal Bloom",
+    type: "interactive",
+    value: "crystals",
+    preview:
+      "linear-gradient(135deg, #0a0420 0%, #1a0a3a 100%), radial-gradient(circle at 30% 40%, rgba(196,181,253,0.35) 0%, transparent 50%), radial-gradient(circle at 70% 70%, rgba(251,207,232,0.3) 0%, transparent 50%)",
+  },
+
+  // Dubai-themed canvases — built earlier and now wired in.
+  {
+    id: "interactive-aurora-dubai",
+    name: "Aurora Dubai",
+    type: "interactive",
+    value: "aurora-dubai",
+    preview:
+      "linear-gradient(135deg, #06081a 0%, #1a1247 45%, #5e3a86 100%)",
+  },
+  {
+    id: "interactive-burj-twilight",
+    name: "Burj Twilight",
+    type: "interactive",
+    value: "burj-twilight",
+    preview:
+      "linear-gradient(180deg, #1a0d2e 0%, #5b1f5d 45%, #f97316 100%)",
+  },
+  {
+    id: "interactive-desert-dunes",
+    name: "Desert Dunes",
+    type: "interactive",
+    value: "desert-dunes",
+    preview:
+      "linear-gradient(180deg, #2a1407 0%, #b45309 45%, #fcd34d 100%)",
+  },
+  {
+    id: "interactive-marina-lights",
+    name: "Marina Lights",
+    type: "interactive",
+    value: "marina-lights",
+    preview:
+      "linear-gradient(180deg, #051028 0%, #0a2a4a 50%, #16345f 100%)",
+  },
+  {
+    id: "interactive-palm-jumeirah",
+    name: "Palm Jumeirah",
+    type: "interactive",
+    value: "palm-jumeirah",
+    preview:
+      "linear-gradient(180deg, #032936 0%, #086a78 55%, #f59e0b 100%)",
+  },
+  {
+    id: "interactive-sandstorm",
+    name: "Sandstorm",
+    type: "interactive",
+    value: "sandstorm",
+    preview:
+      "linear-gradient(135deg, #261609 0%, #7c3a0d 50%, #d97706 100%)",
   },
 ];
 
-/* Map of fallback CSS for interactive wallpapers. The real renderer is
- * intentionally not built yet — we render the fallback via an inline
- * style so the desktop background still feels different per choice. */
+/* Map of fallback CSS for interactive wallpapers — used when the
+ * canvas component fails to mount or while it lazy-loads. Keys match
+ * `value` in WALLPAPERS entries above and `INTERACTIVE_COMPONENTS` in
+ * `./wallpapers/index.ts`. The component renders ON TOP of this
+ * fallback, so a slow first paint still shows a tinted background. */
 export const INTERACTIVE_FALLBACK: Record<string, string> = {
-  particles:
-    "radial-gradient(circle at 30% 30%, #312e81 0%, #0f172a 70%), radial-gradient(circle at 70% 60%, #4338ca 0%, transparent 60%)",
-  aurora:
-    "linear-gradient(135deg, #064e3b 0%, #1e3a8a 50%, #4c1d95 100%)",
+  galaxy:
+    "radial-gradient(ellipse at 30% 30%, #1e1b4b 0%, #020617 65%)",
+  mesh: "radial-gradient(circle at 50% 50%, #1a1a2e 0%, #060611 75%)",
+  metaballs:
+    "linear-gradient(135deg, #0c0420 0%, #1a0635 100%)",
+  synthwave:
+    "linear-gradient(180deg, #1a0020 0%, #ff006e 55%, #ffaa00 75%, #00d4ff 100%)",
+  crystals: "linear-gradient(135deg, #0a0420 0%, #1a0a3a 100%)",
+  "aurora-dubai":
+    "linear-gradient(135deg, #06081a 0%, #1a1247 45%, #5e3a86 100%)",
+  "burj-twilight":
+    "linear-gradient(180deg, #1a0d2e 0%, #5b1f5d 45%, #f97316 100%)",
+  "desert-dunes":
+    "linear-gradient(180deg, #2a1407 0%, #b45309 45%, #fcd34d 100%)",
+  "marina-lights":
+    "linear-gradient(180deg, #051028 0%, #0a2a4a 50%, #16345f 100%)",
+  "palm-jumeirah":
+    "linear-gradient(180deg, #032936 0%, #086a78 55%, #f59e0b 100%)",
+  sandstorm: "linear-gradient(135deg, #261609 0%, #7c3a0d 50%, #d97706 100%)",
 };
 
 /** Suffix only — the actual localStorage key is namespaced per workspace

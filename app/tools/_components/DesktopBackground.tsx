@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useMotionValue, useSpring } from "framer-motion";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, lazy, useEffect, useMemo, useState } from "react";
 import {
   DEFAULT_WALLPAPER_ID,
   WALLPAPER_CHANGE_EVENT,
@@ -15,6 +15,13 @@ import {
 import { useWorkspaceKey } from "./useWorkspaces";
 import { useTheme } from "@/components/ThemeProvider";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
+
+/* Interactive wallpapers are lazy-loaded so the 11 canvas components
+ * don't bloat the initial desktop bundle. The dispatcher (a single
+ * lazy-loaded module) reads the active interactiveKey and mounts the
+ * matching canvas. The static-CSS fallback layer renders underneath
+ * so a slow first paint still shows a tinted background. */
+const InteractiveBackground = lazy(() => import("./InteractiveBackground"));
 
 /* Animated on-brand background:
  *   1. The user-selected wallpaper, theme-aware (light + dark variants
@@ -143,6 +150,17 @@ export default function DesktopBackground() {
           data-wallpaper-id={entry.id}
           data-wallpaper-theme={resolved}
         />
+        {entry.section === "interactive" && entry.interactiveKey && (
+          <Suspense fallback={null}>
+            <div
+              key={`interactive:${entry.interactiveKey}`}
+              className="absolute inset-0"
+              data-wallpaper-canvas={entry.interactiveKey}
+            >
+              <InteractiveBackground interactiveKey={entry.interactiveKey} />
+            </div>
+          </Suspense>
+        )}
         <div className="desktop-glow desktop-glow-1" />
         <div className="desktop-glow desktop-glow-2" />
         <div className="desktop-glow desktop-glow-3" />

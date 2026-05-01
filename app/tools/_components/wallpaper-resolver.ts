@@ -53,6 +53,11 @@ export interface UnifiedWallpaperEntry {
   getPreview: (resolved: "light" | "dark") => string;
   /** Optional badge label (e.g. "Pair", "Light", "Dark"). */
   badge?: string;
+  /** For `section: "interactive"` entries only — the key into
+   *  `INTERACTIVE_COMPONENTS` from `./wallpapers/index.ts`. The
+   *  DesktopBackground uses this to mount the matching canvas
+   *  component instead of painting the static fallback. */
+  interactiveKey?: string;
 }
 
 /** Convert a paired registry entry into the unified form. */
@@ -81,6 +86,7 @@ function fromLegacy(l: LegacyWallpaper): UnifiedWallpaperEntry {
           : "interactive",
     getBackground: () => css,
     getPreview: () => l.preview,
+    interactiveKey: l.type === "interactive" ? l.value : undefined,
   };
 }
 
