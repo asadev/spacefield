@@ -1,260 +1,424 @@
 "use client";
 
-/* NetworkMesh — drifting nodes that connect to nearby neighbors with
- * alpha-faded lines. Cursor acts as a mild gravity well that nodes
- * gravitate toward and connect to with brighter lines. */
+/* NetworkMesh — Three.js sphere of dots connected by line segments.
+ *
+ * Heavily inspired by Mamboleoo's DecorativeBackgrounds demo1
+ * (https://github.com/Mamboleoo/DecorativeBackgrounds/blob/master/js/demo1.js):
+ *
+ *   - ~1800 dots distributed on a sphere shell using a Fibonacci
+ *     spiral (visually even, no clumps at the poles).
+ *   - Pairs within a small distance threshold are connected by short
+ *     white line segments — that's the "mesh" look.
+ *   - The whole sphere auto-rotates very slowly and tilts toward the
+ *     mouse via a quaternion slerp. NOT brownian random motion — the
+ *     network is at rest unless you push it.
+ *   - A Raycaster intersects against the dots; hovered dots scale up
+ *     elastically (per-vertex size attribute) and the lines emanating
+ *     from them brighten. Snap back smoothly when you move away.
+ *
+ * Lazy-loads Three via DesktopBackground's Suspense boundary so users
+ * on a static wallpaper never download it. Pauses on
+ * visibilitychange. Respects prefers-reduced-motion (renders one
+ * static frame and stops).
+ */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
+import * as THREE from "three";
 
 interface Props {
   preview?: { w: number; h: number };
 }
 
-interface Node {
-  x: number;
-  y: number;
-  vx: number;
-  vy: number;
-  r: number;
-}
+const PALETTE_NODE = new THREE.Color("#a8c7ff"); // soft cyan-blue
+const PALETTE_EDGE = new THREE.Color("#7fb6ff"); // slightly bluer for lines
+const HOVER_TINT = new THREE.Color("#ffffff");
 
 export default function NetworkMesh({ preview }: Props) {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Reduce density when used as a thumbnail.
+  const dotCount = useMemo(() => (preview ? 320 : 1800), [preview]);
+  const radius = useMemo(() => (preview ? 35 : 100), [preview]);
+  const linkDist = useMemo(() => (preview ? 9 : 9), [preview]);
 
   useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
+    const container = containerRef.current;
+    if (!container) return;
 
-    let dpr = Math.min(window.devicePixelRatio || 1, 2);
-    let cssW = preview?.w ?? canvas.clientWidth;
-    let cssH = preview?.h ?? canvas.clientHeight;
-    let raf = 0;
-    let running = true;
-    let t = 0;
-    const mouse = { x: -1000, y: -1000, tx: -1000, ty: -1000, active: false };
+    const reduceMotion =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
-    const reduced =
-      typeof window.matchMedia === "function" &&
-      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    /* ─── Scene setup ────────────────────────────────────────────── */
+    const w = preview?.w ?? container.clientWidth;
+    const h = preview?.h ?? container.clientHeight;
 
-    const NODE_COUNT = preview ? 15 : 60;
-    const MAX_DIST = preview ? 110 : 150;
-    const MOUSE_DIST = 200;
-    const nodes: Node[] = [];
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: false,
+      powerPreference: "low-power",
+    });
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    renderer.setPixelRatio(dpr);
+    renderer.setSize(w, h, false);
+    renderer.setClearColor(0x070914, 1);
+    container.appendChild(renderer.domElement);
+    Object.assign(renderer.domElement.style, {
+      width: "100%",
+      height: "100%",
+      display: "block",
+    });
 
-    const seed = (n: number) => {
-      const s = Math.sin(n * 9301 + 49297) * 233280;
-      return s - Math.floor(s);
-    };
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(50, w / h, 0.1, 2000);
+    camera.position.set(0, 0, radius * 3.4);
 
-    const buildNodes = () => {
-      nodes.length = 0;
-      for (let i = 0; i < NODE_COUNT; i++) {
-        const speed = 0.015 + seed(i + 11) * 0.025;
-        const ang = seed(i + 23) * Math.PI * 2;
-        nodes.push({
-          x: seed(i + 41) * cssW,
-          y: seed(i + 53) * cssH,
-          vx: Math.cos(ang) * speed,
-          vy: Math.sin(ang) * speed,
-          r: 1.6 + seed(i + 67) * 1.4,
-        });
+    const galaxy = new THREE.Group();
+    scene.add(galaxy);
+
+    /* ─── Dots: Fibonacci sphere, BufferGeometry with size attr ──── */
+    const positions = new Float32Array(dotCount * 3);
+    const sizes = new Float32Array(dotCount);
+    const baseSize = preview ? 1.4 : 2.0;
+    const goldenAngle = Math.PI * (3 - Math.sqrt(5));
+
+    interface Dot {
+      pos: THREE.Vector3;
+      base: number;
+      target: number;
+      cur: number;
+    }
+    const dots: Dot[] = new Array(dotCount);
+
+    for (let i = 0; i < dotCount; i++) {
+      const y = 1 - (i / (dotCount - 1)) * 2; // -1..1
+      const r = Math.sqrt(1 - y * y);
+      const t = goldenAngle * i;
+      const x = Math.cos(t) * r;
+      const z = Math.sin(t) * r;
+      const v = new THREE.Vector3(x, y, z).multiplyScalar(radius);
+      positions[i * 3] = v.x;
+      positions[i * 3 + 1] = v.y;
+      positions[i * 3 + 2] = v.z;
+      sizes[i] = baseSize;
+      dots[i] = { pos: v, base: baseSize, target: baseSize, cur: baseSize };
+    }
+
+    const dotGeom = new THREE.BufferGeometry();
+    dotGeom.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+    dotGeom.setAttribute(
+      "size",
+      new THREE.BufferAttribute(sizes, 1).setUsage(THREE.DynamicDrawUsage)
+    );
+
+    /* Round-dot shader — replaces the dotTexture.png trick from the
+     * reference; we draw a soft circle directly in the fragment shader
+     * so there's no asset to ship. Size is per-vertex so hover scaling
+     * is GPU-cheap. */
+    const dotMat = new THREE.ShaderMaterial({
+      uniforms: {
+        uColor: { value: PALETTE_NODE },
+        uHover: { value: HOVER_TINT },
+      },
+      vertexShader: /* glsl */ `
+        attribute float size;
+        varying float vSize;
+        void main() {
+          vSize = size;
+          vec4 mv = modelViewMatrix * vec4(position, 1.0);
+          gl_PointSize = size * (300.0 / -mv.z);
+          gl_Position = projectionMatrix * mv;
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        precision mediump float;
+        uniform vec3 uColor;
+        uniform vec3 uHover;
+        varying float vSize;
+        void main() {
+          float d = length(gl_PointCoord - vec2(0.5));
+          if (d > 0.5) discard;
+          float alpha = smoothstep(0.5, 0.35, d);
+          float hoverMix = smoothstep(2.5, 6.0, vSize);
+          vec3 c = mix(uColor, uHover, hoverMix);
+          gl_FragColor = vec4(c, alpha);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+    });
+
+    const points = new THREE.Points(dotGeom, dotMat);
+    galaxy.add(points);
+
+    /* ─── Edge mesh: short white segments between near-neighbors ─── */
+    const edgePairs: Array<[number, number]> = [];
+    // Spatial hashing so we don't do O(n²) on 1800 dots.
+    const cellSize = linkDist;
+    const grid = new Map<string, number[]>();
+    const key = (x: number, y: number, z: number) =>
+      `${Math.floor(x / cellSize)}|${Math.floor(y / cellSize)}|${Math.floor(z / cellSize)}`;
+    for (let i = 0; i < dotCount; i++) {
+      const v = dots[i].pos;
+      const k = key(v.x, v.y, v.z);
+      const bucket = grid.get(k) ?? [];
+      bucket.push(i);
+      grid.set(k, bucket);
+    }
+    const linkSq = linkDist * linkDist;
+    for (let i = 0; i < dotCount; i++) {
+      const v = dots[i].pos;
+      const cx = Math.floor(v.x / cellSize);
+      const cy = Math.floor(v.y / cellSize);
+      const cz = Math.floor(v.z / cellSize);
+      for (let dx = -1; dx <= 1; dx++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dz = -1; dz <= 1; dz++) {
+            const bucket = grid.get(`${cx + dx}|${cy + dy}|${cz + dz}`);
+            if (!bucket) continue;
+            for (const j of bucket) {
+              if (j <= i) continue;
+              const u = dots[j].pos;
+              const ddx = u.x - v.x;
+              const ddy = u.y - v.y;
+              const ddz = u.z - v.z;
+              if (ddx * ddx + ddy * ddy + ddz * ddz < linkSq) {
+                edgePairs.push([i, j]);
+              }
+            }
+          }
+        }
       }
-    };
+    }
 
-    const resize = () => {
-      cssW = preview?.w ?? canvas.clientWidth;
-      cssH = preview?.h ?? canvas.clientHeight;
-      dpr = Math.min(window.devicePixelRatio || 1, 2);
-      canvas.width = Math.floor(cssW * dpr);
-      canvas.height = Math.floor(cssH * dpr);
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      buildNodes();
-    };
+    const edgePos = new Float32Array(edgePairs.length * 6);
+    const edgeAlpha = new Float32Array(edgePairs.length * 2);
+    for (let e = 0; e < edgePairs.length; e++) {
+      const [i, j] = edgePairs[e];
+      const a = dots[i].pos;
+      const b = dots[j].pos;
+      edgePos[e * 6 + 0] = a.x;
+      edgePos[e * 6 + 1] = a.y;
+      edgePos[e * 6 + 2] = a.z;
+      edgePos[e * 6 + 3] = b.x;
+      edgePos[e * 6 + 4] = b.y;
+      edgePos[e * 6 + 5] = b.z;
+      edgeAlpha[e * 2 + 0] = 0.18;
+      edgeAlpha[e * 2 + 1] = 0.18;
+    }
+    const edgeGeom = new THREE.BufferGeometry();
+    edgeGeom.setAttribute("position", new THREE.BufferAttribute(edgePos, 3));
+    edgeGeom.setAttribute(
+      "alpha",
+      new THREE.BufferAttribute(edgeAlpha, 1).setUsage(THREE.DynamicDrawUsage)
+    );
 
-    resize();
-    const ro = preview ? null : new ResizeObserver(resize);
-    if (ro) ro.observe(canvas);
+    const edgeMat = new THREE.ShaderMaterial({
+      uniforms: { uColor: { value: PALETTE_EDGE } },
+      vertexShader: /* glsl */ `
+        attribute float alpha;
+        varying float vAlpha;
+        void main() {
+          vAlpha = alpha;
+          gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+        }
+      `,
+      fragmentShader: /* glsl */ `
+        precision mediump float;
+        uniform vec3 uColor;
+        varying float vAlpha;
+        void main() {
+          gl_FragColor = vec4(uColor, vAlpha);
+        }
+      `,
+      transparent: true,
+      depthWrite: false,
+    });
 
-    const onMouse = (e: MouseEvent) => {
-      const rect = canvas.getBoundingClientRect();
-      mouse.tx = e.clientX - rect.left;
-      mouse.ty = e.clientY - rect.top;
-      mouse.active = true;
+    const edges = new THREE.LineSegments(edgeGeom, edgeMat);
+    galaxy.add(edges);
+
+    // Per-edge index lookup: which edges touch a given dot index?
+    const edgesAtDot: number[][] = new Array(dotCount);
+    for (let i = 0; i < dotCount; i++) edgesAtDot[i] = [];
+    for (let e = 0; e < edgePairs.length; e++) {
+      edgesAtDot[edgePairs[e][0]].push(e);
+      edgesAtDot[edgePairs[e][1]].push(e);
+    }
+
+    /* ─── Mouse + raycaster ──────────────────────────────────────── */
+    const raycaster = new THREE.Raycaster();
+    raycaster.params.Points = { threshold: preview ? 1.5 : 3.5 };
+    const mouse = new THREE.Vector2(2, 2); // start off-screen
+    const targetTilt = new THREE.Vector2(0, 0);
+    const tilt = new THREE.Vector2(0, 0);
+
+    const updateMouse = (clientX: number, clientY: number) => {
+      const rect = renderer.domElement.getBoundingClientRect();
+      mouse.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      mouse.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      // Drive a gentle tilt — the "moves only when you move the cursor"
+      // behavior. No pointer motion = no tilt change = network at rest.
+      targetTilt.x = mouse.y * 0.4;
+      targetTilt.y = mouse.x * 0.6;
     };
-    const onLeave = () => {
-      mouse.active = false;
-      mouse.tx = -1000;
-      mouse.ty = -1000;
+    const onPointerMove = (e: PointerEvent) =>
+      updateMouse(e.clientX, e.clientY);
+    const onPointerLeave = () => {
+      mouse.set(2, 2);
+      targetTilt.set(0, 0);
     };
     if (!preview) {
-      window.addEventListener("mousemove", onMouse);
-      window.addEventListener("mouseout", onLeave);
+      window.addEventListener("pointermove", onPointerMove, { passive: true });
+      window.addEventListener("pointerleave", onPointerLeave);
     }
 
-    const drawBg = () => {
-      const g = ctx.createLinearGradient(0, 0, 0, cssH);
-      g.addColorStop(0, "#0a0a14");
-      g.addColorStop(1, "#060611");
-      ctx.fillStyle = g;
-      ctx.fillRect(0, 0, cssW, cssH);
-    };
-
-    const drawNodesAndLinks = () => {
-      // links first so they sit behind nodes
-      for (let i = 0; i < nodes.length; i++) {
-        const a = nodes[i];
-        for (let j = i + 1; j < nodes.length; j++) {
-          const b = nodes[j];
-          const dx = a.x - b.x;
-          const dy = a.y - b.y;
-          const d2 = dx * dx + dy * dy;
-          if (d2 > MAX_DIST * MAX_DIST) continue;
-          const d = Math.sqrt(d2);
-          const alpha = (1 - d / MAX_DIST) * 0.5;
-          ctx.strokeStyle = `rgba(203,213,225,${alpha})`;
-          ctx.lineWidth = 0.7;
-          ctx.beginPath();
-          ctx.moveTo(a.x, a.y);
-          ctx.lineTo(b.x, b.y);
-          ctx.stroke();
-        }
-      }
-
-      // mouse links
-      if (mouse.active) {
-        for (let i = 0; i < nodes.length; i++) {
-          const a = nodes[i];
-          const dx = a.x - mouse.x;
-          const dy = a.y - mouse.y;
-          const d2 = dx * dx + dy * dy;
-          if (d2 > MOUSE_DIST * MOUSE_DIST) continue;
-          const d = Math.sqrt(d2);
-          const alpha = (1 - d / MOUSE_DIST) * 0.7;
-          ctx.strokeStyle = `rgba(165,243,252,${alpha})`;
-          ctx.lineWidth = 1;
-          ctx.beginPath();
-          ctx.moveTo(a.x, a.y);
-          ctx.lineTo(mouse.x, mouse.y);
-          ctx.stroke();
-        }
-      }
-
-      // nodes on top
-      for (let i = 0; i < nodes.length; i++) {
-        const n = nodes[i];
-        ctx.fillStyle = "rgba(203,213,225,0.9)";
-        ctx.beginPath();
-        ctx.arc(n.x, n.y, n.r, 0, Math.PI * 2);
-        ctx.fill();
-      }
-    };
-
-    if (reduced) {
-      drawBg();
-      drawNodesAndLinks();
-      return () => {
-        ro?.disconnect();
-        if (!preview) {
-          window.removeEventListener("mousemove", onMouse);
-          window.removeEventListener("mouseout", onLeave);
-        }
-      };
-    }
+    /* ─── Render loop ────────────────────────────────────────────── */
+    let rafId = 0;
+    let running = true;
+    let last = performance.now();
+    const hoverMaxSize = preview ? 4.5 : 7.5;
+    const hoverActive = new Set<number>();
 
     const onVis = () => {
       running = document.visibilityState !== "hidden";
       if (running) {
         last = performance.now();
-        raf = requestAnimationFrame(frame);
+        rafId = requestAnimationFrame(frame);
       } else {
-        cancelAnimationFrame(raf);
+        cancelAnimationFrame(rafId);
       }
     };
     document.addEventListener("visibilitychange", onVis);
 
-    let last = performance.now();
-    const frame = (now: number) => {
+    const sizesAttr = dotGeom.getAttribute("size") as THREE.BufferAttribute;
+    const alphaAttr = edgeGeom.getAttribute("alpha") as THREE.BufferAttribute;
+
+    function frame(now: number) {
       if (!running) return;
-      const dt = Math.min(48, now - last);
+      const dt = Math.min(50, now - last) / 1000;
       last = now;
-      t += dt;
-      mouse.x += (mouse.tx - mouse.x) * 0.12;
-      mouse.y += (mouse.ty - mouse.y) * 0.12;
 
-      // physics step
-      for (let i = 0; i < nodes.length; i++) {
-        const n = nodes[i];
-        n.x += n.vx * dt;
-        n.y += n.vy * dt;
+      // Smoothly approach the mouse-driven tilt.
+      tilt.x += (targetTilt.x - tilt.x) * Math.min(1, dt * 4);
+      tilt.y += (targetTilt.y - tilt.y) * Math.min(1, dt * 4);
+      galaxy.rotation.x = tilt.x;
+      // Tiny constant drift so even an idle viewer sees life. Half the
+      // speed of the original demo to feel calm.
+      galaxy.rotation.y += dt * 0.04 + (tilt.y - galaxy.rotation.y) * 0.04;
 
-        // gentle gravity toward mouse if within range
-        if (mouse.active) {
-          const dx = mouse.x - n.x;
-          const dy = mouse.y - n.y;
-          const d2 = dx * dx + dy * dy;
-          if (d2 < MOUSE_DIST * MOUSE_DIST && d2 > 0.01) {
-            const d = Math.sqrt(d2);
-            const pull = (1 - d / MOUSE_DIST) * 0.0008 * dt;
-            n.vx += (dx / d) * pull;
-            n.vy += (dy / d) * pull;
-          }
-        }
-
-        // soft cap on velocity
-        const v2 = n.vx * n.vx + n.vy * n.vy;
-        const max = 0.06;
-        if (v2 > max * max) {
-          const v = Math.sqrt(v2);
-          n.vx = (n.vx / v) * max;
-          n.vy = (n.vy / v) * max;
-        }
-
-        // bounce
-        if (n.x < 0) {
-          n.x = 0;
-          n.vx = Math.abs(n.vx);
-        } else if (n.x > cssW) {
-          n.x = cssW;
-          n.vx = -Math.abs(n.vx);
-        }
-        if (n.y < 0) {
-          n.y = 0;
-          n.vy = Math.abs(n.vy);
-        } else if (n.y > cssH) {
-          n.y = cssH;
-          n.vy = -Math.abs(n.vy);
+      /* Raycast against the points. Hovered indices get a bigger
+       * target size; everyone else relaxes back to base. */
+      const newHover = new Set<number>();
+      if (!preview && mouse.x <= 1) {
+        raycaster.setFromCamera(mouse, camera);
+        const hits = raycaster.intersectObject(points, false);
+        for (const h of hits) {
+          if (typeof h.index === "number") newHover.add(h.index);
         }
       }
 
-      drawBg();
-      drawNodesAndLinks();
+      // Update target sizes; fast attack on hover, slow release.
+      for (const i of newHover) {
+        dots[i].target = hoverMaxSize;
+      }
+      for (const i of hoverActive) {
+        if (!newHover.has(i)) dots[i].target = dots[i].base;
+      }
+      hoverActive.clear();
+      for (const i of newHover) hoverActive.add(i);
 
-      raf = requestAnimationFrame(frame);
-    };
-    raf = requestAnimationFrame(frame);
+      // Smooth current → target per-dot.
+      let sizesDirty = false;
+      for (let i = 0; i < dotCount; i++) {
+        const d = dots[i];
+        const k =
+          d.target > d.cur ? Math.min(1, dt * 12) : Math.min(1, dt * 4);
+        const next = d.cur + (d.target - d.cur) * k;
+        if (Math.abs(next - d.cur) > 0.001) {
+          d.cur = next;
+          sizes[i] = next;
+          sizesDirty = true;
+        }
+      }
+      if (sizesDirty) sizesAttr.needsUpdate = true;
 
+      // Pump line alpha for edges touching hovered dots.
+      let edgeDirty = false;
+      const baseAlpha = 0.18;
+      const litAlpha = 0.85;
+      // Decay everything one step toward base.
+      for (let e = 0; e < edgePairs.length; e++) {
+        const a0 = edgeAlpha[e * 2];
+        const decayed = a0 + (baseAlpha - a0) * Math.min(1, dt * 3);
+        if (Math.abs(decayed - a0) > 0.005) {
+          edgeAlpha[e * 2] = decayed;
+          edgeAlpha[e * 2 + 1] = decayed;
+          edgeDirty = true;
+        }
+      }
+      // Light the edges of hovered dots.
+      for (const i of newHover) {
+        for (const e of edgesAtDot[i]) {
+          edgeAlpha[e * 2] = litAlpha;
+          edgeAlpha[e * 2 + 1] = litAlpha;
+          edgeDirty = true;
+        }
+      }
+      if (edgeDirty) alphaAttr.needsUpdate = true;
+
+      renderer.render(scene, camera);
+      if (!reduceMotion) rafId = requestAnimationFrame(frame);
+    }
+
+    if (reduceMotion) {
+      // One static render then stop.
+      renderer.render(scene, camera);
+    } else {
+      rafId = requestAnimationFrame(frame);
+    }
+
+    /* ─── Resize ─────────────────────────────────────────────────── */
+    let ro: ResizeObserver | null = null;
+    if (!preview) {
+      ro = new ResizeObserver(() => {
+        const nw = container.clientWidth;
+        const nh = container.clientHeight;
+        if (nw === 0 || nh === 0) return;
+        renderer.setSize(nw, nh, false);
+        camera.aspect = nw / nh;
+        camera.updateProjectionMatrix();
+      });
+      ro.observe(container);
+    }
+
+    /* ─── Cleanup ────────────────────────────────────────────────── */
     return () => {
       running = false;
-      cancelAnimationFrame(raf);
+      cancelAnimationFrame(rafId);
       document.removeEventListener("visibilitychange", onVis);
       if (!preview) {
-        window.removeEventListener("mousemove", onMouse);
-        window.removeEventListener("mouseout", onLeave);
+        window.removeEventListener("pointermove", onPointerMove);
+        window.removeEventListener("pointerleave", onPointerLeave);
       }
       ro?.disconnect();
+      dotGeom.dispose();
+      edgeGeom.dispose();
+      dotMat.dispose();
+      edgeMat.dispose();
+      renderer.dispose();
+      if (renderer.domElement.parentNode === container) {
+        container.removeChild(renderer.domElement);
+      }
     };
-  }, [preview]);
+  }, [preview, dotCount, radius, linkDist]);
 
   return (
-    <canvas
-      ref={canvasRef}
+    <div
+      ref={containerRef}
       style={{
         width: preview ? `${preview.w}px` : "100%",
         height: preview ? `${preview.h}px` : "100%",
-        display: "block",
       }}
     />
   );
