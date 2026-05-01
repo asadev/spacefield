@@ -1027,17 +1027,16 @@ function buildSolarSystem(
     orbitGeoms.push(og);
   }
 
-  /* Asteroid belt — proper smooth-shaded irregular rocks lit by the
-   * Sun's PointLight. Higher subdivision (icosahedron detail=2 = 320
-   * triangles) + small per-vertex displacement for irregular
-   * silhouette + computeVertexNormals afterwards so smooth shading
-   * still works. MeshStandardMaterial with a procedural rocky color
-   * variant per-asteroid. */
-  const asteroidCount = isPreview ? 0 : 18;
+  /* Satellites — procedural spacecraft built from primitives. Each
+   * is a Group of (central body + 2 solar panels + antenna or dish).
+   * Three body silhouettes (cylinder / cube / octahedron) for variety.
+   * Few of them (5), slow orbital drift, gentle tumble — they should
+   * read as man-made objects floating, not asteroids. */
+  const satelliteCount = isPreview ? 0 : 5;
   const asteroidMeshes: Array<{
-    mesh: THREE.Mesh;
-    geom: THREE.BufferGeometry;
-    mat: THREE.MeshStandardMaterial;
+    mesh: THREE.Group;
+    geoms: THREE.BufferGeometry[];
+    mats: THREE.Material[];
     orbit: number;
     speed: number;
     phase: number;
@@ -1045,65 +1044,29 @@ function buildSolarSystem(
     spinAxis: THREE.Vector3;
     spinRate: number;
   }> = [];
-  for (let i = 0; i < asteroidCount; i++) {
-    const radius = 0.18 + Math.random() * 0.28;
-    const detail = Math.random() > 0.5 ? 2 : 1;
-    const geom = new THREE.IcosahedronGeometry(radius, detail);
-    // Multi-octave per-vertex displacement for a believably irregular
-    // surface (asteroids are lumpy, not faceted-paper).
-    const pos = geom.getAttribute("position") as THREE.BufferAttribute;
-    const arr = pos.array as Float32Array;
-    for (let v = 0; v < arr.length; v += 3) {
-      const x = arr[v];
-      const y = arr[v + 1];
-      const z = arr[v + 2];
-      const len = Math.hypot(x, y, z) || 1;
-      // Two octaves of pseudo-noise based on position.
-      const n1 =
-        0.5 +
-        0.5 *
-          Math.sin(x * 8 + 3.3) *
-          Math.cos(y * 8 + 5.1) *
-          Math.sin(z * 8 + 1.7);
-      const n2 =
-        0.5 +
-        0.5 *
-          Math.sin(x * 17 + 9.1) *
-          Math.cos(y * 17 + 2.4) *
-          Math.sin(z * 17 + 6.8);
-      const noise = 1 + (n1 - 0.5) * 0.18 + (n2 - 0.5) * 0.08;
-      arr[v] = (x / len) * radius * noise;
-      arr[v + 1] = (y / len) * radius * noise;
-      arr[v + 2] = (z / len) * radius * noise;
-    }
-    geom.computeVertexNormals(); // smooth shading
-    // Random per-asteroid color: warm gray with brown/orange hint.
-    const tone = 0.42 + Math.random() * 0.28;
-    const warm = 0.8 + Math.random() * 0.2;
-    const mat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(tone * warm, tone * 0.9, tone * 0.78),
-      roughness: 0.95,
-      metalness: 0.04,
-      transparent: true,
-      opacity: 0,
-    });
-    const mesh = new THREE.Mesh(geom, mat);
-    group.add(mesh);
-    const orbit = 13 + Math.random() * 4;
+  for (let i = 0; i < satelliteCount; i++) {
+    const sat = buildSatellite(i);
+    group.add(sat.group);
+    // Place satellites around varied orbits — spread between Mars
+    // (11.4) and outer dust (~16) so they're visible past the
+    // outermost planet, not crowding the planets themselves.
+    const orbit = 13 + Math.random() * 3.5;
     asteroidMeshes.push({
-      mesh,
-      geom,
-      mat,
+      mesh: sat.group,
+      geoms: sat.geoms,
+      mats: sat.mats,
       orbit,
-      speed: 0.13 + Math.random() * 0.18,
+      speed: 0.04 + Math.random() * 0.04, // ~3-4× slower than the old asteroids
       phase: Math.random() * Math.PI * 2,
-      inclination: (Math.random() - 0.5) * 0.4,
+      inclination: (Math.random() - 0.5) * 0.25,
       spinAxis: new THREE.Vector3(
         Math.random() - 0.5,
         Math.random() - 0.5,
         Math.random() - 0.5
       ).normalize(),
-      spinRate: (Math.random() - 0.5) * 1.4,
+      // Very slow tumble — gives a sense of free-fall float without
+      // the spinning-rock energy of the previous asteroid implementation.
+      spinRate: (Math.random() - 0.5) * 0.18,
     });
   }
 
@@ -1128,8 +1091,8 @@ function buildSolarSystem(
         p.mat.dispose();
       }
       for (const a of asteroidMeshes) {
-        a.geom.dispose();
-        a.mat.dispose();
+        for (const g of a.geoms) g.dispose();
+        for (const m of a.mats) m.dispose();
       }
       for (const og of orbitGeoms) og.dispose();
       for (const om of orbitMats) om.dispose();
@@ -1473,6 +1436,183 @@ const ATMO_FRAG = /* glsl */ `
     gl_FragColor = vec4(uColor, intensity * uOpacity);
   }
 `;
+
+/* ──────────── builders ──────────── */
+
+/* buildSatellite — assemble a small spacecraft Group from primitives.
+ * Three body shapes for variety (cylinder Hubble-style / cube comm
+ * sat / octahedron probe) all sharing the same characteristic
+ * silhouette feature — two flat dark-blue solar panels extending
+ * sideways. A small accent on top: alternating antenna or dish.
+ *
+ * Materials use realistic spacecraft tones — silver/gold-foil bodies,
+ * dark deep-blue solar panels with faint emissive glow, white
+ * antennas. All MeshStandardMaterial so the Sun's PointLight + fill
+ * lighting shade them properly. */
+function buildSatellite(index: number): {
+  group: THREE.Group;
+  geoms: THREE.BufferGeometry[];
+  mats: THREE.Material[];
+} {
+  const group = new THREE.Group();
+  const geoms: THREE.BufferGeometry[] = [];
+  const mats: THREE.Material[] = [];
+  const variant = index % 3;
+
+  // Central body
+  if (variant === 0) {
+    // Cylinder body — Hubble-style telescope.
+    const bodyGeom = new THREE.CylinderGeometry(0.11, 0.13, 0.45, 14);
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: 0xeaecef,
+      metalness: 0.65,
+      roughness: 0.35,
+      transparent: true,
+      opacity: 0,
+    });
+    const body = new THREE.Mesh(bodyGeom, bodyMat);
+    body.rotation.z = Math.PI / 2;
+    group.add(body);
+    geoms.push(bodyGeom);
+    mats.push(bodyMat);
+    // End cap (lens / aperture)
+    const capGeom = new THREE.CircleGeometry(0.11, 18);
+    const capMat = new THREE.MeshStandardMaterial({
+      color: 0x101216,
+      metalness: 0.8,
+      roughness: 0.25,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0,
+    });
+    const cap = new THREE.Mesh(capGeom, capMat);
+    cap.position.x = 0.225;
+    cap.rotation.y = Math.PI / 2;
+    group.add(cap);
+    geoms.push(capGeom);
+    mats.push(capMat);
+  } else if (variant === 1) {
+    // Cube body — communication satellite.
+    const bodyGeom = new THREE.BoxGeometry(0.26, 0.26, 0.3);
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: 0xc8b88a, // gold MLI foil
+      metalness: 0.6,
+      roughness: 0.45,
+      transparent: true,
+      opacity: 0,
+    });
+    const body = new THREE.Mesh(bodyGeom, bodyMat);
+    group.add(body);
+    geoms.push(bodyGeom);
+    mats.push(bodyMat);
+  } else {
+    // Octahedron body — interplanetary probe.
+    const bodyGeom = new THREE.OctahedronGeometry(0.18, 0);
+    const bodyMat = new THREE.MeshStandardMaterial({
+      color: 0xf4f5f7,
+      metalness: 0.4,
+      roughness: 0.55,
+      flatShading: true,
+      transparent: true,
+      opacity: 0,
+    });
+    const body = new THREE.Mesh(bodyGeom, bodyMat);
+    group.add(body);
+    geoms.push(bodyGeom);
+    mats.push(bodyMat);
+  }
+
+  // Two solar-panel wings — the unmistakable satellite silhouette.
+  const panelGeom = new THREE.BoxGeometry(0.85, 0.34, 0.025);
+  const panelMat = new THREE.MeshStandardMaterial({
+    color: 0x162a55,
+    metalness: 0.35,
+    roughness: 0.4,
+    emissive: 0x0a1840,
+    emissiveIntensity: 0.4,
+    transparent: true,
+    opacity: 0,
+  });
+  const leftPanel = new THREE.Mesh(panelGeom, panelMat);
+  leftPanel.position.set(-0.65, 0, 0);
+  group.add(leftPanel);
+  const rightPanel = new THREE.Mesh(panelGeom, panelMat);
+  rightPanel.position.set(0.65, 0, 0);
+  group.add(rightPanel);
+  geoms.push(panelGeom);
+  mats.push(panelMat);
+
+  // Small connecting struts so the panels don't appear to float
+  // detached from the body.
+  const strutGeom = new THREE.CylinderGeometry(0.012, 0.012, 0.4, 6);
+  const strutMat = new THREE.MeshStandardMaterial({
+    color: 0xcfd2d6,
+    metalness: 0.7,
+    roughness: 0.4,
+    transparent: true,
+    opacity: 0,
+  });
+  const strutL = new THREE.Mesh(strutGeom, strutMat);
+  strutL.rotation.z = Math.PI / 2;
+  strutL.position.set(-0.32, 0, 0);
+  group.add(strutL);
+  const strutR = new THREE.Mesh(strutGeom, strutMat);
+  strutR.rotation.z = Math.PI / 2;
+  strutR.position.set(0.32, 0, 0);
+  group.add(strutR);
+  geoms.push(strutGeom);
+  mats.push(strutMat);
+
+  // Top accent — antenna OR dish, alternating per satellite index
+  // for variety. Both are small enough not to dominate the silhouette.
+  if (index % 2 === 0) {
+    // Whip antenna.
+    const antennaGeom = new THREE.CylinderGeometry(0.008, 0.008, 0.22, 6);
+    const antennaMat = new THREE.MeshStandardMaterial({
+      color: 0xfafafa,
+      metalness: 0.55,
+      roughness: 0.4,
+      transparent: true,
+      opacity: 0,
+    });
+    const antenna = new THREE.Mesh(antennaGeom, antennaMat);
+    antenna.position.y = 0.22;
+    group.add(antenna);
+    geoms.push(antennaGeom);
+    mats.push(antennaMat);
+    // Tip blob
+    const tipGeom = new THREE.SphereGeometry(0.018, 8, 6);
+    const tip = new THREE.Mesh(tipGeom, antennaMat);
+    tip.position.y = 0.33;
+    group.add(tip);
+    geoms.push(tipGeom);
+  } else {
+    // Communication dish (parabolic).
+    const dishGeom = new THREE.SphereGeometry(0.13, 16, 12, 0, Math.PI * 2, 0, Math.PI / 2.2);
+    const dishMat = new THREE.MeshStandardMaterial({
+      color: 0xf2f3f4,
+      metalness: 0.55,
+      roughness: 0.42,
+      side: THREE.DoubleSide,
+      transparent: true,
+      opacity: 0,
+    });
+    const dish = new THREE.Mesh(dishGeom, dishMat);
+    dish.position.set(0, 0.18, 0);
+    dish.rotation.x = Math.PI; // open end facing up
+    group.add(dish);
+    geoms.push(dishGeom);
+    mats.push(dishMat);
+    // Feed horn (small cylinder pointing into dish).
+    const feedGeom = new THREE.CylinderGeometry(0.018, 0.018, 0.07, 8);
+    const feed = new THREE.Mesh(feedGeom, dishMat);
+    feed.position.set(0, 0.14, 0);
+    group.add(feed);
+    geoms.push(feedGeom);
+  }
+
+  return { group, geoms, mats };
+}
 
 /* ──────────── helpers ──────────── */
 
