@@ -40,6 +40,25 @@ const TEX_EARTH = "/textures/earth_atmos_2048.jpg";
 const TEX_EARTH_CLOUDS = "/textures/earth_clouds_1024.png";
 const TEX_MOON = "/textures/moon_1024.jpg";
 
+interface MoonSpec {
+  /** Display name (used for log/debug only). */
+  name: string;
+  /** Moon body radius at wallpaper scale (NOT real km — visually
+   *  scaled so tiny captured asteroids like Phobos/Deimos are still
+   *  visible as small chunks rather than single pixels). */
+  radius: number;
+  /** Orbit radius from the parent planet's center, wallpaper units. */
+  orbit: number;
+  /** Orbit angular velocity, rad/sec. Closer moons usually faster
+   *  (per Kepler-ish), but we just pick visually pleasing rates. */
+  speed: number;
+  /** Inclination — small Y tilt in the orbit so moons don't sit on a
+   *  flat plane. Also slightly different per moon. */
+  inclination: number;
+  /** "luna" gets the real lunar texture; "rocky" is procedural gray. */
+  surface: "luna" | "rocky";
+}
+
 interface PlanetSpec {
   name: (typeof PLANET_NAMES)[number];
   radius: number;
@@ -48,16 +67,31 @@ interface PlanetSpec {
   type: "rocky" | "earth" | "mars";
   speed: number;
   tilt: number; // degrees of axial tilt, applied as rotation.z
-  moonRadius: number;
-  moonOrbit: number;
-  moonSpeed: number;
+  /** REAL moons. Mercury and Venus have none — empty array.
+   *  Earth has 1 (Luna). Mars has 2 (Phobos + Deimos). */
+  moons: MoonSpec[];
 }
 
 const PLANETS: PlanetSpec[] = [
-  { name: "Mercury", radius: 0.4, orbit: 4.6, color: 0xa8a29e, type: "rocky", speed: 0.9, tilt: 0.04, moonRadius: 0.12, moonOrbit: 1.2, moonSpeed: 1.8 },
-  { name: "Venus", radius: 0.65, orbit: 6.2, color: 0xe8c894, type: "rocky", speed: 0.6, tilt: 0.02, moonRadius: 0.18, moonOrbit: 1.6, moonSpeed: 1.2 },
-  { name: "Earth", radius: 0.78, orbit: 8.4, color: 0x4dabf7, type: "earth", speed: 0.4, tilt: 23.5, moonRadius: 0.21, moonOrbit: 2.0, moonSpeed: 0.9 },
-  { name: "Mars", radius: 0.55, orbit: 10.6, color: 0xc06b3a, type: "mars", speed: 0.28, tilt: 25, moonRadius: 0.13, moonOrbit: 1.4, moonSpeed: 1.5 },
+  // Mercury — zero moons (gravitational pull too weak + too close to the Sun).
+  { name: "Mercury", radius: 0.4, orbit: 4.6, color: 0xa8a29e, type: "rocky", speed: 0.9, tilt: 0.04, moons: [] },
+  // Venus — zero moons (no captured satellite ever stable here).
+  { name: "Venus", radius: 0.65, orbit: 6.2, color: 0xe8c894, type: "rocky", speed: 0.6, tilt: 0.02, moons: [] },
+  // Earth — one moon, gets the real LRO texture.
+  {
+    name: "Earth", radius: 0.78, orbit: 8.4, color: 0x4dabf7, type: "earth", speed: 0.4, tilt: 23.5,
+    moons: [
+      { name: "Luna", radius: 0.7, orbit: 5.5, speed: 0.55, inclination: 0.07, surface: "luna" },
+    ],
+  },
+  // Mars — two tiny captured asteroids (Phobos closer + smaller orbit, Deimos farther + slower).
+  {
+    name: "Mars", radius: 0.55, orbit: 10.6, color: 0xc06b3a, type: "mars", speed: 0.28, tilt: 25,
+    moons: [
+      { name: "Phobos", radius: 0.16, orbit: 3.2, speed: 1.4, inclination: 0.1, surface: "rocky" },
+      { name: "Deimos", radius: 0.13, orbit: 5.4, speed: 0.6, inclination: -0.18, surface: "rocky" },
+    ],
+  },
 ];
 
 export default function ParticleGalaxy({ preview }: Props) {
@@ -185,11 +219,13 @@ export default function ParticleGalaxy({ preview }: Props) {
     hideAll();
     setSceneOpacity(galaxyGroup, 1);
 
-    /* ─── Trackball-style drag rotation per group ───────────────── */
-    /* Each level group has its own .rotation we modulate. We store
-     * "user rotation" separately from "auto idle rotation" so they
-     * compose without fighting. */
-    const userRot = { x: 0, y: 0 };
+    /* ─── Trackball-style drag rotation ─────────────────────────── */
+    /* Each level group has its own .rotation we modulate. User drag
+     * directly mutates group.rotation (no separate userRot store —
+     * the rotation property IS the source of truth). Auto-idle
+     * (galaxy spin etc.) ALSO accumulates onto group.rotation.y in
+     * the render loop. Both compose without resetting each frame.
+     * Switching levels resets the new level's rotation to neutral. */
 
     /* ─── Pointer state machine ─────────────────────────────────── */
     let pointerDown = false;
@@ -198,10 +234,14 @@ export default function ParticleGalaxy({ preview }: Props) {
     let pointerLastX = 0;
     let pointerLastY = 0;
     let pointerDownAt = 0;
+    let pointerCanvasW = 0;
+    let pointerCanvasH = 0;
     let dragMode: "none" | "rotate" = "none";
     let lastClickTime = 0;
     let lastClickX = 0;
     let lastClickY = 0;
+    let pendingClick: { x: number; y: number } | null = null;
+    let pendingClickTimer: ReturnType<typeof setTimeout> | null = null;
 
     const DBL_CLICK_MS = 320;
     const LONG_PRESS_MS = 180;
@@ -223,9 +263,10 @@ export default function ParticleGalaxy({ preview }: Props) {
       curPlanet = toPlanet;
       transitionStart = performance.now();
       inTransition = true;
-      // Reset per-level user rotation so each level starts cleanly.
-      userRot.x = 0;
-      userRot.y = 0;
+      // Reset the destination group's rotation so each level starts
+      // facing forward, not retaining the previous drag orientation.
+      const dest = activeGroup(toLevel, toPlanet);
+      dest.rotation.set(toLevel === 0 ? -0.72 : 0, 0, 0);
       setLevel(toLevel);
       setFocusedPlanet(toPlanet);
     }
@@ -247,6 +288,19 @@ export default function ParticleGalaxy({ preview }: Props) {
       return meshes.indexOf(hits[0].object as THREE.Mesh);
     }
 
+    function commitClick(clientX: number, clientY: number) {
+      if (curLevel === 2) {
+        const idx = projectPlanetClick(clientX, clientY);
+        if (idx >= 0) startTransition(3, idx);
+      }
+    }
+    function commitDoubleClick() {
+      const next: 0 | 1 | 2 | 3 =
+        curLevel === 0 ? 1 : curLevel === 1 ? 2 : curLevel === 2 ? 3 : 0;
+      const toPlanet = curLevel === 2 ? curPlanet : 2;
+      startTransition(next, toPlanet);
+    }
+
     function onPointerDown(e: PointerEvent) {
       if (isPreview) return;
       pointerDown = true;
@@ -254,49 +308,65 @@ export default function ParticleGalaxy({ preview }: Props) {
       pointerStartY = pointerLastY = e.clientY;
       pointerDownAt = performance.now();
       dragMode = "none";
-      renderer.domElement.setPointerCapture(e.pointerId);
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointerCanvasW = rect.width;
+      pointerCanvasH = rect.height;
+      // Window-level move/up so events are received even if the
+      // pointer leaves the canvas mid-drag. setPointerCapture was
+      // failing silently on some chains because of the
+      // pointer-events:none parent in DesktopBackground; this
+      // pattern sidesteps the entire capture API.
+      window.addEventListener("pointermove", onWindowPointerMove);
+      window.addEventListener("pointerup", onWindowPointerUp);
+      window.addEventListener("pointercancel", onWindowPointerUp);
     }
-    function onPointerMove(e: PointerEvent) {
-      if (isPreview) return;
-      if (pointerDown) {
-        const dx = e.clientX - pointerLastX;
-        const dy = e.clientY - pointerLastY;
-        pointerLastX = e.clientX;
-        pointerLastY = e.clientY;
-        if (dragMode === "none") {
-          const tdx = e.clientX - pointerStartX;
-          const tdy = e.clientY - pointerStartY;
-          const dist = Math.hypot(tdx, tdy);
-          const held = performance.now() - pointerDownAt;
-          if (dist > DRAG_THRESHOLD_PX || held > LONG_PRESS_MS) {
-            dragMode = "rotate";
-            renderer.domElement.style.cursor = "grabbing";
-          }
-        }
-        if (dragMode === "rotate") {
-          const wRect = renderer.domElement.getBoundingClientRect();
-          // Map pixels → radians. A full pass across the canvas = ~PI rotation.
-          userRot.y += (dx / wRect.width) * Math.PI;
-          userRot.x += (dy / wRect.height) * Math.PI;
-          // Clamp X (prevent flip-over).
-          userRot.x = Math.max(-1.2, Math.min(1.2, userRot.x));
+    function onWindowPointerMove(e: PointerEvent) {
+      if (!pointerDown) return;
+      const dx = e.clientX - pointerLastX;
+      const dy = e.clientY - pointerLastY;
+      pointerLastX = e.clientX;
+      pointerLastY = e.clientY;
+
+      if (dragMode === "none") {
+        const tdx = e.clientX - pointerStartX;
+        const tdy = e.clientY - pointerStartY;
+        const dist = Math.hypot(tdx, tdy);
+        const held = performance.now() - pointerDownAt;
+        if (dist > DRAG_THRESHOLD_PX || held > LONG_PRESS_MS) {
+          dragMode = "rotate";
+          renderer.domElement.style.cursor = "grabbing";
         }
       }
+      if (dragMode === "rotate") {
+        // Pixels → radians. A full canvas-width sweep = π rotation.
+        const yawDelta = (dx / Math.max(1, pointerCanvasW)) * Math.PI;
+        const pitchDelta = (dy / Math.max(1, pointerCanvasH)) * Math.PI;
+        // Apply directly to the active group's rotation. No reset
+        // each frame — the rotation IS the source of truth, the
+        // auto-idle just adds small per-frame deltas on top.
+        const g = activeGroup(curLevel, curPlanet);
+        g.rotation.y += yawDelta;
+        g.rotation.x = Math.max(-1.4, Math.min(1.4, g.rotation.x + pitchDelta));
+      }
     }
-    function onPointerUp(e: PointerEvent) {
-      if (isPreview) return;
+    function onWindowPointerUp(e: PointerEvent) {
       const wasDown = pointerDown;
       pointerDown = false;
+      window.removeEventListener("pointermove", onWindowPointerMove);
+      window.removeEventListener("pointerup", onWindowPointerUp);
+      window.removeEventListener("pointercancel", onWindowPointerUp);
       renderer.domElement.style.cursor = "grab";
-      try {
-        renderer.domElement.releasePointerCapture(e.pointerId);
-      } catch {}
+
       if (!wasDown || dragMode === "rotate") {
         dragMode = "none";
         return;
       }
 
-      // It was a click (no drag). Decide single vs double.
+      // It was a click (no drag). Decide single vs double via
+      // a small grace timer — if a second click arrives within
+      // DBL_CLICK_MS we treat the pair as double; otherwise the
+      // single-click commits after the timer.
+      dragMode = "none";
       const now = performance.now();
       const sinceLast = now - lastClickTime;
       const moveSinceLast = Math.hypot(
@@ -307,24 +377,28 @@ export default function ParticleGalaxy({ preview }: Props) {
       lastClickTime = now;
       lastClickX = e.clientX;
       lastClickY = e.clientY;
-      dragMode = "none";
 
       if (isDouble) {
-        // Double-click: advance level (or wrap from detail back to galaxy).
-        const next: 0 | 1 | 2 | 3 =
-          curLevel === 0 ? 1 : curLevel === 1 ? 2 : curLevel === 2 ? 3 : 0;
-        const toPlanet = curLevel === 2 ? curPlanet : 2;
-        startTransition(next, toPlanet);
+        // Cancel any pending single-click commit; this counted as the second.
+        if (pendingClickTimer) {
+          clearTimeout(pendingClickTimer);
+          pendingClickTimer = null;
+          pendingClick = null;
+        }
+        commitDoubleClick();
         return;
       }
 
-      // Single click on a planet at solar level → zoom that planet.
-      if (curLevel === 2) {
-        const idx = projectPlanetClick(e.clientX, e.clientY);
-        if (idx >= 0) {
-          startTransition(3, idx);
+      // Hold the single-click for DBL_CLICK_MS in case a double is coming.
+      pendingClick = { x: e.clientX, y: e.clientY };
+      if (pendingClickTimer) clearTimeout(pendingClickTimer);
+      pendingClickTimer = setTimeout(() => {
+        if (pendingClick) {
+          commitClick(pendingClick.x, pendingClick.y);
+          pendingClick = null;
         }
-      }
+        pendingClickTimer = null;
+      }, DBL_CLICK_MS);
     }
     function onContextMenu(e: MouseEvent) {
       if (isPreview) return;
@@ -345,9 +419,6 @@ export default function ParticleGalaxy({ preview }: Props) {
 
     if (!isPreview) {
       renderer.domElement.addEventListener("pointerdown", onPointerDown);
-      renderer.domElement.addEventListener("pointermove", onPointerMove);
-      renderer.domElement.addEventListener("pointerup", onPointerUp);
-      renderer.domElement.addEventListener("pointercancel", onPointerUp);
       renderer.domElement.addEventListener("contextmenu", onContextMenu);
       window.addEventListener("keydown", onKey);
     }
@@ -417,13 +488,16 @@ export default function ParticleGalaxy({ preview }: Props) {
       }
       camera.lookAt(camPresets[curLevel].look);
 
-      // User rotation applied to current group.
-      curG.rotation.x = userRot.x;
-      curG.rotation.y = (curG.rotation.y || 0) * 0 + userRot.y;
-      // Layer auto-idle rotations BACK ON TOP of user input by adding a
-      // small per-frame increment that the user can still steer.
-      if (curLevel === 0) curG.rotation.y += dt * 0.045;
-      if (curLevel === 1) curG.rotation.y += dt * 0.03;
+      // Auto-idle rotation accumulates onto the active group's
+      // rotation.y. User drag has ALREADY mutated the rotation
+      // directly via onWindowPointerMove; we just keep adding small
+      // per-frame deltas on top so a galaxy with no drag input still
+      // spins gently. This composes naturally — no per-frame reset,
+      // no userRot store fighting with .rotation.
+      if (!pointerDown && !inTransition) {
+        if (curLevel === 0) curG.rotation.y += dt * 0.045;
+        else if (curLevel === 1) curG.rotation.y += dt * 0.03;
+      }
 
       // Solar system: planets orbit, sun rotates regardless of group rotation.
       if (curLevel === 2) {
@@ -438,15 +512,19 @@ export default function ParticleGalaxy({ preview }: Props) {
         }
         if (solarBuild.sun) solarBuild.sun.rotation.y += dt * 0.06;
       }
-      // Planet detail: focused planet rotates + moon orbits.
+      // Planet detail: focused planet rotates + each real moon orbits.
       if (curLevel === 3) {
         const d = detailBuilds[curPlanet];
         if (d.planet) d.planet.rotation.y += dt * 0.18;
         if (d.clouds) d.clouds.rotation.y += dt * 0.04; // clouds slightly faster than surface drift
-        if (d.moon) {
-          const a = uTime.value * 0.55;
-          d.moon.position.set(Math.cos(a) * 5.5, 0.4, Math.sin(a) * 5.5);
-          d.moon.rotation.y += dt * 0.06;
+        for (const m of d.moons) {
+          const a = uTime.value * m.spec.speed + m.phase;
+          m.mesh.position.set(
+            Math.cos(a) * m.spec.orbit,
+            Math.sin(a) * m.spec.inclination * m.spec.orbit,
+            Math.sin(a) * m.spec.orbit
+          );
+          m.mesh.rotation.y += dt * 0.06;
         }
       }
 
@@ -481,12 +559,17 @@ export default function ParticleGalaxy({ preview }: Props) {
       document.removeEventListener("visibilitychange", onVis);
       if (!isPreview) {
         renderer.domElement.removeEventListener("pointerdown", onPointerDown);
-        renderer.domElement.removeEventListener("pointermove", onPointerMove);
-        renderer.domElement.removeEventListener("pointerup", onPointerUp);
-        renderer.domElement.removeEventListener("pointercancel", onPointerUp);
         renderer.domElement.removeEventListener("contextmenu", onContextMenu);
         window.removeEventListener("keydown", onKey);
         window.removeEventListener("pointermove", onHoverMove);
+        // If a drag is mid-flight when the wallpaper unmounts, the
+        // window-level move/up listeners are still attached. Yank them.
+        window.removeEventListener("pointermove", onWindowPointerMove);
+        window.removeEventListener("pointerup", onWindowPointerUp);
+        window.removeEventListener("pointercancel", onWindowPointerUp);
+        if (pendingClickTimer) {
+          clearTimeout(pendingClickTimer);
+        }
       }
       ro?.disconnect();
       galaxyCleanup();
@@ -524,7 +607,7 @@ export default function ParticleGalaxy({ preview }: Props) {
           <span className="text-white/40">·</span>
           <span className="text-white/55">
             {level === 2
-              ? "click planet · double-click for Earth"
+              ? "click a planet · drag to rotate"
               : level === 3
                 ? "double-click to exit · drag to rotate"
                 : "double-click to dive · drag to rotate"}
@@ -934,38 +1017,54 @@ function buildPlanetDetail(
     group.add(planetMesh);
   }
 
-  // Moon (real texture for Earth, procedural for others).
-  let moonMesh: THREE.Mesh;
-  let moonMat: THREE.Material;
-  let moonGeom: THREE.SphereGeometry;
-  if (spec.name === "Earth" && moonTex && !isPreview) {
-    const m = new THREE.MeshPhongMaterial({
-      map: moonTex,
-      specular: 0x111111,
-      shininess: 5,
-      transparent: true,
-      opacity: 0,
+  // Real moons. Mercury / Venus → empty array, no moon mesh built.
+  // Earth → 1 (Luna with the LRO texture). Mars → 2 (Phobos/Deimos
+  // procedural — they're tiny captured asteroids in reality, no good
+  // public-domain map at the resolution we'd use).
+  interface BuiltMoon {
+    spec: MoonSpec;
+    mesh: THREE.Mesh;
+    mat: THREE.Material;
+    geom: THREE.SphereGeometry;
+    /** Per-moon orbit phase so multiple moons don't sit on top of each other. */
+    phase: number;
+  }
+  const builtMoons: BuiltMoon[] = [];
+  for (let i = 0; i < spec.moons.length; i++) {
+    const ms = spec.moons[i];
+    let mat: THREE.Material;
+    if (ms.surface === "luna" && moonTex && !isPreview) {
+      mat = new THREE.MeshPhongMaterial({
+        map: moonTex,
+        specular: 0x111111,
+        shininess: 5,
+        transparent: true,
+        opacity: 0,
+      });
+    } else {
+      mat = new THREE.ShaderMaterial({
+        uniforms: {
+          uTime,
+          uOpacity: { value: 0 },
+          uColor: { value: new THREE.Color(0xb0b3b8) },
+          uType: { value: 3 },
+        },
+        vertexShader: PLANET_VERT,
+        fragmentShader: PLANET_FRAG,
+        transparent: true,
+      });
+    }
+    const segs = ms.surface === "luna" ? 48 : 24;
+    const geom = new THREE.SphereGeometry(ms.radius, segs, segs);
+    const mesh = new THREE.Mesh(geom, mat);
+    group.add(mesh);
+    builtMoons.push({
+      spec: ms,
+      mesh,
+      mat,
+      geom,
+      phase: (i * Math.PI * 2) / Math.max(1, spec.moons.length),
     });
-    moonMat = m;
-    moonGeom = new THREE.SphereGeometry(0.7, 48, 48);
-    moonMesh = new THREE.Mesh(moonGeom, moonMat);
-    group.add(moonMesh);
-  } else {
-    const m = new THREE.ShaderMaterial({
-      uniforms: {
-        uTime,
-        uOpacity: { value: 0 },
-        uColor: { value: new THREE.Color(0xb0b3b8) },
-        uType: { value: 3 },
-      },
-      vertexShader: PLANET_VERT,
-      fragmentShader: PLANET_FRAG,
-      transparent: true,
-    });
-    moonMat = m;
-    moonGeom = new THREE.SphereGeometry(0.55, 32, 32);
-    moonMesh = new THREE.Mesh(moonGeom, moonMat);
-    group.add(moonMesh);
   }
 
   // Background dust at this scale.
@@ -1008,7 +1107,7 @@ function buildPlanetDetail(
     planet: planetMesh,
     clouds: cloudsMesh,
     atmosphere: atmoMesh,
-    moon: moonMesh,
+    moons: builtMoons,
     dispose: () => {
       planetGeom.dispose();
       planetMat.dispose();
@@ -1016,8 +1115,10 @@ function buildPlanetDetail(
       cloudsMat?.dispose();
       atmoGeom?.dispose();
       atmoMat?.dispose();
-      moonGeom.dispose();
-      moonMat.dispose();
+      for (const m of builtMoons) {
+        m.geom.dispose();
+        m.mat.dispose();
+      }
       dG.dispose();
       dM.dispose();
     },
