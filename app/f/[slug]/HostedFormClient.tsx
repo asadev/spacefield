@@ -22,6 +22,7 @@ const inputClass =
 
 export default function HostedFormClient({ slug, fields, thankYouMessage }: Props) {
   const [values, setValues] = useState<Record<string, string>>({});
+  const [hpValue, setHpValue] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "ok" | "error">(
     "idle"
   );
@@ -39,7 +40,7 @@ export default function HostedFormClient({ slug, fields, thankYouMessage }: Prop
       const res = await fetch(`/api/inbound/form/${slug}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(values),
+        body: JSON.stringify({ ...values, _hp_company: hpValue }),
       });
       const json = (await res.json()) as {
         ok: boolean;
@@ -76,6 +77,31 @@ export default function HostedFormClient({ slug, fields, thankYouMessage }: Prop
 
   return (
     <form onSubmit={submit} className="space-y-4">
+      {/* Honeypot — invisible to real users; bots auto-fill. Server drops the submission silently if non-empty. */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          left: "-9999px",
+          opacity: 0,
+          pointerEvents: "none",
+          height: 0,
+          width: 0,
+          overflow: "hidden",
+        }}
+      >
+        <label htmlFor="_hp_company">Company (leave blank)</label>
+        <input
+          id="_hp_company"
+          type="text"
+          name="_hp_company"
+          autoComplete="off"
+          tabIndex={-1}
+          aria-hidden="true"
+          value={hpValue}
+          onChange={(e) => setHpValue(e.target.value)}
+        />
+      </div>
       {fields.map((f) => (
         <div key={f.key} className="space-y-1.5">
           <label

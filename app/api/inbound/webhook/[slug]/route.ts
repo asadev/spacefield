@@ -81,6 +81,21 @@ export async function POST(
     return jsonResponse({ ok: false, error: "invalid_json" }, 422);
   }
 
+  // Honeypot — `_hp_company` is a hidden field on the rendered form that
+  // real users never see (and never fill). Bots that scrape forms often
+  // replay the same body to the webhook URL too. If it's non-empty,
+  // silently pretend the submission worked so the bot moves on; never
+  // 4xx — bots learn from rejections.
+  if (payload && typeof payload === "object" && !Array.isArray(payload)) {
+    const hp = (payload as Record<string, unknown>)["_hp_company"];
+    if (typeof hp === "string" && hp.trim().length > 0) {
+      console.warn(`[webhook/${slug}] honeypot tripped, dropping submission`);
+      return jsonResponse({ ok: true }, 200);
+    }
+    // Strip so downstream ingest never sees the honeypot key.
+    delete (payload as Record<string, unknown>)["_hp_company"];
+  }
+
   const meta = {
     ip: req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || null,
     userAgent: req.headers.get("user-agent") || null,
