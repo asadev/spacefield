@@ -490,6 +490,12 @@ export default function AISection({
         </button>
       </div>
 
+      {/* Channels — WhatsApp and Telegram sit side-by-side at md+ so a
+          wider settings panel doesn't waste horizontal real estate. */}
+      <div className="text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-faint">
+        Channels
+      </div>
+      <div className="grid gap-4 md:grid-cols-2">
       {/* WhatsApp linking */}
       <div className="rounded-xl border border-app bg-app p-4">
         <div className="text-[0.62rem] uppercase tracking-[0.14em] text-secondary">
@@ -625,6 +631,7 @@ export default function AISection({
             </button>
           </div>
         )}
+      </div>
       </div>
 
       {/* Persona */}
