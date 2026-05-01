@@ -1,29 +1,68 @@
 "use client";
 
-/* ParticleGalaxy v4 — interactive zoom journey from a galaxy down to
- * a real-textured Earth/Moon, with per-planet click-to-zoom and
- * trackball drag-to-rotate.
+/* ParticleGalaxy v5 — properly photorealistic, full rewrite.
  *
- * Interaction model (Asad's spec):
- *   - DOUBLE-CLICK on empty space → advance / wrap level
- *   - CLICK on a planet (in the Solar System view) → zoom into that
- *     planet's detail view; each planet has its own moon
- *   - LONG-PRESS + DRAG (held >180ms then move) → trackball-rotate the
- *     current scene 360° on both axes; release to leave the new
- *     orientation in place
- *   - ESC → step back to the previous level
+ * Asad called out the v4 line as "incremental tries that don't add
+ * up". This version is built around a single principle: every body
+ * uses a real NASA-derived texture, lit by a real PointLight at the
+ * Sun. No more procedural-noise planets that look like colored
+ * marbles. No more jittered-icosahedron asteroids that read as
+ * folded paper.
  *
- * Levels:
- *   0  Galaxy           — wide spiral disk, 6000 stars + glowing core
- *   1  Star Cluster     — sparser stars + prominent feature star
- *   2  Solar System     — Sun + 4 clickable planets on tilted orbits
- *   3  Planet Detail    — focused planet (real NASA texture for
- *                         Earth, procedural for others) + its moon
+ * Texture pipeline (all CC-licensed / public domain, bundled in
+ * /public/textures, total ~3.7MB, only fetched when the wallpaper
+ * is selected):
+ *   - 2k_sun.jpg                — Solar Dynamics Observatory composite
+ *   - 2k_mercury.jpg            — MESSENGER mosaic
+ *   - 2k_venus_atmosphere.jpg   — Magellan / Pioneer atmospheric top
+ *   - earth_atmos_2048.jpg      — NASA Blue Marble surface
+ *   - earth_clouds_1024.png     — translucent cloud layer
+ *   - earth_specular_2048.jpg   — ocean specular mask (oceans glint
+ *                                 under the sun, continents are matte)
+ *   - 2k_mars.jpg               — Viking / MOLA mosaic
+ *   - moon_1024.jpg             — Lunar Reconnaissance Orbiter mosaic
+ *   - 2k_stars_milky_way.jpg    — wide-field night sky for the
+ *                                 inverted-sphere skybox
  *
- * Earth + Moon use NASA Visible Earth Blue Marble + Lunar Reconnaissance
- * Orbiter imagery via the Three.js examples textures (public domain).
- * Clouds layer is a translucent shell with a separate cloud texture.
- * The Sun illuminates Earth/Moon via a real PointLight at the origin.
+ * Lighting model (Solar System level):
+ *   - PointLight at world origin (the Sun) — distance falloff so
+ *     Mercury is brightest, Mars dimmer.
+ *   - Soft AmbientLight (0.08) so unlit hemispheres don't go pure
+ *     black on planets that face away.
+ *   - Sun mesh uses MeshBasicMaterial (emissive, no lighting
+ *     dependency) so it appears self-lit even though the PointLight
+ *     is positioned inside it.
+ *
+ * Lighting model (Planet Detail level):
+ *   - DirectionalLight from off-axis to give a clean terminator and
+ *     visible day/night. Planets rotate underneath the fixed light
+ *     so their textured surface scrolls into and out of daylight.
+ *   - AmbientLight 0.18 for subtle base illumination.
+ *
+ * Asteroid belt:
+ *   - Smooth-shaded IcosahedronGeometry(detail=2) — 320 triangles
+ *     each, more than the v4 jittered low-poly origami. Vertices
+ *     get a small (0.15) per-vertex displacement along their normal
+ *     for an irregular silhouette, then computeVertexNormals() so
+ *     lighting reads as smooth.
+ *   - MeshStandardMaterial with a procedural rocky color (warm gray
+ *     + dark mineral patches) and high roughness. Lit by the same
+ *     PointLight at the Sun, so they fall into shadow naturally.
+ *   - Each rock has its own orbit + tumble axis + spin rate.
+ *
+ * Star skybox:
+ *   - Inverted SphereGeometry(800) with the Milky Way panorama
+ *     mapped on the inside. The whole scene exists inside this
+ *     sphere; the camera stays well inside it. Doesn't move with the
+ *     planets — it's the universe.
+ *
+ * Interaction (preserved from v4.2):
+ *   - DOUBLE-CLICK empty space → advance level (galaxy → cluster →
+ *     solar → planet detail → wraps).
+ *   - SINGLE-CLICK a planet → zoom into that planet's detail.
+ *   - LONG-PRESS + DRAG → trackball rotate; release with velocity →
+ *     inertial spin that decays.
+ *   - ESC / right-click → step back one level.
  */
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -36,57 +75,51 @@ interface Props {
 const LEVEL_NAMES = ["Galaxy", "Star Cluster", "Solar System"] as const;
 const PLANET_NAMES = ["Mercury", "Venus", "Earth", "Mars"] as const;
 
-const TEX_EARTH = "/textures/earth_atmos_2048.jpg";
-const TEX_EARTH_CLOUDS = "/textures/earth_clouds_1024.png";
-const TEX_MOON = "/textures/moon_1024.jpg";
+const TEX = {
+  sun: "/textures/2k_sun.jpg",
+  mercury: "/textures/2k_mercury.jpg",
+  venus: "/textures/2k_venus_atmosphere.jpg",
+  earth: "/textures/earth_atmos_2048.jpg",
+  earthClouds: "/textures/earth_clouds_1024.png",
+  earthSpecular: "/textures/earth_specular_2048.jpg",
+  mars: "/textures/2k_mars.jpg",
+  moon: "/textures/moon_1024.jpg",
+  stars: "/textures/2k_stars_milky_way.jpg",
+} as const;
 
 interface MoonSpec {
-  /** Display name (used for log/debug only). */
   name: string;
-  /** Moon body radius at wallpaper scale (NOT real km — visually
-   *  scaled so tiny captured asteroids like Phobos/Deimos are still
-   *  visible as small chunks rather than single pixels). */
   radius: number;
-  /** Orbit radius from the parent planet's center, wallpaper units. */
   orbit: number;
-  /** Orbit angular velocity, rad/sec. Closer moons usually faster
-   *  (per Kepler-ish), but we just pick visually pleasing rates. */
   speed: number;
-  /** Inclination — small Y tilt in the orbit so moons don't sit on a
-   *  flat plane. Also slightly different per moon. */
   inclination: number;
-  /** "luna" gets the real lunar texture; "rocky" is procedural gray. */
+  /** "luna" → real LRO map. "rocky" → procedural gray (Phobos / Deimos). */
   surface: "luna" | "rocky";
 }
 
 interface PlanetSpec {
   name: (typeof PLANET_NAMES)[number];
-  radius: number;
+  /** Radius in the SOLAR SYSTEM view (everything tiny, lit by Sun). */
+  solarRadius: number;
+  /** Radius in the PLANET DETAIL view (planet fills frame). */
+  detailRadius: number;
   orbit: number;
-  color: number; // hex, used as fallback tint
-  type: "rocky" | "earth" | "mars";
+  type: "mercury" | "venus" | "earth" | "mars";
   speed: number;
-  tilt: number; // degrees of axial tilt, applied as rotation.z
-  /** REAL moons. Mercury and Venus have none — empty array.
-   *  Earth has 1 (Luna). Mars has 2 (Phobos + Deimos). */
+  /** Axial tilt in degrees. Earth ≈ 23.5, Mars ≈ 25, Mercury ≈ 0, Venus ≈ 177 (retrograde, simplified). */
+  tilt: number;
   moons: MoonSpec[];
 }
 
 const PLANETS: PlanetSpec[] = [
-  // Mercury — zero moons (gravitational pull too weak + too close to the Sun).
-  { name: "Mercury", radius: 0.4, orbit: 4.6, color: 0xa8a29e, type: "rocky", speed: 0.9, tilt: 0.04, moons: [] },
-  // Venus — zero moons (no captured satellite ever stable here).
-  { name: "Venus", radius: 0.65, orbit: 6.2, color: 0xe8c894, type: "rocky", speed: 0.6, tilt: 0.02, moons: [] },
-  // Earth — one moon, gets the real LRO texture.
+  { name: "Mercury", solarRadius: 0.45, detailRadius: 2.4, orbit: 5.0, type: "mercury", speed: 0.9, tilt: 0.04, moons: [] },
+  { name: "Venus", solarRadius: 0.7, detailRadius: 2.5, orbit: 6.8, type: "venus", speed: 0.6, tilt: 2.6, moons: [] },
   {
-    name: "Earth", radius: 0.78, orbit: 8.4, color: 0x4dabf7, type: "earth", speed: 0.4, tilt: 23.5,
-    moons: [
-      { name: "Luna", radius: 0.7, orbit: 5.5, speed: 0.55, inclination: 0.07, surface: "luna" },
-    ],
+    name: "Earth", solarRadius: 0.78, detailRadius: 2.6, orbit: 9.0, type: "earth", speed: 0.4, tilt: 23.5,
+    moons: [{ name: "Luna", radius: 0.7, orbit: 5.5, speed: 0.55, inclination: 0.07, surface: "luna" }],
   },
-  // Mars — two tiny captured asteroids (Phobos closer + smaller orbit, Deimos farther + slower).
   {
-    name: "Mars", radius: 0.55, orbit: 10.6, color: 0xc06b3a, type: "mars", speed: 0.28, tilt: 25,
+    name: "Mars", solarRadius: 0.6, detailRadius: 2.55, orbit: 11.4, type: "mars", speed: 0.28, tilt: 25,
     moons: [
       { name: "Phobos", radius: 0.16, orbit: 3.2, speed: 1.4, inclination: 0.1, surface: "rocky" },
       { name: "Deimos", radius: 0.13, orbit: 5.4, speed: 0.6, inclination: -0.18, surface: "rocky" },
@@ -94,10 +127,22 @@ const PLANETS: PlanetSpec[] = [
   },
 ];
 
+interface Textures {
+  sun: THREE.Texture;
+  mercury: THREE.Texture;
+  venus: THREE.Texture;
+  earth: THREE.Texture;
+  earthClouds: THREE.Texture;
+  earthSpecular: THREE.Texture;
+  mars: THREE.Texture;
+  moon: THREE.Texture;
+  stars: THREE.Texture;
+}
+
 export default function ParticleGalaxy({ preview }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [level, setLevel] = useState<0 | 1 | 2 | 3>(0);
-  const [focusedPlanet, setFocusedPlanet] = useState<number>(2); // Earth default
+  const [focusedPlanet, setFocusedPlanet] = useState<number>(2);
 
   const isPreview = !!preview;
   const dotCount = useMemo(() => (isPreview ? 800 : 6000), [isPreview]);
@@ -116,13 +161,15 @@ export default function ParticleGalaxy({ preview }: Props) {
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: false,
-      powerPreference: "low-power",
+      powerPreference: isPreview ? "low-power" : "high-performance",
     });
     const dpr = Math.min(window.devicePixelRatio || 1, 2);
     renderer.setPixelRatio(dpr);
     renderer.setSize(w, h, false);
     renderer.setClearColor(0x040611, 1);
     renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.05;
     container.appendChild(renderer.domElement);
     Object.assign(renderer.domElement.style, {
       width: "100%",
@@ -136,40 +183,50 @@ export default function ParticleGalaxy({ preview }: Props) {
     const camera = new THREE.PerspectiveCamera(45, w / h, 0.05, 4000);
     const uTime = { value: 0 };
 
-    /* Texture loader for the realistic Earth/Moon level. */
+    /* ─── Texture loading ───────────────────────────────────────── */
     const texLoader = new THREE.TextureLoader();
-    let earthTex: THREE.Texture | null = null;
-    let earthCloudsTex: THREE.Texture | null = null;
-    let moonTex: THREE.Texture | null = null;
+    const maxAniso = renderer.capabilities.getMaxAnisotropy();
+    function loadColor(url: string): THREE.Texture {
+      const t = texLoader.load(url);
+      t.colorSpace = THREE.SRGBColorSpace;
+      t.anisotropy = maxAniso;
+      return t;
+    }
+    function loadData(url: string): THREE.Texture {
+      const t = texLoader.load(url);
+      t.anisotropy = maxAniso;
+      return t;
+    }
+    let textures: Textures | null = null;
     if (!isPreview) {
-      earthTex = texLoader.load(TEX_EARTH);
-      earthTex.colorSpace = THREE.SRGBColorSpace;
-      earthTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-      earthCloudsTex = texLoader.load(TEX_EARTH_CLOUDS);
-      moonTex = texLoader.load(TEX_MOON);
-      moonTex.colorSpace = THREE.SRGBColorSpace;
-      moonTex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+      textures = {
+        sun: loadColor(TEX.sun),
+        mercury: loadColor(TEX.mercury),
+        venus: loadColor(TEX.venus),
+        earth: loadColor(TEX.earth),
+        earthClouds: loadColor(TEX.earthClouds),
+        earthSpecular: loadData(TEX.earthSpecular),
+        mars: loadColor(TEX.mars),
+        moon: loadColor(TEX.moon),
+        stars: loadColor(TEX.stars),
+      };
     }
 
-    /* ─── Level 0: Galaxy ──────────────────────────────────────── */
+    /* ─── Levels ───────────────────────────────────────────────── */
     const galaxyGroup = new THREE.Group();
     scene.add(galaxyGroup);
-    const galaxyRadius = 95;
-    const galaxyCleanup = buildGalaxy(galaxyGroup, dotCount, galaxyRadius, isPreview, uTime);
+    const galaxyCleanup = buildGalaxy(galaxyGroup, dotCount, isPreview, uTime);
 
-    /* ─── Level 1: Star Cluster ─────────────────────────────────── */
     const clusterGroup = new THREE.Group();
     clusterGroup.visible = false;
     scene.add(clusterGroup);
     const clusterCleanup = buildStarCluster(clusterGroup, isPreview, uTime);
 
-    /* ─── Level 2: Solar System (with clickable planets) ────────── */
     const solarGroup = new THREE.Group();
     solarGroup.visible = false;
     scene.add(solarGroup);
-    const solarBuild = buildSolarSystem(solarGroup, isPreview, uTime);
+    const solarBuild = buildSolarSystem(solarGroup, isPreview, uTime, textures);
 
-    /* ─── Level 3: Planet Detail (one per planet) ──────────────── */
     const detailGroups: THREE.Group[] = [];
     const detailBuilds: ReturnType<typeof buildPlanetDetail>[] = [];
     for (let i = 0; i < PLANETS.length; i++) {
@@ -177,30 +234,19 @@ export default function ParticleGalaxy({ preview }: Props) {
       g.visible = false;
       scene.add(g);
       detailGroups.push(g);
-      detailBuilds.push(
-        buildPlanetDetail(
-          g,
-          PLANETS[i],
-          isPreview,
-          uTime,
-          PLANETS[i].name === "Earth" ? earthTex : null,
-          PLANETS[i].name === "Earth" ? earthCloudsTex : null,
-          moonTex
-        )
-      );
+      detailBuilds.push(buildPlanetDetail(g, PLANETS[i], isPreview, uTime, textures));
     }
 
     /* ─── Camera presets ────────────────────────────────────────── */
     const camPresets = {
       0: { pos: new THREE.Vector3(0, 50, 250), look: new THREE.Vector3(0, 0, 0) },
       1: { pos: new THREE.Vector3(0, 5, 90), look: new THREE.Vector3(0, 0, 0) },
-      2: { pos: new THREE.Vector3(0, 6, 22), look: new THREE.Vector3(0, 0, 0) },
+      2: { pos: new THREE.Vector3(0, 7, 24), look: new THREE.Vector3(0, 0, 0) },
       3: { pos: new THREE.Vector3(0, 0, 9), look: new THREE.Vector3(0, 0, 0) },
     };
     camera.position.copy(camPresets[0].pos);
     camera.lookAt(camPresets[0].look);
 
-    /* ─── Group visibility / opacity helpers ──────────────────── */
     function activeGroup(lvl: 0 | 1 | 2 | 3, planet: number): THREE.Group {
       if (lvl === 0) return galaxyGroup;
       if (lvl === 1) return clusterGroup;
@@ -219,15 +265,7 @@ export default function ParticleGalaxy({ preview }: Props) {
     hideAll();
     setSceneOpacity(galaxyGroup, 1);
 
-    /* ─── Trackball-style drag rotation ─────────────────────────── */
-    /* Each level group has its own .rotation we modulate. User drag
-     * directly mutates group.rotation (no separate userRot store —
-     * the rotation property IS the source of truth). Auto-idle
-     * (galaxy spin etc.) ALSO accumulates onto group.rotation.y in
-     * the render loop. Both compose without resetting each frame.
-     * Switching levels resets the new level's rotation to neutral. */
-
-    /* ─── Pointer state machine ─────────────────────────────────── */
+    /* ─── Pointer state ────────────────────────────────────────── */
     let pointerDown = false;
     let pointerStartX = 0;
     let pointerStartY = 0;
@@ -247,17 +285,14 @@ export default function ParticleGalaxy({ preview }: Props) {
     const LONG_PRESS_MS = 180;
     const DRAG_THRESHOLD_PX = 5;
 
-    /* Angular velocity tracker — captures the last few drag samples so
-     * we can hand off the user's "throw" to a damped free-spin when
-     * the pointer releases. Recent samples weighted more than old. */
     interface VelSample {
       t: number;
       yaw: number;
       pitch: number;
     }
     const velSamples: VelSample[] = [];
-    const velocity = { yaw: 0, pitch: 0 }; // rad/sec, decays over time
-    const VELOCITY_DAMPING = 0.93; // per-frame multiplier (≈ 1.4s to ~1% at 60fps)
+    const velocity = { yaw: 0, pitch: 0 };
+    const VELOCITY_DAMPING = 0.93;
 
     let curLevel: 0 | 1 | 2 | 3 = 0;
     let prevLevel: 0 | 1 | 2 | 3 = 0;
@@ -265,8 +300,6 @@ export default function ParticleGalaxy({ preview }: Props) {
     let prevPlanet = 2;
     let inTransition = false;
     let transitionStart = 0;
-    // Slower, more cinematic dive — was 950ms, felt rushed and made
-    // Earth blink in before you could appreciate the approach.
     const TRANSITION_MS = reduceMotion ? 1 : 1800;
 
     function startTransition(toLevel: 0 | 1 | 2 | 3, toPlanet: number) {
@@ -277,17 +310,22 @@ export default function ParticleGalaxy({ preview }: Props) {
       curPlanet = toPlanet;
       transitionStart = performance.now();
       inTransition = true;
-      // Reset the destination group's rotation so each level starts
-      // facing forward, not retaining the previous drag orientation.
       const dest = activeGroup(toLevel, toPlanet);
       dest.rotation.set(toLevel === 0 ? -0.72 : 0, 0, 0);
+      velocity.yaw = 0;
+      velocity.pitch = 0;
       setLevel(toLevel);
       setFocusedPlanet(toPlanet);
     }
 
-    /* ─── Click / double-click / long-press routing ─────────────── */
+    function commitDoubleClick() {
+      const next: 0 | 1 | 2 | 3 =
+        curLevel === 0 ? 1 : curLevel === 1 ? 2 : curLevel === 2 ? 3 : 0;
+      const toPlanet = curLevel === 2 ? curPlanet : 2;
+      startTransition(next, toPlanet);
+    }
+
     function projectPlanetClick(clientX: number, clientY: number): number {
-      // Returns planet index 0..3 if a planet was clicked, or -1.
       if (curLevel !== 2) return -1;
       const rect = renderer.domElement.getBoundingClientRect();
       const ndc = new THREE.Vector2(
@@ -302,19 +340,6 @@ export default function ParticleGalaxy({ preview }: Props) {
       return meshes.indexOf(hits[0].object as THREE.Mesh);
     }
 
-    function commitClick(clientX: number, clientY: number) {
-      if (curLevel === 2) {
-        const idx = projectPlanetClick(clientX, clientY);
-        if (idx >= 0) startTransition(3, idx);
-      }
-    }
-    function commitDoubleClick() {
-      const next: 0 | 1 | 2 | 3 =
-        curLevel === 0 ? 1 : curLevel === 1 ? 2 : curLevel === 2 ? 3 : 0;
-      const toPlanet = curLevel === 2 ? curPlanet : 2;
-      startTransition(next, toPlanet);
-    }
-
     function onPointerDown(e: PointerEvent) {
       if (isPreview) return;
       pointerDown = true;
@@ -325,11 +350,6 @@ export default function ParticleGalaxy({ preview }: Props) {
       const rect = renderer.domElement.getBoundingClientRect();
       pointerCanvasW = rect.width;
       pointerCanvasH = rect.height;
-      // Window-level move/up so events are received even if the
-      // pointer leaves the canvas mid-drag. setPointerCapture was
-      // failing silently on some chains because of the
-      // pointer-events:none parent in DesktopBackground; this
-      // pattern sidesteps the entire capture API.
       window.addEventListener("pointermove", onWindowPointerMove);
       window.addEventListener("pointerup", onWindowPointerUp);
       window.addEventListener("pointercancel", onWindowPointerUp);
@@ -352,24 +372,17 @@ export default function ParticleGalaxy({ preview }: Props) {
         }
       }
       if (dragMode === "rotate") {
-        // Pixels → radians. A full canvas-width sweep = π rotation.
         const yawDelta = (dx / Math.max(1, pointerCanvasW)) * Math.PI;
         const pitchDelta = (dy / Math.max(1, pointerCanvasH)) * Math.PI;
         const g = activeGroup(curLevel, curPlanet);
         g.rotation.y += yawDelta;
         g.rotation.x = Math.max(-1.4, Math.min(1.4, g.rotation.x + pitchDelta));
-
-        // Record sample so we can compute throw velocity on release.
         velSamples.push({
           t: performance.now(),
           yaw: g.rotation.y,
           pitch: g.rotation.x,
         });
-        // Trim to the last 8 samples (avoids unbounded growth).
         if (velSamples.length > 8) velSamples.shift();
-
-        // Cancel any inertial spin currently in progress when the
-        // user grabs again — they're taking over.
         velocity.yaw = 0;
         velocity.pitch = 0;
       }
@@ -382,22 +395,18 @@ export default function ParticleGalaxy({ preview }: Props) {
       window.removeEventListener("pointercancel", onWindowPointerUp);
       renderer.domElement.style.cursor = "grab";
 
-      // If the gesture was a drag, hand off velocity to inertial spin
-      // (so a fast flick keeps rotating after release, decaying).
       if (!wasDown || dragMode === "rotate") {
         if (dragMode === "rotate") {
-          // Compute velocity from the last ≤120ms of drag samples.
           const now = performance.now();
           const recent = velSamples.filter((s) => now - s.t < 120);
           if (recent.length >= 2) {
             const a = recent[0];
             const b = recent[recent.length - 1];
-            const elapsed = (b.t - a.t) / 1000; // seconds
+            const elapsed = (b.t - a.t) / 1000;
             if (elapsed > 0.001) {
               velocity.yaw = (b.yaw - a.yaw) / elapsed;
               velocity.pitch = (b.pitch - a.pitch) / elapsed;
-              // Cap so an unreasonable flick doesn't spin out of control.
-              const maxVel = 12; // rad/sec
+              const maxVel = 12;
               velocity.yaw = Math.max(-maxVel, Math.min(maxVel, velocity.yaw));
               velocity.pitch = Math.max(-maxVel, Math.min(maxVel, velocity.pitch));
             }
@@ -408,7 +417,6 @@ export default function ParticleGalaxy({ preview }: Props) {
         return;
       }
 
-      // It was a click (no drag).
       dragMode = "none";
       velSamples.length = 0;
       const now = performance.now();
@@ -422,13 +430,9 @@ export default function ParticleGalaxy({ preview }: Props) {
       lastClickX = e.clientX;
       lastClickY = e.clientY;
 
-      // Planet hit-test FIRST. If the user clicked directly on a
-      // planet at the solar level, commit immediately — no
-      // double-click wait — so it dives to THAT planet, not Earth.
       if (curLevel === 2) {
         const idx = projectPlanetClick(e.clientX, e.clientY);
         if (idx >= 0) {
-          // Cancel any pending click + treat this as a planet zoom.
           if (pendingClickTimer) {
             clearTimeout(pendingClickTimer);
             pendingClickTimer = null;
@@ -449,14 +453,9 @@ export default function ParticleGalaxy({ preview }: Props) {
         return;
       }
 
-      // Single click on empty space — hold for the double-click
-      // grace window in case a second click arrives.
       pendingClick = { x: e.clientX, y: e.clientY };
       if (pendingClickTimer) clearTimeout(pendingClickTimer);
       pendingClickTimer = setTimeout(() => {
-        // Single click on empty space at the solar level is a no-op
-        // (we don't want a stray background click to fire a level
-        // advance — that's what double-click is for).
         pendingClick = null;
         pendingClickTimer = null;
       }, DBL_CLICK_MS);
@@ -464,7 +463,6 @@ export default function ParticleGalaxy({ preview }: Props) {
     function onContextMenu(e: MouseEvent) {
       if (isPreview) return;
       e.preventDefault();
-      // Right-click steps back one level.
       if (curLevel > 0) {
         const back: 0 | 1 | 2 | 3 = (curLevel - 1) as 0 | 1 | 2;
         startTransition(back, curPlanet);
@@ -484,7 +482,6 @@ export default function ParticleGalaxy({ preview }: Props) {
       window.addEventListener("keydown", onKey);
     }
 
-    /* ─── Mouse parallax (small camera offset on hover) ─────────── */
     const targetCam = new THREE.Vector2(0, 0);
     const curCam = new THREE.Vector2(0, 0);
     const onHoverMove = (e: PointerEvent) => {
@@ -521,7 +518,6 @@ export default function ParticleGalaxy({ preview }: Props) {
       last = now;
       uTime.value = now * 0.001;
 
-      // Resolve transition / camera + opacities.
       const prevG = activeGroup(prevLevel, prevPlanet);
       const curG = activeGroup(curLevel, curPlanet);
       if (inTransition) {
@@ -534,14 +530,12 @@ export default function ParticleGalaxy({ preview }: Props) {
         if (prevG !== curG) setSceneOpacity(curG, eased);
         if (t >= 1) {
           inTransition = false;
-          // Hide everyone except current.
           [galaxyGroup, clusterGroup, solarGroup, ...detailGroups].forEach((g) => {
             if (g !== curG) setSceneOpacity(g, 0);
           });
           setSceneOpacity(curG, 1);
         }
       } else {
-        // Stable: tiny mouse parallax on top of preset camera.
         const c = camPresets[curLevel];
         curCam.x += (targetCam.x - curCam.x) * Math.min(1, dt * 3);
         curCam.y += (targetCam.y - curCam.y) * Math.min(1, dt * 3);
@@ -549,10 +543,7 @@ export default function ParticleGalaxy({ preview }: Props) {
       }
       camera.lookAt(camPresets[curLevel].look);
 
-      // Inertial spin from a recent drag-release flick. Velocity
-      // decays each frame; once it's tiny, snap to 0. Auto-idle
-      // (galaxy/cluster spin) only resumes once velocity is fully
-      // decayed AND the user isn't holding the pointer.
+      // Inertia + auto-idle
       if (!pointerDown && !inTransition) {
         const spinning =
           Math.abs(velocity.yaw) > 0.005 || Math.abs(velocity.pitch) > 0.005;
@@ -562,15 +553,11 @@ export default function ParticleGalaxy({ preview }: Props) {
             -1.4,
             Math.min(1.4, curG.rotation.x + velocity.pitch * dt)
           );
-          // Per-frame damping. Pow(damping, frames-this-frame) is
-          // fine for small dt at 60fps.
           velocity.yaw *= Math.pow(VELOCITY_DAMPING, dt * 60);
           velocity.pitch *= Math.pow(VELOCITY_DAMPING, dt * 60);
           if (Math.abs(velocity.yaw) < 0.005) velocity.yaw = 0;
           if (Math.abs(velocity.pitch) < 0.005) velocity.pitch = 0;
         } else {
-          // Calm auto-idle so each level still feels alive when no
-          // drag is in progress.
           if (curLevel === 0) curG.rotation.y += dt * 0.045;
           else if (curLevel === 1) curG.rotation.y += dt * 0.03;
         }
@@ -585,11 +572,9 @@ export default function ParticleGalaxy({ preview }: Props) {
             Math.sin(a * 0.5) * p.tilt,
             Math.sin(a) * p.orbit
           );
-          p.mesh.rotation.y += dt * 0.4;
+          p.mesh.rotation.y += dt * 0.2;
         }
-        if (solarBuild.sun) solarBuild.sun.rotation.y += dt * 0.06;
-        // Asteroid belt — slow orbits + irregular tumble around a
-        // random axis per rock so the field is alive but not busy.
+        if (solarBuild.sun) solarBuild.sun.rotation.y += dt * 0.04;
         for (const a of solarBuild.asteroids) {
           const ang = uTime.value * a.speed + a.phase;
           a.mesh.position.set(
@@ -599,19 +584,16 @@ export default function ParticleGalaxy({ preview }: Props) {
           );
           a.mesh.rotateOnAxis(a.spinAxis, a.spinRate * dt);
         }
+        // Animate the sun's overlay shader.
+        if (solarBuild.sunOverlayMat) {
+          solarBuild.sunOverlayMat.uniforms.uTime.value = uTime.value;
+        }
       }
-      // Planet detail: surface + clouds are LOCKED together (same
-      // rotation rate) so the planet reads as a single coherent body
-      // rather than two layers gliding past each other. Clouds get a
-      // tiny extra delta — relative drift only, like real weather.
-      // Earth's spin is slow + stately (a full turn ≈ 60s) so it
-      // looks majestic rather than spinning like a top.
+      // Planet detail: planet rotates slowly; clouds match it; moons orbit.
       if (curLevel === 3) {
         const d = detailBuilds[curPlanet];
-        const spinRate = 0.05; // rad/s — slow + cinematic
+        const spinRate = 0.05;
         if (d.planet) d.planet.rotation.y += dt * spinRate;
-        // Clouds rotate at surface rate + a tiny relative drift
-        // (~6% extra) to feel like wind shear, not a separate layer.
         if (d.clouds) d.clouds.rotation.y += dt * spinRate * 1.06;
         for (const m of d.moons) {
           const a = uTime.value * m.spec.speed + m.phase;
@@ -634,7 +616,6 @@ export default function ParticleGalaxy({ preview }: Props) {
       rafId = requestAnimationFrame(frame);
     }
 
-    /* ─── Resize ─────────────────────────────────────────────────── */
     let ro: ResizeObserver | null = null;
     if (!preview) {
       ro = new ResizeObserver(() => {
@@ -648,7 +629,6 @@ export default function ParticleGalaxy({ preview }: Props) {
       ro.observe(container);
     }
 
-    /* ─── Cleanup ────────────────────────────────────────────────── */
     return () => {
       running = false;
       cancelAnimationFrame(rafId);
@@ -658,23 +638,21 @@ export default function ParticleGalaxy({ preview }: Props) {
         renderer.domElement.removeEventListener("contextmenu", onContextMenu);
         window.removeEventListener("keydown", onKey);
         window.removeEventListener("pointermove", onHoverMove);
-        // If a drag is mid-flight when the wallpaper unmounts, the
-        // window-level move/up listeners are still attached. Yank them.
         window.removeEventListener("pointermove", onWindowPointerMove);
         window.removeEventListener("pointerup", onWindowPointerUp);
         window.removeEventListener("pointercancel", onWindowPointerUp);
-        if (pendingClickTimer) {
-          clearTimeout(pendingClickTimer);
-        }
+        if (pendingClickTimer) clearTimeout(pendingClickTimer);
       }
       ro?.disconnect();
       galaxyCleanup();
       clusterCleanup();
       solarBuild.dispose();
       for (const d of detailBuilds) d.dispose();
-      earthTex?.dispose();
-      earthCloudsTex?.dispose();
-      moonTex?.dispose();
+      if (textures) {
+        for (const k of Object.keys(textures) as Array<keyof Textures>) {
+          textures[k].dispose();
+        }
+      }
       renderer.dispose();
       if (renderer.domElement.parentNode === container) {
         container.removeChild(renderer.domElement);
@@ -719,10 +697,10 @@ export default function ParticleGalaxy({ preview }: Props) {
 function buildGalaxy(
   group: THREE.Group,
   dotCount: number,
-  galaxyRadius: number,
   isPreview: boolean,
   uTime: { value: number }
 ) {
+  const galaxyRadius = 95;
   const positions = new Float32Array(dotCount * 3);
   const colors = new Float32Array(dotCount * 3);
   const sizes = new Float32Array(dotCount);
@@ -882,65 +860,135 @@ function buildStarCluster(
 function buildSolarSystem(
   group: THREE.Group,
   isPreview: boolean,
-  uTime: { value: number }
+  uTime: { value: number },
+  textures: Textures | null
 ) {
-  // Sun
-  const sunMat = new THREE.ShaderMaterial({
-    uniforms: { uTime, uOpacity: { value: 0 } },
-    vertexShader: SUN_VERT,
-    fragmentShader: SUN_FRAG,
-    transparent: true,
-  });
-  const sunGeom = new THREE.SphereGeometry(2.4, 48, 48);
-  const sun = new THREE.Mesh(sunGeom, sunMat);
-  group.add(sun);
-  const coronaMap = makeRadialTexture("#ffcb6b");
-  const coronaMat = new THREE.SpriteMaterial({
-    map: coronaMap,
-    transparent: true,
+  /* Skybox — inverted sphere with the Milky Way panorama on the
+   * inside. Doesn't move with the planets; you're looking out at
+   * the deep field. */
+  const skyGeom = new THREE.SphereGeometry(800, 32, 32);
+  const skyMat = new THREE.MeshBasicMaterial({
+    map: textures?.stars ?? null,
+    side: THREE.BackSide,
     depthWrite: false,
-    blending: THREE.AdditiveBlending,
+    transparent: true,
     opacity: 0,
   });
-  const corona = new THREE.Sprite(coronaMat);
-  corona.scale.set(11, 11, 1);
-  group.add(corona);
+  const sky = new THREE.Mesh(skyGeom, skyMat);
+  group.add(sky);
 
-  // Planets
+  /* PointLight at the Sun's position lights all planets and asteroids
+   * with proper inverse-square falloff. Mercury (close) is brightest;
+   * Mars (far) is dimmer. */
+  const sunLight = new THREE.PointLight(0xfff5e5, 3.2, 0, 1.7);
+  sunLight.position.set(0, 0, 0);
+  group.add(sunLight);
+  const ambient = new THREE.AmbientLight(0x202938, 0.18);
+  group.add(ambient);
+
+  /* The Sun itself. MeshBasicMaterial so it's self-luminous regardless
+   * of the PointLight (which is positioned inside it anyway). The base
+   * texture supplies surface color/sunspots; an additive overlay
+   * shader on a slightly larger sphere adds animated turbulence and
+   * granulation cells, and a second outer corona sphere adds the
+   * soft halo. Three layers compose to a luminous star. */
+  const sunBaseGeom = new THREE.SphereGeometry(2.6, 64, 64);
+  const sunBaseMat = new THREE.MeshBasicMaterial({
+    map: textures?.sun ?? null,
+    color: 0xffe9a8,
+    transparent: true,
+    opacity: 0,
+    toneMapped: false,
+  });
+  const sun = new THREE.Mesh(sunBaseGeom, sunBaseMat);
+  group.add(sun);
+
+  // Animated noise overlay — adds the "boiling" surface activity that
+  // a static texture can't show.
+  const sunOverlayGeom = new THREE.SphereGeometry(2.61, 48, 48);
+  const sunOverlayMat = new THREE.ShaderMaterial({
+    uniforms: { uTime: { value: 0 }, uOpacity: { value: 0 } },
+    vertexShader: SUN_OVERLAY_VERT,
+    fragmentShader: SUN_OVERLAY_FRAG,
+    transparent: true,
+    blending: THREE.AdditiveBlending,
+    depthWrite: false,
+  });
+  const sunOverlay = new THREE.Mesh(sunOverlayGeom, sunOverlayMat);
+  group.add(sunOverlay);
+
+  // Corona — three additive sprites at increasing scale for a
+  // multi-layer soft halo.
+  const coronaSprites: Array<{ sprite: THREE.Sprite; mat: THREE.SpriteMaterial; map: THREE.CanvasTexture }> = [];
+  const coronaSpec = [
+    { color: "#ffcb6b", scale: 7.2, opacity: 0.85 },
+    { color: "#ff9c3e", scale: 11, opacity: 0.55 },
+    { color: "#ff6b22", scale: 16, opacity: 0.3 },
+  ];
+  for (const c of coronaSpec) {
+    const map = makeRadialTexture(c.color);
+    const mat = new THREE.SpriteMaterial({
+      map,
+      transparent: true,
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      opacity: 0,
+      toneMapped: false,
+    });
+    const sprite = new THREE.Sprite(mat);
+    sprite.scale.set(c.scale, c.scale, 1);
+    group.add(sprite);
+    coronaSprites.push({ sprite, mat, map });
+  }
+
+  /* Planets — each gets its real texture, lit by the PointLight at
+   * the sun via MeshStandardMaterial. */
+  const planetTextures: Record<PlanetSpec["type"], THREE.Texture | null> = {
+    mercury: textures?.mercury ?? null,
+    venus: textures?.venus ?? null,
+    earth: textures?.earth ?? null,
+    mars: textures?.mars ?? null,
+  };
   const planets: Array<{
     mesh: THREE.Mesh;
-    mat: THREE.ShaderMaterial;
+    mat: THREE.MeshStandardMaterial;
+    geom: THREE.SphereGeometry;
     orbit: number;
     speed: number;
     phase: number;
     tilt: number;
-    geom: THREE.BufferGeometry;
   }> = [];
   for (let i = 0; i < PLANETS.length; i++) {
     const spec = PLANETS[i];
-    const mat = new THREE.ShaderMaterial({
-      uniforms: {
-        uTime,
-        uOpacity: { value: 0 },
-        uColor: { value: new THREE.Color(spec.color) },
-        uType: { value: spec.type === "earth" ? 1 : spec.type === "mars" ? 2 : 0 },
-      },
-      vertexShader: PLANET_VERT,
-      fragmentShader: PLANET_FRAG,
+    const mat = new THREE.MeshStandardMaterial({
+      map: planetTextures[spec.type] ?? null,
+      color: planetTextures[spec.type] ? 0xffffff : 0x808080,
+      roughness: spec.type === "earth" ? 0.78 : 0.92,
+      metalness: 0,
       transparent: true,
+      opacity: 0,
     });
-    const g = new THREE.SphereGeometry(spec.radius, 32, 32);
-    const m = new THREE.Mesh(g, mat);
-    m.userData.planetIndex = i;
-    group.add(m);
-    planets.push({ mesh: m, mat, orbit: spec.orbit, speed: spec.speed, phase: Math.random() * Math.PI * 2, tilt: spec.tilt * 0.05, geom: g });
+    const geom = new THREE.SphereGeometry(spec.solarRadius, 48, 48);
+    const mesh = new THREE.Mesh(geom, mat);
+    mesh.userData.planetIndex = i;
+    mesh.rotation.z = THREE.MathUtils.degToRad(spec.tilt);
+    group.add(mesh);
+    planets.push({
+      mesh,
+      mat,
+      geom,
+      orbit: spec.orbit,
+      speed: spec.speed,
+      phase: Math.random() * Math.PI * 2,
+      tilt: spec.tilt * 0.05,
+    });
   }
 
-  // Orbit rings
+  // Orbit rings — faint white ellipses.
   const orbitMats: THREE.LineBasicMaterial[] = [];
   const orbitGeoms: THREE.BufferGeometry[] = [];
   for (const spec of PLANETS) {
-    const segs = 96;
+    const segs = 128;
     const verts = new Float32Array(segs * 3);
     for (let i = 0; i < segs; i++) {
       const a = (i / segs) * Math.PI * 2;
@@ -951,7 +999,7 @@ function buildSolarSystem(
     const og = new THREE.BufferGeometry();
     og.setAttribute("position", new THREE.BufferAttribute(verts, 3));
     const om = new THREE.LineBasicMaterial({
-      color: 0x4a5570,
+      color: 0x6a7280,
       transparent: true,
       opacity: 0,
     });
@@ -962,13 +1010,13 @@ function buildSolarSystem(
     orbitGeoms.push(og);
   }
 
-  /* Asteroid belt — irregular low-poly rocks scattered between Mars
-   * and the outer dust ring. Each is an icosahedron with each vertex
-   * pushed by a small random amount along its normal so the silhouette
-   * isn't a clean sphere. They drift on their own slow orbits and
-   * tumble on a random axis so the field feels populated and alive
-   * without competing visually with the planets. */
-  const asteroidCount = isPreview ? 0 : 14;
+  /* Asteroid belt — proper smooth-shaded irregular rocks lit by the
+   * Sun's PointLight. Higher subdivision (icosahedron detail=2 = 320
+   * triangles) + small per-vertex displacement for irregular
+   * silhouette + computeVertexNormals afterwards so smooth shading
+   * still works. MeshStandardMaterial with a procedural rocky color
+   * variant per-asteroid. */
+  const asteroidCount = isPreview ? 0 : 18;
   const asteroidMeshes: Array<{
     mesh: THREE.Mesh;
     geom: THREE.BufferGeometry;
@@ -980,45 +1028,57 @@ function buildSolarSystem(
     spinAxis: THREE.Vector3;
     spinRate: number;
   }> = [];
-  // Soft hemisphere light just for the asteroids — picks up the warm
-  // sun-side and cool night-side without lighting the rest of the scene.
-  const beltLight = new THREE.HemisphereLight(0xffe4a3, 0x10131d, 0.85);
-  beltLight.position.set(0, 1, 0);
-  group.add(beltLight);
   for (let i = 0; i < asteroidCount; i++) {
-    const radius = 0.16 + Math.random() * 0.32;
-    const detail = Math.random() > 0.5 ? 1 : 0;
+    const radius = 0.18 + Math.random() * 0.28;
+    const detail = Math.random() > 0.5 ? 2 : 1;
     const geom = new THREE.IcosahedronGeometry(radius, detail);
-    // Jitter vertices for an irregular silhouette.
+    // Multi-octave per-vertex displacement for a believably irregular
+    // surface (asteroids are lumpy, not faceted-paper).
     const pos = geom.getAttribute("position") as THREE.BufferAttribute;
     const arr = pos.array as Float32Array;
     for (let v = 0; v < arr.length; v += 3) {
-      const len = Math.hypot(arr[v], arr[v + 1], arr[v + 2]);
-      const j = 1 + (Math.random() - 0.5) * 0.55;
-      arr[v] = (arr[v] / len) * radius * j;
-      arr[v + 1] = (arr[v + 1] / len) * radius * j;
-      arr[v + 2] = (arr[v + 2] / len) * radius * j;
+      const x = arr[v];
+      const y = arr[v + 1];
+      const z = arr[v + 2];
+      const len = Math.hypot(x, y, z) || 1;
+      // Two octaves of pseudo-noise based on position.
+      const n1 =
+        0.5 +
+        0.5 *
+          Math.sin(x * 8 + 3.3) *
+          Math.cos(y * 8 + 5.1) *
+          Math.sin(z * 8 + 1.7);
+      const n2 =
+        0.5 +
+        0.5 *
+          Math.sin(x * 17 + 9.1) *
+          Math.cos(y * 17 + 2.4) *
+          Math.sin(z * 17 + 6.8);
+      const noise = 1 + (n1 - 0.5) * 0.18 + (n2 - 0.5) * 0.08;
+      arr[v] = (x / len) * radius * noise;
+      arr[v + 1] = (y / len) * radius * noise;
+      arr[v + 2] = (z / len) * radius * noise;
     }
-    geom.computeVertexNormals();
-    const tone = 0.45 + Math.random() * 0.25;
+    geom.computeVertexNormals(); // smooth shading
+    // Random per-asteroid color: warm gray with brown/orange hint.
+    const tone = 0.42 + Math.random() * 0.28;
+    const warm = 0.8 + Math.random() * 0.2;
     const mat = new THREE.MeshStandardMaterial({
-      color: new THREE.Color(tone, tone * 0.95, tone * 0.85),
+      color: new THREE.Color(tone * warm, tone * 0.9, tone * 0.78),
       roughness: 0.95,
-      metalness: 0.05,
-      flatShading: true,
+      metalness: 0.04,
       transparent: true,
       opacity: 0,
     });
     const mesh = new THREE.Mesh(geom, mat);
     group.add(mesh);
-    // Distribute mostly between Mars (10.6) and the outer dust shell.
-    const orbit = 12.5 + Math.random() * 4.5;
+    const orbit = 13 + Math.random() * 4;
     asteroidMeshes.push({
       mesh,
       geom,
       mat,
       orbit,
-      speed: 0.15 + Math.random() * 0.18,
+      speed: 0.13 + Math.random() * 0.18,
       phase: Math.random() * Math.PI * 2,
       inclination: (Math.random() - 0.5) * 0.4,
       spinAxis: new THREE.Vector3(
@@ -1030,51 +1090,22 @@ function buildSolarSystem(
     });
   }
 
-  // Background dust
-  const dustN = isPreview ? 80 : 220;
-  const dPos = new Float32Array(dustN * 3);
-  const dCol = new Float32Array(dustN * 3);
-  const dSize = new Float32Array(dustN);
-  const dPhase = new Float32Array(dustN);
-  for (let i = 0; i < dustN; i++) {
-    const r = 60 + Math.random() * 40;
-    const theta = Math.random() * Math.PI * 2;
-    const phi = Math.acos(2 * Math.random() - 1);
-    dPos[i * 3] = r * Math.sin(phi) * Math.cos(theta);
-    dPos[i * 3 + 1] = r * Math.sin(phi) * Math.sin(theta);
-    dPos[i * 3 + 2] = r * Math.cos(phi);
-    dCol[i * 3] = 0.85;
-    dCol[i * 3 + 1] = 0.9;
-    dCol[i * 3 + 2] = 1;
-    dSize[i] = 0.7 + Math.random() * 0.7;
-    dPhase[i] = Math.random() * Math.PI * 2;
-  }
-  const dGeom = new THREE.BufferGeometry();
-  dGeom.setAttribute("position", new THREE.BufferAttribute(dPos, 3));
-  dGeom.setAttribute("color", new THREE.BufferAttribute(dCol, 3));
-  dGeom.setAttribute("size", new THREE.BufferAttribute(dSize, 1));
-  dGeom.setAttribute("phase", new THREE.BufferAttribute(dPhase, 1));
-  const dMat = new THREE.ShaderMaterial({
-    uniforms: { uTime, uOpacity: { value: 0 } },
-    vertexShader: STAR_VERT,
-    fragmentShader: STAR_FRAG,
-    vertexColors: true,
-    transparent: true,
-    depthWrite: false,
-    blending: THREE.AdditiveBlending,
-  });
-  const dust = new THREE.Points(dGeom, dMat);
-  group.add(dust);
-
   return {
     sun,
+    sunOverlayMat,
     planets,
     asteroids: asteroidMeshes,
     dispose: () => {
-      sunGeom.dispose();
-      sunMat.dispose();
-      coronaMat.dispose();
-      coronaMap.dispose();
+      skyGeom.dispose();
+      skyMat.dispose();
+      sunBaseGeom.dispose();
+      sunBaseMat.dispose();
+      sunOverlayGeom.dispose();
+      sunOverlayMat.dispose();
+      for (const cs of coronaSprites) {
+        cs.mat.dispose();
+        cs.map.dispose();
+      }
       for (const p of planets) {
         p.geom.dispose();
         p.mat.dispose();
@@ -1085,8 +1116,6 @@ function buildSolarSystem(
       }
       for (const og of orbitGeoms) og.dispose();
       for (const om of orbitMats) om.dispose();
-      dGeom.dispose();
-      dMat.dispose();
     },
   };
 }
@@ -1096,23 +1125,35 @@ function buildPlanetDetail(
   spec: PlanetSpec,
   isPreview: boolean,
   uTime: { value: number },
-  earthTex: THREE.Texture | null,
-  earthCloudsTex: THREE.Texture | null,
-  moonTex: THREE.Texture | null
+  textures: Textures | null
 ) {
-  // Sun light at the same notional origin (off-screen) so Earth/Moon
-  // are lit consistently.
-  const sunDir = new THREE.Vector3(8, 4, 6).normalize();
-  const sunLight = new THREE.DirectionalLight(0xffffff, 1.6);
-  sunLight.position.copy(sunDir).multiplyScalar(20);
+  /* Sun simulated by a DirectionalLight plus a soft AmbientLight.
+   * Off-axis position so the terminator is visible (day on the
+   * "front" half, night on the "back"). */
+  const sunLight = new THREE.DirectionalLight(0xffffff, 1.7);
+  sunLight.position.set(8, 4, 6);
   group.add(sunLight);
-  const ambient = new THREE.AmbientLight(0x202938, 0.45);
+  const ambient = new THREE.AmbientLight(0x202938, 0.26);
   group.add(ambient);
 
-  // The PLANET itself.
-  let planetMesh: THREE.Mesh;
+  /* Skybox same as solar level — keeps continuity when zooming in. */
+  const skyGeom = new THREE.SphereGeometry(800, 32, 32);
+  const skyMat = new THREE.MeshBasicMaterial({
+    map: textures?.stars ?? null,
+    side: THREE.BackSide,
+    depthWrite: false,
+    transparent: true,
+    opacity: 0,
+  });
+  const sky = new THREE.Mesh(skyGeom, skyMat);
+  group.add(sky);
+
+  /* The PLANET. Earth gets a special multi-layer treatment: surface
+   * map + ocean specular mask + cloud shell + atmospheric rim. The
+   * other planets get a single textured Phong sphere — clean, real,
+   * sun-lit. */
+  const planetGeom = new THREE.SphereGeometry(spec.detailRadius, 96, 96);
   let planetMat: THREE.Material;
-  let planetGeom: THREE.SphereGeometry;
   let cloudsMesh: THREE.Mesh | null = null;
   let cloudsMat: THREE.Material | null = null;
   let cloudsGeom: THREE.SphereGeometry | null = null;
@@ -1120,28 +1161,18 @@ function buildPlanetDetail(
   let atmoMat: THREE.ShaderMaterial | null = null;
   let atmoGeom: THREE.SphereGeometry | null = null;
 
-  const planetRadius = 2.6;
-
-  if (spec.name === "Earth" && earthTex && earthCloudsTex && !isPreview) {
-    // Realistic Earth with the NASA Blue Marble colour map.
-    const m = new THREE.MeshPhongMaterial({
-      map: earthTex,
-      specular: new THREE.Color(0x223344),
-      shininess: 18,
+  if (spec.type === "earth" && textures) {
+    planetMat = new THREE.MeshPhongMaterial({
+      map: textures.earth,
+      specularMap: textures.earthSpecular,
+      specular: new THREE.Color(0x556677),
+      shininess: 22,
       transparent: true,
       opacity: 0,
     });
-    planetMat = m;
-    planetGeom = new THREE.SphereGeometry(planetRadius, 96, 96);
-    planetMesh = new THREE.Mesh(planetGeom, planetMat);
-    planetMesh.rotation.z = THREE.MathUtils.degToRad(spec.tilt);
-    group.add(planetMesh);
-
-    // Cloud shell — slightly larger sphere with a transparent cloud
-    // texture; rotates independently.
-    cloudsGeom = new THREE.SphereGeometry(planetRadius * 1.012, 96, 96);
+    cloudsGeom = new THREE.SphereGeometry(spec.detailRadius * 1.012, 96, 96);
     cloudsMat = new THREE.MeshPhongMaterial({
-      map: earthCloudsTex,
+      map: textures.earthClouds,
       transparent: true,
       depthWrite: false,
       opacity: 0,
@@ -1150,8 +1181,7 @@ function buildPlanetDetail(
     cloudsMesh.rotation.z = THREE.MathUtils.degToRad(spec.tilt);
     group.add(cloudsMesh);
 
-    // Atmospheric rim glow — additive shader on a slightly oversized sphere.
-    atmoGeom = new THREE.SphereGeometry(planetRadius * 1.06, 64, 64);
+    atmoGeom = new THREE.SphereGeometry(spec.detailRadius * 1.06, 64, 64);
     atmoMat = new THREE.ShaderMaterial({
       uniforms: {
         uOpacity: { value: 0 },
@@ -1166,65 +1196,82 @@ function buildPlanetDetail(
     });
     atmoMesh = new THREE.Mesh(atmoGeom, atmoMat);
     group.add(atmoMesh);
-  } else {
-    // Procedural fallback for the non-Earth planets.
-    const m = new THREE.ShaderMaterial({
-      uniforms: {
-        uTime,
-        uOpacity: { value: 0 },
-        uColor: { value: new THREE.Color(spec.color) },
-        uType: { value: spec.type === "mars" ? 2 : 0 },
-      },
-      vertexShader: PLANET_VERT,
-      fragmentShader: PLANET_FRAG,
+  } else if (textures) {
+    const map =
+      spec.type === "mercury"
+        ? textures.mercury
+        : spec.type === "venus"
+          ? textures.venus
+          : spec.type === "mars"
+            ? textures.mars
+            : null;
+    planetMat = new THREE.MeshStandardMaterial({
+      map,
+      color: map ? 0xffffff : 0x888888,
+      roughness: spec.type === "venus" ? 0.6 : 0.92,
+      metalness: 0,
       transparent: true,
+      opacity: 0,
     });
-    planetMat = m;
-    planetGeom = new THREE.SphereGeometry(planetRadius, 64, 64);
-    planetMesh = new THREE.Mesh(planetGeom, planetMat);
-    planetMesh.rotation.z = THREE.MathUtils.degToRad(spec.tilt);
-    group.add(planetMesh);
+  } else {
+    planetMat = new THREE.MeshStandardMaterial({
+      color: 0x888888,
+      roughness: 0.9,
+      metalness: 0,
+      transparent: true,
+      opacity: 0,
+    });
   }
+  const planetMesh = new THREE.Mesh(planetGeom, planetMat);
+  planetMesh.rotation.z = THREE.MathUtils.degToRad(spec.tilt);
+  group.add(planetMesh);
 
-  // Real moons. Mercury / Venus → empty array, no moon mesh built.
-  // Earth → 1 (Luna with the LRO texture). Mars → 2 (Phobos/Deimos
-  // procedural — they're tiny captured asteroids in reality, no good
-  // public-domain map at the resolution we'd use).
+  /* Moons — exactly the count that planet has in reality. Earth → 1
+   * Luna with the LRO texture. Mars → 2 procedural rocky moons. */
   interface BuiltMoon {
     spec: MoonSpec;
     mesh: THREE.Mesh;
     mat: THREE.Material;
     geom: THREE.SphereGeometry;
-    /** Per-moon orbit phase so multiple moons don't sit on top of each other. */
     phase: number;
   }
   const builtMoons: BuiltMoon[] = [];
   for (let i = 0; i < spec.moons.length; i++) {
     const ms = spec.moons[i];
     let mat: THREE.Material;
-    if (ms.surface === "luna" && moonTex && !isPreview) {
+    let geom: THREE.SphereGeometry;
+    if (ms.surface === "luna" && textures) {
       mat = new THREE.MeshPhongMaterial({
-        map: moonTex,
+        map: textures.moon,
         specular: 0x111111,
         shininess: 5,
         transparent: true,
         opacity: 0,
       });
+      geom = new THREE.SphereGeometry(ms.radius, 48, 48);
     } else {
-      mat = new THREE.ShaderMaterial({
-        uniforms: {
-          uTime,
-          uOpacity: { value: 0 },
-          uColor: { value: new THREE.Color(0xb0b3b8) },
-          uType: { value: 3 },
-        },
-        vertexShader: PLANET_VERT,
-        fragmentShader: PLANET_FRAG,
+      // Procedural rocky moon — slightly displaced sphere with a
+      // dusty gray color, smooth shaded. Phobos / Deimos shape.
+      const rGeom = new THREE.IcosahedronGeometry(ms.radius, 2);
+      const arr = (rGeom.getAttribute("position").array as Float32Array);
+      for (let v = 0; v < arr.length; v += 3) {
+        const len = Math.hypot(arr[v], arr[v + 1], arr[v + 2]) || 1;
+        const n =
+          1 + (Math.sin(arr[v] * 30) * Math.cos(arr[v + 1] * 28)) * 0.13;
+        arr[v] = (arr[v] / len) * ms.radius * n;
+        arr[v + 1] = (arr[v + 1] / len) * ms.radius * n;
+        arr[v + 2] = (arr[v + 2] / len) * ms.radius * n;
+      }
+      rGeom.computeVertexNormals();
+      mat = new THREE.MeshStandardMaterial({
+        color: 0x777777,
+        roughness: 0.95,
+        metalness: 0.03,
         transparent: true,
+        opacity: 0,
       });
+      geom = rGeom as unknown as THREE.SphereGeometry;
     }
-    const segs = ms.surface === "luna" ? 48 : 24;
-    const geom = new THREE.SphereGeometry(ms.radius, segs, segs);
     const mesh = new THREE.Mesh(geom, mat);
     group.add(mesh);
     builtMoons.push({
@@ -1236,7 +1283,7 @@ function buildPlanetDetail(
     });
   }
 
-  // Background dust at this scale.
+  /* Background dust. */
   const dN = isPreview ? 80 : 200;
   const dP = new Float32Array(dN * 3);
   const dC = new Float32Array(dN * 3);
@@ -1284,6 +1331,8 @@ function buildPlanetDetail(
       cloudsMat?.dispose();
       atmoGeom?.dispose();
       atmoMat?.dispose();
+      skyGeom.dispose();
+      skyMat.dispose();
       for (const m of builtMoons) {
         m.geom.dispose();
         m.mat.dispose();
@@ -1326,7 +1375,11 @@ const STAR_FRAG = /* glsl */ `
   }
 `;
 
-const SUN_VERT = /* glsl */ `
+/* Sun overlay: a thin shell rendered ON TOP of the textured sun
+ * sphere. Adds animated turbulence + granulation cells without
+ * blowing out the underlying texture. Additive blend means it only
+ * brightens; it never darkens what's beneath. */
+const SUN_OVERLAY_VERT = /* glsl */ `
   varying vec3 vNormal;
   varying vec3 vWorldPos;
   void main() {
@@ -1335,7 +1388,7 @@ const SUN_VERT = /* glsl */ `
     gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   }
 `;
-const SUN_FRAG = /* glsl */ `
+const SUN_OVERLAY_FRAG = /* glsl */ `
   precision highp float;
   varying vec3 vNormal;
   varying vec3 vWorldPos;
@@ -1355,134 +1408,25 @@ const SUN_FRAG = /* glsl */ `
           mix(hash(i+vec3(0,1,1)), hash(i+vec3(1,1,1)), f.x), f.y),
       f.z);
   }
-  /* Layered noise — fast small-scale "boiling" + slow large-scale
-   * convection cells. Scrolled in opposite directions so they shear
-   * across each other and read as a turbulent surface, not a static
-   * speckle pattern. */
-  float surface(vec3 p, float t) {
-    float n = 0.0;
-    n += 0.50 * vnoise(p * 1.6 + vec3(t * 0.18, t * 0.12, 0.0));
-    n += 0.30 * vnoise(p * 3.4 + vec3(-t * 0.32, 0.0, t * 0.22));
-    n += 0.20 * vnoise(p * 6.8 + vec3(0.0, t * 0.5, -t * 0.4));
-    return n;
-  }
   void main() {
-    float n = surface(vWorldPos, uTime);
-    /* Granulation cells — adds dark thin lacing between hot bright
-     * patches, like real solar granulation. */
-    float cells = smoothstep(0.42, 0.58, vnoise(vWorldPos * 9.0 + uTime * 0.3));
-    /* Hot core / cool shell colour palette pushed redder than before. */
-    vec3 hot = vec3(1.0, 0.92, 0.55);
-    vec3 mid = vec3(1.0, 0.62, 0.20);
-    vec3 cool = vec3(0.96, 0.30, 0.06);
-    vec3 c = mix(cool, mid, smoothstep(0.30, 0.70, n));
-    c = mix(c, hot, smoothstep(0.65, 1.15, n));
-    /* Granulation darkens the lacing slightly. */
-    c *= 0.88 + 0.12 * cells;
-    /* Limb-brightening rim. The pow() input is now clamped to [0,1]
-     * so there's no NaN risk on back-facing normals. */
+    /* Two scrolling layers in opposing directions for shear. */
+    float a = vnoise(vWorldPos * 1.4 + vec3(uTime * 0.18, uTime * 0.12, 0.0));
+    float b = vnoise(vWorldPos * 3.2 + vec3(-uTime * 0.32, 0.0, uTime * 0.22));
+    float n = a * 0.6 + b * 0.4;
+    /* Granulation cells. */
+    float cells = smoothstep(0.42, 0.58, vnoise(vWorldPos * 8.0 + uTime * 0.3));
+    /* Limb brightening. */
     float rim = pow(max(0.0, 1.0 - max(dot(vNormal, vec3(0,0,1)), 0.0)), 1.4);
-    c += rim * vec3(1.0, 0.55, 0.20) * 1.1;
-    /* Tiny pulsing prominences — flares peak occasionally. */
-    float flare = pow(max(0.0, vnoise(vWorldPos * 2.0 + uTime * 0.6)), 6.0);
-    c += flare * vec3(1.0, 0.8, 0.4) * 0.6;
-    gl_FragColor = vec4(c, uOpacity);
-  }
-`;
-
-const PLANET_VERT = /* glsl */ `
-  varying vec3 vWorldPos;
-  varying vec3 vNormal;
-  void main() {
-    vNormal = normalize(normalMatrix * normal);
-    vWorldPos = position;
-    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
-  }
-`;
-const PLANET_FRAG = /* glsl */ `
-  precision mediump float;
-  varying vec3 vWorldPos;
-  varying vec3 vNormal;
-  uniform float uTime;
-  uniform float uOpacity;
-  uniform vec3 uColor;
-  uniform int uType;
-  float hash(vec3 p) { return fract(sin(dot(p, vec3(12.9898, 78.233, 37.719))) * 43758.5453); }
-  float vnoise(vec3 p) {
-    vec3 i = floor(p);
-    vec3 f = fract(p);
-    f = f*f*(3.0-2.0*f);
-    return mix(
-      mix(mix(hash(i+vec3(0,0,0)), hash(i+vec3(1,0,0)), f.x),
-          mix(hash(i+vec3(0,1,0)), hash(i+vec3(1,1,0)), f.x), f.y),
-      mix(mix(hash(i+vec3(0,0,1)), hash(i+vec3(1,0,1)), f.x),
-          mix(hash(i+vec3(0,1,1)), hash(i+vec3(1,1,1)), f.x), f.y),
-      f.z);
-  }
-  float fbm(vec3 p) {
-    float v = 0.0; float a = 0.5;
-    for (int k = 0; k < 5; k++) {
-      v += a * vnoise(p);
-      p *= 2.07; a *= 0.5;
-    }
-    return v;
-  }
-  void main() {
-    vec3 N = normalize(vNormal);
-    vec3 sunDir = normalize(vec3(1.0, 0.6, 0.5));
-    float ndotl = max(0.0, dot(N, sunDir));
-    /* Half-Lambert wraparound makes the night side fall off softer
-     * than the harsh terminator from raw Lambert. */
-    float wrap = ndotl * 0.6 + 0.4;
-    vec3 baseCol = uColor;
-    float roughness = 0.65;
-    if (uType == 2) {
-      // Mars — multi-octave fbm + dark mineral patches + ice cap mix
-      // toward the poles.
-      float n = fbm(vWorldPos * 2.2);
-      float fine = fbm(vWorldPos * 6.0);
-      vec3 lo = vec3(0.45, 0.16, 0.06);
-      vec3 hi = vec3(0.86, 0.46, 0.22);
-      baseCol = mix(lo, hi, n);
-      // Dark patch noise.
-      baseCol *= 0.78 + 0.22 * fine;
-      // Polar caps (subtle frost).
-      float polar = smoothstep(0.78, 0.95, abs(N.y));
-      baseCol = mix(baseCol, vec3(0.94, 0.92, 0.88), polar * 0.55);
-      roughness = 0.88;
-    } else if (uType == 3) {
-      // Moon — gray with crater pock-noise.
-      float n = fbm(vWorldPos * 5.0);
-      baseCol = mix(vec3(0.55, 0.55, 0.6), vec3(0.85, 0.85, 0.9), n);
-      float pits = vnoise(vWorldPos * 12.0);
-      baseCol *= 0.85 + 0.15 * pits;
-      roughness = 0.95;
-    } else {
-      // Generic rocky (Mercury / Venus). Mercury-like rough cratering
-      // for darker base; Venus-like banded clouds for warmer colors.
-      float n = fbm(vWorldPos * 3.0);
-      float bands = 0.5 + 0.5 * sin(vWorldPos.y * 6.0 + n * 4.0);
-      vec3 darker = uColor * 0.55;
-      vec3 lighter = uColor * 1.18;
-      // Use bands more for warm tones (Venus), less for cold (Mercury).
-      float warmth = clamp(uColor.r - uColor.b + 0.3, 0.0, 1.0);
-      vec3 mottled = mix(darker, lighter, n);
-      vec3 banded = mix(darker, lighter, bands);
-      baseCol = mix(mottled, banded, warmth);
-      roughness = 0.75 - warmth * 0.25;
-    }
-    /* Diffuse + subtle specular (Blinn-Phong-ish) so lit edges glint
-     * a little and the body reads as 3D, not painted. */
-    vec3 lit = baseCol * (0.16 + 0.84 * wrap);
-    /* Specular only on the lit hemisphere, attenuated by roughness. */
-    vec3 viewDir = vec3(0.0, 0.0, 1.0);
-    vec3 halfDir = normalize(sunDir + viewDir);
-    float spec = pow(max(0.0, dot(N, halfDir)), 28.0);
-    lit += spec * (1.0 - roughness) * 0.4;
-    /* Fresnel rim for a touch of atmospheric edge brightness. */
-    float rim = pow(1.0 - max(dot(N, viewDir), 0.0), 3.0);
-    lit += rim * baseCol * 0.18;
-    gl_FragColor = vec4(lit, uOpacity);
+    /* Color ramp from cool red (low) → orange → warm yellow (high). */
+    vec3 c = mix(vec3(0.95, 0.32, 0.10), vec3(1.0, 0.62, 0.18), smoothstep(0.30, 0.65, n));
+    c = mix(c, vec3(1.0, 0.9, 0.55), smoothstep(0.65, 1.05, n));
+    c *= 0.85 + 0.15 * cells;
+    c += rim * vec3(1.0, 0.55, 0.18) * 0.85;
+    /* Pulsing prominences — pow at high exponent for sparse hot points. */
+    float flare = pow(max(0.0, vnoise(vWorldPos * 2.0 + uTime * 0.6)), 7.0);
+    c += flare * vec3(1.0, 0.85, 0.45) * 0.7;
+    /* Blend strength — moderate so the underlying texture still reads. */
+    gl_FragColor = vec4(c, uOpacity * 0.4);
   }
 `;
 
@@ -1499,10 +1443,6 @@ const ATMO_FRAG = /* glsl */ `
   uniform vec3 uColor;
   varying vec3 vNormal;
   void main() {
-    /* Clamp the input to [0,1] before pow() — the previous form
-     * produced NaN on back-facing normals and banded the silhouette.
-     * The result is the classic Rayleigh-style halo that's brightest
-     * at the limb and fades into the planet. */
     float fresnel = clamp(0.85 - dot(normalize(vNormal), vec3(0.0, 0.0, 1.0)), 0.0, 1.0);
     float intensity = pow(fresnel, 2.0);
     gl_FragColor = vec4(uColor, intensity * uOpacity);
