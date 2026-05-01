@@ -36,6 +36,7 @@ import { useWorkspaceKey } from "./useWorkspaces";
 
 const COMPLETE_KEY = "tools-desktop-onboarding-complete-v1";
 const DISMISSED_UNTIL_KEY = "tools-desktop-onboarding-dismissed-until-v1";
+const COLLAPSED_KEY = "tools-desktop-onboarding-collapsed-v1";
 const WALLPAPER_SUFFIX = "tools-desktop-wallpaper-v1";
 const ACCENT_SUFFIX = "tools-desktop-accent-v1";
 const DEFAULT_WALLPAPER_ID = "pair:aurora";
@@ -193,6 +194,25 @@ export default function OnboardingChecklist() {
   );
   const [now, setNow] = useState<number>(() => Date.now());
   const [delayElapsed, setDelayElapsed] = useState(false);
+  const [collapsed, setCollapsed] = useState<boolean>(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.localStorage.getItem(COLLAPSED_KEY) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const toggleCollapsed = useCallback(() => {
+    setCollapsed((c) => {
+      const next = !c;
+      try {
+        window.localStorage.setItem(COLLAPSED_KEY, next ? "1" : "0");
+      } catch {
+        /* ignore */
+      }
+      return next;
+    });
+  }, []);
   // Bumping `refreshTick` triggers a re-read of profile + storage flags.
   // Used by the custom-event listener so other panes can ping the widget
   // after they update e.g. the avatar URL or pick a wallpaper.
@@ -330,6 +350,54 @@ export default function OnboardingChecklist() {
 
   const progressPct = Math.round((completedCount / TASKS.length) * 100);
 
+  /* Anchored bottom-RIGHT, ABOVE the AgentChatLauncher (which sits at
+   * approx bottom-24 right-4 by default). Stacking vertically there
+   * keeps the widget in the dock-corner zone instead of overlapping
+   * dashboard widgets at bottom-left. The user can additionally
+   * collapse it down to a small chip — the chip is what shows by
+   * default once the user has interacted with the widget once. */
+
+  if (collapsed) {
+    return (
+      <motion.button
+        type="button"
+        onClick={toggleCollapsed}
+        initial={{ opacity: 0, y: 8, scale: 0.94 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.25, ease: "easeOut" }}
+        aria-label={`Resume profile setup — ${completedCount} of ${TASKS.length} done`}
+        className="pointer-events-auto fixed bottom-[180px] right-4 z-30 flex items-center gap-2 rounded-full border border-app bg-app-elevated px-3 py-2 shadow-card transition-colors hover:border-tool-accent hover:bg-app"
+      >
+        <span
+          aria-hidden="true"
+          className="relative flex h-6 w-6 items-center justify-center"
+        >
+          {/* Donut progress ring around the count */}
+          <svg width="24" height="24" viewBox="0 0 24 24" className="-rotate-90">
+            <circle cx="12" cy="12" r="10" fill="none" stroke="currentColor" strokeWidth="2" className="text-app" />
+            <circle
+              cx="12"
+              cy="12"
+              r="10"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeDasharray={`${(progressPct / 100) * 62.83} 62.83`}
+              strokeLinecap="round"
+              className="text-tool-accent"
+            />
+          </svg>
+          <span className="absolute text-[9px] font-semibold leading-none text-app">
+            {completedCount}
+          </span>
+        </span>
+        <span className="text-[11px] font-medium text-app">
+          {TASKS.length - completedCount} left to set up
+        </span>
+      </motion.button>
+    );
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 8 }}
@@ -337,7 +405,7 @@ export default function OnboardingChecklist() {
       transition={{ duration: 0.3, ease: "easeOut" }}
       role="region"
       aria-label="Finish setting up your profile"
-      className="pointer-events-auto fixed bottom-6 left-6 z-30 w-[340px] overflow-hidden rounded-2xl border border-app bg-app-elevated shadow-card"
+      className="pointer-events-auto fixed bottom-[180px] right-4 z-30 w-[320px] overflow-hidden rounded-2xl border border-app bg-app-elevated shadow-card"
     >
       {/* Header */}
       <div className="flex items-center justify-between gap-3 px-4 pt-3.5 pb-2.5">
@@ -349,13 +417,35 @@ export default function OnboardingChecklist() {
             Finish setting up
           </span>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5">
           <span className="rounded-full bg-tool-accent-soft px-2 py-0.5 text-[11px] font-medium text-tool-accent">
             {completedCount} / {TASKS.length}
           </span>
+          {/* Minimize → collapse to chip; preserves "remind me later"
+              without using up the X-dismiss budget */}
           <button
             type="button"
-            aria-label="Dismiss for now"
+            aria-label="Minimize"
+            onClick={toggleCollapsed}
+            className="flex h-6 w-6 items-center justify-center rounded-md text-muted transition-colors hover:bg-app hover:text-app"
+          >
+            <svg
+              viewBox="0 0 24 24"
+              width="14"
+              height="14"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <line x1="5" y1="12" x2="19" y2="12" />
+            </svg>
+          </button>
+          <button
+            type="button"
+            aria-label="Dismiss for 24 hours"
             onClick={handleDismiss}
             className="flex h-6 w-6 items-center justify-center rounded-md text-muted transition-colors hover:bg-app hover:text-app"
           >

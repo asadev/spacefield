@@ -310,15 +310,42 @@ function DesktopApp() {
     const onSignOut = () => {
       void authSignOut();
     };
+    // Onboarding checklist row clicks fire CustomEvent
+    // 'tools-desktop-onboarding-action' with detail.taskId — route
+    // each task to the right surface.
+    const onOnboardingAction = (e: Event) => {
+      const detail = (e as CustomEvent<{ taskId?: string }>).detail;
+      const id = detail?.taskId;
+      if (!id) return;
+      switch (id) {
+        case "avatar":
+        case "username":
+        case "fullName":
+        case "bio":
+          openProfile();
+          break;
+        case "wallpaper":
+          setWallpaperPickerOpen(true);
+          break;
+        case "installApp":
+          setStoreOpen(true);
+          break;
+        case "accent":
+          openSettings("appearance");
+          break;
+      }
+    };
     window.addEventListener("spotlight:open-profile", onOpenProfile);
     window.addEventListener("spotlight:open-settings", onOpenSettings);
     window.addEventListener("spotlight:create-workspace", onCreateWorkspace);
     window.addEventListener("spotlight:sign-out", onSignOut);
+    window.addEventListener("tools-desktop-onboarding-action", onOnboardingAction);
     return () => {
       window.removeEventListener("spotlight:open-profile", onOpenProfile);
       window.removeEventListener("spotlight:open-settings", onOpenSettings);
       window.removeEventListener("spotlight:create-workspace", onCreateWorkspace);
       window.removeEventListener("spotlight:sign-out", onSignOut);
+      window.removeEventListener("tools-desktop-onboarding-action", onOnboardingAction);
     };
     // openProfile / openSettings are stable closures over setSettings*; safe to omit.
     // eslint-disable-next-line react-hooks/exhaustive-deps
