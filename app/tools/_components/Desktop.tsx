@@ -49,6 +49,7 @@ import ClipboardHistory from "./ClipboardHistory";
 import QuickNote from "./QuickNote";
 import EasterEggs from "./EasterEggs";
 import AgentChatLauncher from "./agent/AgentChatLauncher";
+import OnboardingChecklist from "./OnboardingChecklist";
 import { AuthProvider, useAuth } from "./useAuth";
 import { useWorkspaceSync } from "./useWorkspaceSync";
 import { useWorkspaceRole } from "./useWorkspaceRole";
@@ -960,6 +961,13 @@ function DesktopApp() {
           installedAppSlugs={installed}
         />
       )}
+
+      {/* Onboarding checklist — bottom-LEFT floating "finish setting up"
+       * card. Only renders for signed-in users with at least one
+       * outstanding task. The widget self-gates on auth, completion flag,
+       * dismissal timestamp, and a 30-second first-mount grace window;
+       * mounting it unconditionally here is safe. */}
+      {windowsHydrated && onboarded && <OnboardingChecklist />}
 
       {/* Ambient sound mixer — floating button + panel. AudioContext is
        * lazily created only after the user clicks a track on. Other UI
