@@ -14,6 +14,7 @@
  */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { dispatch } from "@/lib/agent/runtime/dispatcher";
 import { loadPersona } from "@/lib/agent/runtime/persona";
@@ -365,7 +366,15 @@ async function processMessage(msg: TgMessage): Promise<void> {
 export async function POST(req: NextRequest) {
   const expected = process.env.TELEGRAM_WEBHOOK_SECRET;
   const provided = req.headers.get("x-telegram-bot-api-secret-token");
-  if (!expected || provided !== expected) {
+  if (!expected || !provided) {
+    return new NextResponse("invalid secret", { status: 401 });
+  }
+  // Timing-safe comparison so the secret can't be brute-forced via
+  // response-latency analysis. Buffers must match length first or
+  // timingSafeEqual throws.
+  const a = Buffer.from(provided);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) {
     return new NextResponse("invalid secret", { status: 401 });
   }
   let payload: TgUpdate = {};

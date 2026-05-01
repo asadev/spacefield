@@ -18,6 +18,7 @@
  * ───────────────────────────────────────────────────────────────────── */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { timingSafeEqual } from "node:crypto";
 import {
   ingestWebhookPayload,
   loadLeadSourceBySlug,
@@ -62,10 +63,12 @@ export async function POST(
   if (sigHeader) {
     authorized = await verifyWebhookSignature(raw, sigHeader, source.secret);
   } else if (tokenParam) {
-    // Constant-time-ish comparison for the token fallback.
-    authorized =
-      tokenParam.length === source.secret.length &&
-      tokenParam === source.secret;
+    // Timing-safe comparison so the token can't be brute-forced via
+    // response-latency analysis. Length-mismatch must short-circuit
+    // before timingSafeEqual or it throws.
+    const a = Buffer.from(tokenParam);
+    const b = Buffer.from(source.secret);
+    authorized = a.length === b.length && timingSafeEqual(a, b);
   }
   if (!authorized) {
     return jsonResponse({ ok: false, error: "bad_signature" }, 400);

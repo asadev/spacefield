@@ -103,6 +103,21 @@ const nextConfig: NextConfig = {
   async headers() {
     return [
       {
+        // Global security headers. /embed/:path* overrides X-Frame-Options
+        // and CSP further down so widgets can be embedded by third parties.
+        source: '/:path*',
+        headers: [
+          { key: 'X-Frame-Options', value: 'SAMEORIGIN' },
+          { key: 'X-Content-Type-Options', value: 'nosniff' },
+          { key: 'Referrer-Policy', value: 'strict-origin-when-cross-origin' },
+          {
+            key: 'Permissions-Policy',
+            value: 'camera=(), microphone=(), geolocation=(), payment=(self "https://buy.paddle.com" "https://checkout.paddle.com")',
+          },
+          { key: 'Content-Security-Policy', value: "frame-ancestors 'self'" },
+        ],
+      },
+      {
         source: '/fonts/:path*',
         headers: [
           { key: 'Cache-Control', value: 'public, max-age=31536000, immutable' },
