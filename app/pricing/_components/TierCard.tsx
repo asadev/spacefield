@@ -21,7 +21,7 @@
  * Once the Paddle webhook fires it flips the subscriptions row to
  * the new tier. */
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ensurePaddle } from "@/app/tools/_components/useBillingClient";
 import type { BillingCycle } from "./types";
@@ -155,7 +155,7 @@ export default function TierCard({
   }, [priceMonthly, priceAnnualPerMonth, billingCycle]);
 
   // ----- Paddle checkout — kept identical to the original TierCard.
-  async function handleUpgrade() {
+  const handleUpgrade = useCallback(async () => {
     setError(null);
     if (!isSignedIn) return;
     if (!checkoutTier) return; // only Pro/Team reach this branch
@@ -212,7 +212,37 @@ export default function TierCard({
       setError(err instanceof Error ? err.message : "Failed");
       setSubmitting(false);
     }
-  }
+  }, [
+    isSignedIn,
+    checkoutTier,
+    targetWorkspaceId,
+    me?.paddle_client_token,
+    me?.paddle_environment,
+  ]);
+
+  // Auto-resume checkout after sign-in. The signed-out CTA links to
+  // /signin?next=/pricing?checkout=<tierId>; once auth returns the user
+  // here we detect the param, strip it from the URL, and open the
+  // Paddle overlay automatically. Without this, the user lands on the
+  // home page or /pricing with no further forward motion — exactly
+  // what Asad reported.
+  useEffect(() => {
+    if (!meChecked || !isSignedIn || !checkoutTier || !targetWorkspaceId) {
+      return;
+    }
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const intent = params.get("checkout");
+    if (intent !== tierId) return;
+
+    // Strip the checkout param so refresh / back-button doesn't re-fire.
+    params.delete("checkout");
+    const cleanQs = params.toString();
+    const cleanUrl = `${window.location.pathname}${cleanQs ? "?" + cleanQs : ""}`;
+    window.history.replaceState(null, "", cleanUrl);
+
+    void handleUpgrade();
+  }, [meChecked, isSignedIn, checkoutTier, targetWorkspaceId, tierId, handleUpgrade]);
 
   // ----- CTA decision matrix.
   let ctaNode: React.ReactNode;
@@ -239,8 +269,14 @@ export default function TierCard({
       </a>
     );
   } else if (!isSignedIn) {
+    // Free / Enterprise just need a destination; Pro / Team carry an
+    // intent param so /pricing auto-fires Paddle once we land back here.
+    const next = checkoutTier
+      ? `/pricing?checkout=${checkoutTier}`
+      : "/pricing";
+    const signInHref = `/signin?next=${encodeURIComponent(next)}`;
     ctaNode = (
-      <Link href="/signin" className={primaryBtnClass}>
+      <Link href={signInHref} className={primaryBtnClass}>
         {isFree ? "Start free" : "Get started"}
       </Link>
     );
@@ -264,9 +300,13 @@ export default function TierCard({
   }
 
   // ----- Card chrome.
+  // Same outer dimensions for every tier. Recommended emphasis is via
+  // ring + shadow (which don't shift layout), not a thicker border —
+  // the previous border-2 was 1px wider on each side and made the
+  // recommended card visibly taller / nudged the row out of alignment.
   const cardClass = isRecommended
-    ? "relative flex flex-col rounded-2xl border-2 border-tool-accent bg-app-elevated p-6 shadow-[0_0_0_4px_var(--accent-bg)]"
-    : "relative flex flex-col rounded-2xl border border-app bg-app-elevated p-6";
+    ? "relative flex h-full flex-col rounded-2xl border border-tool-accent bg-app-elevated p-6 shadow-lg shadow-tool-accent/10 ring-2 ring-tool-accent/30"
+    : "relative flex h-full flex-col rounded-2xl border border-app bg-app-elevated p-6";
 
   return (
     <div className={cardClass} data-tier={tierId}>

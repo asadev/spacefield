@@ -131,7 +131,7 @@ export default function TierGrid() {
       />
       <section className="border-b border-app/40 bg-app">
         <div className="mx-auto max-w-6xl px-5 py-16 sm:py-20 lg:py-24">
-          <div className="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid grid-cols-1 items-stretch gap-5 sm:grid-cols-2 xl:grid-cols-4">
             {TIERS.map((tier) => (
               <TierCard
                 key={tier.tierId}

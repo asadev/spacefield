@@ -84,7 +84,7 @@ function PricingTopNav() {
             Sign in
           </Link>
           <Link
-            href="/signin"
+            href="/signin?next=%2Fpricing"
             className="rounded-md bg-tool-accent px-3 py-1.5 text-sm font-medium text-white shadow-sm transition-opacity hover:opacity-90"
           >
             Get started
@@ -120,7 +120,7 @@ function CtaStrip() {
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
               <Link
-                href="/signin"
+                href="/signin?next=%2Fpricing"
                 className="rounded-lg bg-tool-accent px-5 py-2.5 text-sm font-semibold text-white shadow-sm transition-opacity hover:opacity-90"
               >
                 Get started
