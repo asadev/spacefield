@@ -46,6 +46,47 @@ export default function SharedLinksSection({ workspaceId, workspaceLabel }: Prop
   const [newOpen, setNewOpen] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
 
+  // Custom subdomain state
+  const [subdomain, setSubdomain] = useState<string | null>(null);
+  const [subdomainDraft, setSubdomainDraft] = useState("");
+  const [subEditing, setSubEditing] = useState(false);
+  const [subBusy, setSubBusy] = useState(false);
+  const [subError, setSubError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch(`/api/toshare/subdomain?workspaceId=${encodeURIComponent(workspaceId)}`, {
+      cache: "no-store",
+    })
+      .then((r) => r.json())
+      .then((j) => {
+        setSubdomain(typeof j.subdomain === "string" ? j.subdomain : null);
+        setSubdomainDraft(typeof j.subdomain === "string" ? j.subdomain : "");
+      })
+      .catch(() => {});
+  }, [workspaceId]);
+
+  async function saveSubdomain(value: string | null) {
+    setSubError(null);
+    setSubBusy(true);
+    try {
+      const res = await fetch("/api/toshare/subdomain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId, subdomain: value }),
+      });
+      const j = await res.json();
+      if (!res.ok) {
+        setSubError(j.error ?? "Failed to update");
+        return;
+      }
+      setSubdomain(j.subdomain ?? null);
+      setSubdomainDraft(j.subdomain ?? "");
+      setSubEditing(false);
+    } finally {
+      setSubBusy(false);
+    }
+  }
+
   useEffect(() => {
     let mounted = true;
     setLoading(true);
@@ -155,6 +196,91 @@ export default function SharedLinksSection({ workspaceId, workspaceLabel }: Prop
           onCreated={() => setRefreshTick((n) => n + 1)}
         />
       ) : null}
+
+      {/* Custom subdomain panel */}
+      <div className="rounded-lg border border-app bg-app-elevated p-4">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-semibold">Custom subdomain</div>
+            <div className="mt-0.5 text-xs text-faint">
+              {subdomain
+                ? `Your links resolve at ${subdomain}.toshare.net by default.`
+                : "Claim a subdomain so your links live at your-name.toshare.net instead of the apex."}
+            </div>
+          </div>
+          {!subEditing ? (
+            <button
+              type="button"
+              onClick={() => setSubEditing(true)}
+              className="h-8 shrink-0 rounded-md border border-app bg-app px-3 text-xs text-app hover:border-tool-accent"
+            >
+              {subdomain ? "Change" : "Claim"}
+            </button>
+          ) : null}
+        </div>
+
+        {subEditing ? (
+          <div className="mt-3 space-y-2">
+            <div className="flex items-center gap-1 text-sm">
+              <input
+                type="text"
+                value={subdomainDraft}
+                onChange={(e) =>
+                  setSubdomainDraft(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""))
+                }
+                placeholder="acme"
+                maxLength={32}
+                autoFocus
+                className="h-9 max-w-[160px] rounded-md border border-app bg-app px-2 text-sm text-app placeholder:text-faint focus:border-tool-accent focus:outline-none"
+              />
+              <span className="font-mono text-sm text-faint">.toshare.net</span>
+            </div>
+            <p className="text-[0.7rem] text-faint">
+              3–32 chars · letters, digits, hyphens · must start with a letter.
+            </p>
+            {subError ? (
+              <p className="rounded bg-red-50 px-2 py-1 text-xs text-red-700 dark:bg-red-900/30 dark:text-red-200">
+                {subError}
+              </p>
+            ) : null}
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                type="button"
+                onClick={() => saveSubdomain(subdomainDraft || null)}
+                disabled={subBusy}
+                className="h-8 rounded-md bg-tool-accent px-3 text-xs font-medium text-white disabled:opacity-50"
+              >
+                {subBusy ? "Saving…" : "Save"}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSubEditing(false);
+                  setSubdomainDraft(subdomain ?? "");
+                  setSubError(null);
+                }}
+                className="h-8 rounded-md border border-app bg-app px-3 text-xs text-app"
+              >
+                Cancel
+              </button>
+              {subdomain ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (confirm("Release this subdomain? Existing links will revert to the apex toshare.net URL.")) {
+                      saveSubdomain(null);
+                    }
+                  }}
+                  disabled={subBusy}
+                  className="ml-auto h-8 rounded-md border border-red-300 bg-red-50 px-3 text-xs text-red-700 hover:bg-red-100 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300"
+                >
+                  Release
+                </button>
+              ) : null}
+            </div>
+          </div>
+        ) : null}
+      </div>
 
       <div className="flex flex-wrap items-center gap-2">
         <select
