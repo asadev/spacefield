@@ -15,6 +15,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUserPreferences } from "@/lib/useUserPreferences";
 import { awardXP } from "@/lib/xp-actions";
+import MintShareButton from "@/app/_share/_components/MintShareButton";
 import type { NativeAppProps } from "../_data/tools-list";
 
 const ease: [number, number, number, number] = [0.25, 0.46, 0.45, 0.94];
@@ -596,6 +597,88 @@ export default function SalesOfferGeneratorApp(props: NativeAppProps) {
               Print / PDF
             </button>
           </div>
+        </div>
+
+        {/* Share as public link — mints a toshare.net/q/* URL for the offer */}
+        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-app bg-app-elevated px-4 py-2.5">
+          <div className="min-w-0">
+            <div className="text-[0.65rem] font-medium uppercase tracking-[0.15em] text-tool-accent">
+              Share as link
+            </div>
+            <div className="mt-0.5 text-[0.65rem] text-muted">
+              Publish this offer at toshare.net/q/… — recipient sees an itemized quote.
+            </div>
+          </div>
+          <MintShareButton
+            type="quote"
+            sourceTool="sales-offer-generator"
+            label="Share as link"
+            disabled={
+              !form.propertyName.trim() ||
+              !form.price ||
+              !(Number(form.price) > 0)
+            }
+            payload={() => {
+              const lineItems: { description: string; quantity: number; unitPrice: number }[] = [];
+              const price = Number(form.price) || 0;
+              if (price > 0) {
+                const sizeNum = Number(form.size) || 0;
+                const sizeStr =
+                  sizeNum > 0 ? ` · ${sizeNum.toLocaleString()} sqft` : "";
+                lineItems.push({
+                  description: [
+                    form.propertyName,
+                    form.unitType,
+                    form.bedrooms ? `${form.bedrooms} BR` : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" · ") + sizeStr +
+                    (form.paymentPlan ? ` (Payment plan: ${form.paymentPlan})` : ""),
+                  quantity: 1,
+                  unitPrice: price,
+                });
+              }
+              const sc = Number(form.serviceCharge) || 0;
+              const sz = Number(form.size) || 0;
+              if (sc > 0 && sz > 0) {
+                lineItems.push({
+                  description: `Estimated annual service charge (${sc.toLocaleString()} AED/sqft × ${sz.toLocaleString()} sqft)`,
+                  quantity: 1,
+                  unitPrice: sc * sz,
+                });
+              }
+              const today = new Date().toISOString().split("T")[0];
+              const validUntil = (() => {
+                const d = new Date();
+                d.setDate(d.getDate() + 7);
+                return d.toISOString().split("T")[0];
+              })();
+              const notesParts: string[] = [];
+              if (form.location) notesParts.push(`Location: ${form.location}`);
+              if (form.developerName) notesParts.push(`Developer: ${form.developerName}`);
+              if (form.floor) notesParts.push(`Floor: ${form.floor}`);
+              if (form.handoverDate) notesParts.push(`Handover: ${form.handoverDate}`);
+              if (form.agentName || form.agentPhone) {
+                notesParts.push(
+                  `Agent: ${form.agentName || "Sales Team"}${form.agentPhone ? ` · ${form.agentPhone}` : ""}`,
+                );
+              }
+              return {
+                title: form.propertyName
+                  ? `Offer — ${form.propertyName}`
+                  : "Property Offer",
+                recipientName: form.clientName || undefined,
+                recipientCompany: form.companyName || undefined,
+                issuedDate: today,
+                validUntil,
+                lineItems,
+                currency: "AED",
+                notes: notesParts.join(" · ") || undefined,
+                termsHtml:
+                  "<p>This offer is valid for 7 business days from the issue date. To proceed, please confirm your interest and we will initiate the booking process.</p>",
+              };
+            }}
+          />
         </div>
 
         {/* Template picker pill row */}
