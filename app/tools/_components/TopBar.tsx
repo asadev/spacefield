@@ -8,6 +8,8 @@ import { useFocusMode } from "./useFocusMode";
 import type { WindowState } from "./useWindowManager";
 import { useWorkspaces } from "./useWorkspaces";
 import { usePendingInvites } from "./usePendingInvites";
+import { useWorkspace } from "@/lib/workspaces/client";
+import NewShareLinkDialog from "./workspace-settings/NewShareLinkDialog";
 
 /* Auth in spacefield is opt-in / not yet wired. Minimal user shape so
  * the avatar / email row can render if a user does sign in later,
@@ -89,9 +91,11 @@ export default function TopBar({
 }: Props) {
   const [openMenu, setOpenMenu] = useState<string | null>(null);
   const [now, setNow] = useState<Date | null>(null);
+  const [shareDialogOpen, setShareDialogOpen] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
   const { workspaces, activeId: activeWorkspaceId, switchWorkspace: onSwitchWorkspace } =
     useWorkspaces();
+  const { current: currentWorkspace } = useWorkspace();
   // Pending workspace invites — drives the red dot on the notification bell.
   const { count: pendingInviteCount } = usePendingInvites();
   // Focus / Do-Not-Disturb — surfaces the moon icon next to the bell when on.
@@ -493,6 +497,32 @@ export default function TopBar({
           <path d="M21 21l-4.35-4.35" />
         </svg>
       </button>
+
+      {/* Quick share — opens the universal NewShareLinkDialog so a user
+          can mint a redirect / booking / file / page from anywhere. */}
+      <button
+        type="button"
+        onClick={() => setShareDialogOpen(true)}
+        aria-label="Create share link"
+        title="Create share link"
+        className="flex h-6 w-6 items-center justify-center rounded text-app hover:bg-surface transition-colors"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
+          <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
+        </svg>
+      </button>
+
+      {shareDialogOpen ? (
+        <NewShareLinkDialog
+          workspaceId={currentWorkspace?.kind === "team" ? currentWorkspace.id : undefined}
+          onClose={() => setShareDialogOpen(false)}
+          onCreated={() => {
+            // The dialog stays open showing the created URL; user closes when done.
+            // SharedLinksSection refreshes if it happens to be visible (it has its own refreshTick).
+          }}
+        />
+      ) : null}
 
       {/* Pomodoro timer — popover anchors under this trigger. Compact
        * MM:SS readout shows up next to the icon when a phase is running. */}

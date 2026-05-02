@@ -11,7 +11,8 @@ import { useState } from "react";
 import { mintShareLink } from "@/lib/toshare/client";
 
 interface Props {
-  workspaceId: string;
+  /** When omitted, links are minted without workspace context (personal links). */
+  workspaceId?: string;
   onClose: () => void;
   onCreated: () => void;
 }
@@ -249,7 +250,7 @@ const inputCls =
   "w-full rounded-md border border-app bg-app-elevated px-2 py-1.5 text-sm text-app placeholder:text-faint focus:border-tool-accent focus:outline-none";
 
 interface FormProps {
-  workspaceId: string;
+  workspaceId?: string;
   busy: boolean;
   setBusy: (b: boolean) => void;
   setError: (e: string | null) => void;
