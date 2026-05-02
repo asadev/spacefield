@@ -113,6 +113,18 @@ export default function FormRenderer({ payload, linkId, slug, subdomain }: Props
         ))}
       </div>
 
+      {/* Honeypot — bots fill, humans don't see */}
+      <input
+        type="text"
+        name="_hp_company"
+        tabIndex={-1}
+        autoComplete="off"
+        value={String(values._hp_company ?? "")}
+        onChange={(e) => setValues((v) => ({ ...v, _hp_company: e.target.value }))}
+        aria-hidden="true"
+        className="absolute left-[-9999px] top-[-9999px] h-0 w-0 opacity-0"
+      />
+
       {error ? (
         <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-200">
           {error}
