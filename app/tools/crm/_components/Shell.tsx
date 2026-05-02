@@ -569,131 +569,148 @@ export default function Shell({ width, initialParams, openApp }: NativeAppProps)
             // Every record-driven section needs a team workspace. The
             // settings/reports surfaces are static enough to render even
             // without one, so we exempt them.
-            const needsWorkspace =
-              section === "pipeline" ||
-              section === "deals" ||
-              section === "leads" ||
-              section === "contacts" ||
-              section === "companies" ||
-              section === "inventory" ||
-              section === "boards" ||
-              section === "activities" ||
-              section === "templates" ||
-              section === "reminders" ||
-              section === "forms";
-            if (needsWorkspace && (!signedIn || !workspaceId)) {
+            const NEEDS_WORKSPACE = new Set([
+              "pipeline","deals","leads","contacts","companies","inventory",
+              "boards","activities","templates","reminders","forms",
+            ]);
+            const hasWorkspace = Boolean(signedIn && workspaceId);
+            const showGate = NEEDS_WORKSPACE.has(section) && !hasWorkspace;
+
+            if (showGate) {
+              // Active workspace-gated section without a workspace — render
+              // ONLY the gate. Don't pre-mount data sections; they have
+              // nothing to load yet.
               return <WorkspaceRequired section={section} signedIn={signedIn} />;
             }
-            if (section === "pipeline") {
-              return (
-                <PipelineView
-                  width={width}
-                  search={search}
-                  onSearchChange={setSearch}
-                />
-              );
-            }
-            if (section === "deals") {
-              return (
-                <DealsListView
-                  width={width}
-                  search={search}
-                  onSearchChange={setSearch}
-                  goToPipeline={() => setSection("pipeline")}
-                />
-              );
-            }
-            if (section === "leads") {
-              return (
-                <LeadsView
-                  width={width}
-                  search={search}
-                  onSearchChange={setSearch}
-                />
-              );
-            }
-            if (section === "contacts") {
-              return (
-                <ContactsView
-                  workspaceId={workspaceId}
-                  workspaceLabel={workspaceLabel}
-                  width={width}
-                  openApp={openApp}
-                />
-              );
-            }
-            if (section === "companies") {
-              return (
-                <CompaniesView
-                  workspaceId={workspaceId}
-                  workspaceLabel={workspaceLabel}
-                  width={width}
-                  openApp={openApp}
-                />
-              );
-            }
-            if (section === "inventory") {
-              return (
-                <InventoryView
-                  workspaceId={workspaceId}
-                  workspaceLabel={workspaceLabel}
-                  width={width}
-                  openApp={openApp}
-                />
-              );
-            }
-            if (section === "boards") {
-              return (
-                <BoardsListView
-                  workspaceId={workspaceId}
-                  workspaceLabel={workspaceLabel}
-                />
-              );
-            }
-            if (section === "activities") return <ActivitiesView />;
-            if (section === "templates") {
-              return (
-                <TemplatesView
-                  workspaceId={workspaceId}
-                  workspaceLabel={workspaceLabel}
-                  width={width}
-                />
-              );
-            }
-            if (section === "reminders") {
-              return (
-                <RemindersView
-                  workspaceId={workspaceId}
-                  workspaceLabel={workspaceLabel}
-                  width={width}
-                />
-              );
-            }
-            if (section === "territories") {
-              return <TerritoriesView width={width} />;
-            }
-            if (section === "forms") {
-              return (
-                <FormBuilderView
-                  workspaceId={workspaceId}
-                  workspaceLabel={workspaceLabel}
-                  width={width}
-                />
-              );
-            }
-            if (section === "reports") {
-              return <ReportsView onJump={(s) => setSection(s)} />;
-            }
-            if (section === "settings") {
-              return (
-                <SettingsSurface
-                  sub={settingsSub}
-                  onSub={setSettingsSub}
-                  width={width}
-                />
-              );
-            }
-            return <EmptyState section={section} width={width} />;
+
+            // Render-all-keep-alive pattern: every section mounts on CRM
+            // open, fires its own data fetches in parallel, then stays
+            // mounted. Tab switches are instant because target sections are
+            // already rendered with data — we just toggle visibility.
+            //
+            // Workspace-gated sections only mount when workspace is set
+            // (avoids fetches that would 404 / RLS-block). Settings/reports
+            // mount unconditionally.
+            const Pane = ({
+              active,
+              children,
+            }: { active: boolean; children: React.ReactNode }) => (
+              <div
+                className="absolute inset-0 overflow-auto"
+                style={{ display: active ? undefined : "none" }}
+                aria-hidden={!active}
+              >
+                {children}
+              </div>
+            );
+
+            return (
+              <>
+                {hasWorkspace ? (
+                  <>
+                    <Pane active={section === "pipeline"}>
+                      <PipelineView
+                        width={width}
+                        search={search}
+                        onSearchChange={setSearch}
+                      />
+                    </Pane>
+                    <Pane active={section === "deals"}>
+                      <DealsListView
+                        width={width}
+                        search={search}
+                        onSearchChange={setSearch}
+                        goToPipeline={() => setSection("pipeline")}
+                      />
+                    </Pane>
+                    <Pane active={section === "leads"}>
+                      <LeadsView
+                        width={width}
+                        search={search}
+                        onSearchChange={setSearch}
+                      />
+                    </Pane>
+                    <Pane active={section === "contacts"}>
+                      <ContactsView
+                        workspaceId={workspaceId}
+                        workspaceLabel={workspaceLabel}
+                        width={width}
+                        openApp={openApp}
+                      />
+                    </Pane>
+                    <Pane active={section === "companies"}>
+                      <CompaniesView
+                        workspaceId={workspaceId}
+                        workspaceLabel={workspaceLabel}
+                        width={width}
+                        openApp={openApp}
+                      />
+                    </Pane>
+                    <Pane active={section === "inventory"}>
+                      <InventoryView
+                        workspaceId={workspaceId}
+                        workspaceLabel={workspaceLabel}
+                        width={width}
+                        openApp={openApp}
+                      />
+                    </Pane>
+                    <Pane active={section === "boards"}>
+                      <BoardsListView
+                        workspaceId={workspaceId}
+                        workspaceLabel={workspaceLabel}
+                      />
+                    </Pane>
+                    <Pane active={section === "activities"}>
+                      <ActivitiesView />
+                    </Pane>
+                    <Pane active={section === "templates"}>
+                      <TemplatesView
+                        workspaceId={workspaceId}
+                        workspaceLabel={workspaceLabel}
+                        width={width}
+                      />
+                    </Pane>
+                    <Pane active={section === "reminders"}>
+                      <RemindersView
+                        workspaceId={workspaceId}
+                        workspaceLabel={workspaceLabel}
+                        width={width}
+                      />
+                    </Pane>
+                    <Pane active={section === "forms"}>
+                      <FormBuilderView
+                        workspaceId={workspaceId}
+                        workspaceLabel={workspaceLabel}
+                        width={width}
+                      />
+                    </Pane>
+                  </>
+                ) : null}
+
+                {/* Sections that don't require workspace — always mounted. */}
+                <Pane active={section === "territories"}>
+                  <TerritoriesView width={width} />
+                </Pane>
+                <Pane active={section === "reports"}>
+                  <ReportsView onJump={(s) => setSection(s)} />
+                </Pane>
+                <Pane active={section === "settings"}>
+                  <SettingsSurface
+                    sub={settingsSub}
+                    onSub={setSettingsSub}
+                    width={width}
+                  />
+                </Pane>
+
+                {/* Fallback for unknown sections */}
+                {!NEEDS_WORKSPACE.has(section) &&
+                section !== "territories" &&
+                section !== "reports" &&
+                section !== "settings" ? (
+                  <EmptyState section={section} width={width} />
+                ) : null}
+              </>
+            );
           })()}
         </main>
       </div>

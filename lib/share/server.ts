@@ -6,6 +6,7 @@
  * ───────────────────────────────────────────────────────────────────── */
 
 import { createClient } from "@/lib/supabase/server";
+import { createAdminClient } from "@/lib/supabase/admin";
 import { revalidatePath } from "next/cache";
 import {
   type ShareType,
@@ -96,11 +97,20 @@ export async function mintLink(input: MintLinkInput): Promise<MintLinkResult> {
   };
 }
 
-// ─── resolve (called from edge / public viewer) ─────────────────────────
+// ─── resolve (called from public viewer) ────────────────────────────────
+//
+// IMPORTANT: must use the admin client (service-role) because:
+//   1. Public share.example.com visitors are NOT signed in to Spacefield, so
+//      they hit the RLS SELECT policy as the `anon` role.
+//   2. The SELECT policy on share_links restricts reads to owner +
+//      workspace members — anon would always get 0 rows.
+//   3. Page server-components decide which fields to send to the browser
+//      (e.g. they never expose webhookUrl / notifyEmail), so using
+//      service-role here is safe.
 
 export async function resolveLink(slug: string, subdomain: string | null): Promise<ShareLinkRow | null> {
-  const supabase = await createClient();
-  const query = supabase
+  const admin = createAdminClient();
+  const query = admin
     .from("share_links")
     .select("*")
     .eq("slug", slug)
@@ -118,8 +128,10 @@ export async function resolveLink(slug: string, subdomain: string | null): Promi
 }
 
 export async function getLinkById(linkId: string): Promise<ShareLinkRow | null> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
+  // Same reasoning as resolveLink — public submit/accept/book API routes
+  // call this for anonymous visitors.
+  const admin = createAdminClient();
+  const { data, error } = await admin
     .from("share_links")
     .select("*")
     .eq("id", linkId)
