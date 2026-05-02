@@ -45,18 +45,30 @@ export async function mintLink(input: MintLinkInput): Promise<MintLinkResult> {
     return { ok: false, error: "not signed in" };
   }
 
-  // If a workspace is set and the caller didn't override the subdomain,
-  // pick up the workspace's claimed subdomain so links land at the
-  // workspace's custom URL by default.
+  // If a workspace is set, pull in defaults: subdomain + brand logo +
+  // brand color. The link payload only overrides these if it explicitly
+  // sets them.
   let resolvedSubdomain = input.customSubdomain ?? null;
-  if (input.workspaceId && !resolvedSubdomain) {
+  let mergedPayload = input.payload;
+  if (input.workspaceId) {
     const { data: ws } = await supabase
       .from("workspaces")
-      .select("toshare_subdomain")
+      .select("toshare_subdomain, toshare_brand_color, avatar_url")
       .eq("id", input.workspaceId)
       .maybeSingle();
-    if (ws?.toshare_subdomain) {
-      resolvedSubdomain = ws.toshare_subdomain;
+    if (ws) {
+      if (!resolvedSubdomain && ws.toshare_subdomain) {
+        resolvedSubdomain = ws.toshare_subdomain as string;
+      }
+      const payloadCopy = { ...input.payload };
+      // Only fill-in defaults if the payload doesn't already have them
+      if (!payloadCopy.brandColor && ws.toshare_brand_color) {
+        payloadCopy.brandColor = ws.toshare_brand_color;
+      }
+      if (!payloadCopy.brandLogo && ws.avatar_url) {
+        payloadCopy.brandLogo = ws.avatar_url;
+      }
+      mergedPayload = payloadCopy;
     }
   }
 
@@ -64,7 +76,7 @@ export async function mintLink(input: MintLinkInput): Promise<MintLinkResult> {
     p_workspace_id: input.workspaceId ?? null,
     p_owner_user_id: userData.user.id,
     p_type: input.type,
-    p_payload: input.payload,
+    p_payload: mergedPayload,
     p_source_tool: input.sourceTool ?? null,
     p_custom_slug: input.customSlug ?? null,
     p_custom_subdomain: resolvedSubdomain,
