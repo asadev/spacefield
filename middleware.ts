@@ -6,6 +6,51 @@ const LEGACY_TOOL_SLUGS: Record<string, string> = {
   "files-manager": "launchpad",
 };
 
+const TOSHARE_DOMAIN = "toshare.net";
+
+/* Host-router for the toshare.net link surface.
+ *
+ * toshare.net is hosted on the SAME Vercel project as spacefield.io for
+ * MVP simplicity. We split traffic by Host header in middleware:
+ *
+ *   - host = toshare.net           → rewrite to /_share/<type>/<slug>
+ *   - host = <ws>.toshare.net      → rewrite to /_share/<ws>/<type>/<slug>
+ *   - host = spacefield.io / .co   → existing app (no rewrite)
+ *
+ * Edge rewrite preserves the original URL in the browser bar; the page
+ * route lives at app/_share/... internally.
+ */
+function toshareRewrite(request: NextRequest): NextResponse | null {
+  const host = (request.headers.get("host") ?? "").toLowerCase().split(":")[0];
+  if (host !== TOSHARE_DOMAIN && !host.endsWith("." + TOSHARE_DOMAIN)) return null;
+
+  const url = request.nextUrl.clone();
+  const subdomain = host === TOSHARE_DOMAIN ? null : host.slice(0, -1 - TOSHARE_DOMAIN.length);
+  const path = url.pathname;
+
+  // root → simple landing page
+  if (path === "/" || path === "") {
+    url.pathname = "/_share/landing";
+    if (subdomain) url.searchParams.set("ws", subdomain);
+    return NextResponse.rewrite(url);
+  }
+
+  // submit endpoint (form POSTs) — pass through to api route
+  if (path.startsWith("/api/")) return null;
+
+  // typed-slug routes: /<type>/<slug>
+  const m = path.match(/^\/([a-z])\/([a-z0-9-]+)\/?$/i);
+  if (m) {
+    url.pathname = `/_share/${m[1].toLowerCase()}/${m[2].toLowerCase()}`;
+    if (subdomain) url.searchParams.set("ws", subdomain);
+    return NextResponse.rewrite(url);
+  }
+
+  // anything else on toshare.net → 404 page
+  url.pathname = "/_share/not-found";
+  return NextResponse.rewrite(url);
+}
+
 function isShellFrameRequest(request: NextRequest): boolean {
   if (request.nextUrl.searchParams.get("frame") !== "1") return false;
   if (request.headers.get("sec-fetch-dest") !== "iframe") return false;
@@ -73,6 +118,10 @@ function shellRedirectForStandaloneTool(request: NextRequest): NextResponse | nu
  * sign-in) and returns 401 even though the browser thinks it's signed in.
  */
 export async function middleware(request: NextRequest) {
+  // toshare.net host routing — runs FIRST so /tools redirects don't fire
+  const toshareResp = toshareRewrite(request);
+  if (toshareResp) return toshareResp;
+
   const toolRedirect = shellRedirectForStandaloneTool(request);
   if (toolRedirect) return toolRedirect;
 
