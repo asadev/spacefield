@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { resolveLink, recordView } from "@/lib/toshare/server";
 import type { QuotePayload } from "@/lib/toshare/types";
 import { hashClientFingerprint } from "@/lib/toshare/fingerprint";
+import QuoteAccept from "../../_components/QuoteAccept";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -124,6 +125,13 @@ export default async function QuoteViewer({ params, searchParams }: Props) {
           />
         </details>
       ) : null}
+
+      <QuoteAccept
+        linkId={link.id}
+        acceptCtaLabel={payload.acceptCtaLabel}
+        brandColor={payload.brandColor}
+        totalDisplay={fmtMoney(subtotal, payload.currency)}
+      />
     </article>
   );
 }

@@ -192,7 +192,14 @@ export default function SharedLinksSection({ workspaceId, workspaceLabel }: Prop
                     <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-faint">
                       <span className="font-mono">{url.replace(/^https?:\/\//, "")}</span>
                       <span>{link.view_count} views</span>
-                      {link.type === "form" ? <span>{link.submit_count} submissions</span> : null}
+                      {link.type === "form" && link.submit_count > 0 ? (
+                        <span>{link.submit_count} submissions</span>
+                      ) : null}
+                      {link.type === "quote" && link.submit_count > 0 ? (
+                        <span className="font-medium text-emerald-700 dark:text-emerald-300">
+                          {link.submit_count} accepted
+                        </span>
+                      ) : null}
                       {link.source_tool ? <span>via {link.source_tool}</span> : null}
                       <span title={created.toISOString()}>
                         {created.toLocaleDateString()}
