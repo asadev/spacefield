@@ -95,6 +95,7 @@ async function notifyAccept(args: { link: ToShareLinkRow; body: Record<string, u
   // Webhook (signed)
   if (payload.webhookUrl) {
     await deliverSignedWebhook({
+      linkId: args.link.id,
       workspaceId: args.link.workspace_id,
       webhookUrl: payload.webhookUrl,
       event: "quote.accepted",

@@ -99,6 +99,7 @@ async function notifyBooking(args: { link: ToShareLinkRow; body: Record<string, 
   // Webhook (signed)
   if (payload.webhookUrl) {
     await deliverSignedWebhook({
+      linkId: args.link.id,
       workspaceId: args.link.workspace_id,
       webhookUrl: payload.webhookUrl,
       event: "booking.created",
