@@ -90,6 +90,17 @@ export async function resolveLink(slug: string, subdomain: string | null): Promi
   return row;
 }
 
+export async function getLinkById(linkId: string): Promise<ToShareLinkRow | null> {
+  const supabase = await createClient();
+  const { data, error } = await supabase
+    .from("toshare_links")
+    .select("*")
+    .eq("id", linkId)
+    .limit(1);
+  if (error || !data || data.length === 0) return null;
+  return data[0] as ToShareLinkRow;
+}
+
 // ─── view / submit recording ────────────────────────────────────────────
 
 export async function recordView(input: {

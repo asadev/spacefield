@@ -46,6 +46,12 @@ interface FormDef {
   action: string;
   multiStep?: boolean;
   tracking?: boolean;
+  /** Webhook URL fired on each toshare.net submission. Optional. */
+  webhookUrl?: string;
+  /** Email address notified on each toshare.net submission. Optional. */
+  notifyEmail?: string;
+  /** Plain-text shown to the submitter on the success page. Optional. */
+  successMessage?: string;
 }
 
 const LS_KEY = "solutions:lead-capture-form-builder:v2";
@@ -573,8 +579,64 @@ export default function FormBuilderView({
                     options: f.options,
                   })),
                   submitLabel: form.submitLabel || "Submit",
+                  successMessage: form.successMessage,
+                  webhookUrl: form.webhookUrl,
+                  notifyEmail: form.notifyEmail,
                 })}
               />
+
+              {/* Notification settings — webhook + email fan-out on each
+                  submission. Both optional; submissions always land in
+                  Workspace → Shared links regardless. */}
+              <div className="mt-3 space-y-2 border-t border-app pt-3">
+                <div className="font-mono text-[0.55rem] uppercase tracking-[0.18em] text-faint">
+                  Get notified on submission
+                </div>
+                <label className="block space-y-1">
+                  <span className="text-xs text-secondary">Email me at</span>
+                  <input
+                    type="email"
+                    placeholder="you@company.com"
+                    value={form.notifyEmail ?? ""}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, notifyEmail: e.target.value || undefined }))
+                    }
+                    className={inputCls()}
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-xs text-secondary">
+                    POST submissions to webhook URL
+                  </span>
+                  <input
+                    type="url"
+                    placeholder="https://hooks.zapier.com/..."
+                    value={form.webhookUrl ?? ""}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, webhookUrl: e.target.value || undefined }))
+                    }
+                    className={inputCls()}
+                  />
+                </label>
+                <label className="block space-y-1">
+                  <span className="text-xs text-secondary">
+                    Success message (shown after submit)
+                  </span>
+                  <input
+                    type="text"
+                    placeholder="Thanks! We'll be in touch within 24 hours."
+                    value={form.successMessage ?? ""}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, successMessage: e.target.value || undefined }))
+                    }
+                    className={inputCls()}
+                  />
+                </label>
+                <p className="text-[0.65rem] text-faint">
+                  Existing form submissions persist in System Settings → Workspace → Shared links.
+                  Re-publish after editing to push changes live.
+                </p>
+              </div>
             </section>
             <section className="rounded-md border border-app bg-app-elevated p-3">
             <div className="mb-2 flex flex-wrap items-center gap-2">
