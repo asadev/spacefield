@@ -1,10 +1,11 @@
-/* File viewer — placeholder; secure download flow ships next iteration. */
+/* File viewer — metadata + password-gated download. */
 
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { resolveLink, recordView } from "@/lib/toshare/server";
 import type { FilePayload } from "@/lib/toshare/types";
 import { hashClientFingerprint } from "@/lib/toshare/fingerprint";
+import FileDownload from "../../_components/FileDownload";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -13,19 +14,14 @@ interface Props {
 
 export const dynamic = "force-dynamic";
 
-function fmtBytes(b: number): string {
-  if (b < 1024) return `${b} B`;
-  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
-  if (b < 1024 * 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
-  return `${(b / 1024 / 1024 / 1024).toFixed(1)} GB`;
-}
-
 export default async function FileViewer({ params, searchParams }: Props) {
   const { slug } = await params;
   const { ws } = await searchParams;
   const subdomain = ws ?? null;
+
   const link = await resolveLink(slug, subdomain);
   if (!link || link.type !== "file") notFound();
+
   const payload = link.payload as unknown as FilePayload;
   const h = await headers();
   recordView({
@@ -37,14 +33,21 @@ export default async function FileViewer({ params, searchParams }: Props) {
   }).catch(() => {});
 
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold tracking-tight">{payload.fileName}</h1>
-      <p className="text-sm text-slate-500">
-        {payload.mimeType} · {fmtBytes(payload.fileSize)}
+    <article className="space-y-6">
+      <header className="space-y-1">
+        <div className="text-xs uppercase tracking-wider text-slate-500">Shared file</div>
+        <h1 className="text-2xl font-semibold tracking-tight">A file has been shared with you</h1>
+      </header>
+
+      <FileDownload
+        linkId={link.id}
+        payload={payload}
+        passwordRequired={Boolean(payload.passwordHash)}
+      />
+
+      <p className="text-xs text-slate-500">
+        Files expire automatically and may be limited to a fixed number of downloads.
       </p>
-      <div className="rounded-xl border border-slate-200 p-6 text-sm text-slate-500 dark:border-slate-800">
-        Secure download flow shipping in next iteration.
-      </div>
-    </div>
+    </article>
   );
 }
