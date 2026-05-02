@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import ToolShell from "../../_components/ToolShell";
 import ToolCard, { Field, Stat, inputCls } from "../../_components/ToolCard";
+import MintShareButton from "@/app/_share/_components/MintShareButton";
+import type { PageBlock } from "@/lib/share/types";
 
 type Template = "consulting" | "saas" | "services";
 type TabKey = "edit" | "preview" | "send";
@@ -167,6 +169,83 @@ const money = (n: number) =>
     currency: "USD",
     maximumFractionDigits: 0,
   });
+
+/* Build the share.example.com PagePayload from the proposal's editable state.
+ * Sections obey the same include* flags as the print preview. */
+function buildProposalSharePayload(state: State, total: number) {
+  const blocks: PageBlock[] = [];
+
+  blocks.push({
+    kind: "stats",
+    items: [
+      { label: "Prepared for", value: state.clientCompany || state.clientName || "—" },
+      { label: "Prepared by", value: state.preparedBy || "—" },
+      { label: "Date", value: state.date || "—" },
+      { label: "Investment", value: money(total) },
+    ],
+  });
+
+  if (state.includeProblem !== false && state.problem) {
+    blocks.push({ kind: "heading", text: "The problem", level: 2 });
+    blocks.push({ kind: "paragraph", text: state.problem });
+  }
+  if (state.includeSolution !== false && state.solution) {
+    blocks.push({ kind: "heading", text: "Our proposed solution", level: 2 });
+    blocks.push({ kind: "paragraph", text: state.solution });
+  }
+
+  for (const cs of state.customSections || []) {
+    if (!cs.included) continue;
+    if (cs.title) blocks.push({ kind: "heading", text: cs.title, level: 2 });
+    if (cs.body) blocks.push({ kind: "paragraph", text: cs.body });
+  }
+
+  if (state.includeTimeline !== false && state.phases.length) {
+    blocks.push({ kind: "heading", text: "Timeline", level: 2 });
+    blocks.push({
+      kind: "list",
+      ordered: true,
+      items: state.phases.map(
+        (p) =>
+          `${p.name} — ${p.weeks} week${p.weeks === 1 ? "" : "s"}${
+            p.deliverables ? `: ${p.deliverables}` : ""
+          }`
+      ),
+    });
+  }
+
+  if (state.includeInvestment !== false && state.items.length) {
+    blocks.push({ kind: "heading", text: "Investment", level: 2 });
+    blocks.push({
+      kind: "stats",
+      items: state.items.map((i) => ({
+        label: i.description || "Line item",
+        value: money(i.qty * i.rate),
+      })),
+    });
+    blocks.push({
+      kind: "stats",
+      items: [{ label: "Total", value: money(total) }],
+    });
+  }
+
+  if (state.includeNextSteps !== false && state.nextSteps) {
+    blocks.push({ kind: "heading", text: "Next steps", level: 2 });
+    blocks.push({ kind: "paragraph", text: state.nextSteps });
+  }
+
+  if (state.includeTerms !== false && state.terms) {
+    blocks.push({ kind: "heading", text: "Terms", level: 2 });
+    blocks.push({ kind: "paragraph", text: state.terms });
+  }
+
+  return {
+    title: state.proposalTitle || "Proposal",
+    blocks,
+    ctaLabel: "Reply",
+    ctaHref: undefined as string | undefined,
+  };
+}
 
 export default function ProposalGeneratorPage() {
   return (
@@ -460,6 +539,14 @@ function Inner() {
           </select>
 
           <div className="ml-auto flex items-center gap-1.5">
+            <MintShareButton
+              type="page"
+              sourceTool="proposal-generator"
+              label="Share link"
+              variant="ghost"
+              disabled={!state.proposalTitle.trim()}
+              payload={() => buildProposalSharePayload(state, total)}
+            />
             <button
               onClick={print}
               className="rounded-lg bg-tool-accent px-3 py-1.5 font-mono text-[0.6rem] font-semibold uppercase tracking-[0.16em] transition-opacity hover:opacity-90"
@@ -501,9 +588,27 @@ function Inner() {
         <div className="no-print">
           <ToolCard
             title="Send"
-            subtitle="Export the proposal — email or print to PDF"
+            subtitle="Export the proposal — share, email, or print to PDF"
           >
-            <div className="grid gap-3 md:grid-cols-2">
+            <div className="grid gap-3 md:grid-cols-3">
+              <div className="rounded-xl border border-app bg-app p-4">
+                <div className="font-mono text-[0.55rem] uppercase tracking-[0.22em] text-tool-accent">
+                  Public share link
+                </div>
+                <div className="mt-2 text-sm text-secondary">
+                  Publish to <span className="text-app">share.example.com</span>{" "}
+                  — copy a URL the client opens in any browser, no PDF needed.
+                </div>
+                <div className="mt-3">
+                  <MintShareButton
+                    type="page"
+                    sourceTool="proposal-generator"
+                    label="Create share link"
+                    disabled={!state.proposalTitle.trim()}
+                    payload={() => buildProposalSharePayload(state, total)}
+                  />
+                </div>
+              </div>
               <div className="rounded-xl border border-app bg-app p-4">
                 <div className="font-mono text-[0.55rem] uppercase tracking-[0.22em] text-tool-accent">
                   PDF export

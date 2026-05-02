@@ -9,6 +9,8 @@ import {
   useWorkspace,
 } from "@/lib/workspaces/client";
 import { saveWorkspaceData } from "@/lib/workspaces/server";
+import MintShareButton from "@/app/_share/_components/MintShareButton";
+import type { PageBlock } from "@/lib/share/types";
 
 const LS_KEY = "solutions:pricing-calculator:v1";
 const NAMESPACE = "pricing-calculator";
@@ -749,6 +751,15 @@ function PricingInner() {
           >
             Copy JSON
           </button>
+          <MintShareButton
+            type="page"
+            sourceTool="pricing-calculator"
+            label="Share as link"
+            variant="ghost"
+            workspaceId={current.kind === "team" ? current.id : undefined}
+            disabled={state.tiers.length === 0}
+            payload={() => buildPricingSharePayload(state)}
+          />
         </div>
       </section>
 
@@ -1073,4 +1084,53 @@ function escapeHtml(s: string): string {
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;");
+}
+
+/* Build the share.example.com PagePayload for the pricing tiers.
+ * The hero "stats" block lays out the tiers side-by-side; each tier then
+ * gets its own heading + tagline + feature list block. */
+function buildPricingSharePayload(state: State) {
+  const blocks: PageBlock[] = [];
+
+  if (state.tiers.length) {
+    blocks.push({
+      kind: "stats",
+      items: state.tiers.map((t) => ({
+        label: t.name + (t.highlight ? " · Recommended" : ""),
+        value: `${state.currency} ${t.monthly.toLocaleString()}/mo`,
+      })),
+    });
+  }
+
+  for (const t of state.tiers) {
+    blocks.push({ kind: "heading", text: t.name, level: 2 });
+    if (t.tagline) blocks.push({ kind: "paragraph", text: t.tagline });
+
+    const includedFeatures = t.features
+      .filter((f) => f.included)
+      .map((f) => f.label || "Feature");
+    if (includedFeatures.length) {
+      blocks.push({ kind: "list", items: includedFeatures });
+    }
+
+    const excludedFeatures = t.features
+      .filter((f) => !f.included)
+      .map((f) => f.label || "Feature");
+    if (excludedFeatures.length) {
+      blocks.push({ kind: "paragraph", text: `Not included: ${excludedFeatures.join(", ")}` });
+    }
+  }
+
+  if (state.freemium) {
+    blocks.push({ kind: "heading", text: "Free tier available", level: 3 });
+    blocks.push({
+      kind: "paragraph",
+      text: "A limited free plan is offered alongside the paid tiers.",
+    });
+  }
+
+  return {
+    title: "Pricing",
+    blocks,
+  };
 }
