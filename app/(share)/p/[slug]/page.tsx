@@ -36,6 +36,47 @@ export default async function PageViewer({ params, searchParams }: Props) {
 
   const accent = payload.brandColor ?? "#0f172a";
 
+  // If a rasterized poster snapshot is provided, render it full-bleed
+  // and skip the generic block layout entirely. The user designed an
+  // exact poster — show that exact poster, not a re-layout of the data.
+  if (payload.posterImage) {
+    return (
+      <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+        <img
+          src={payload.posterImage}
+          alt={payload.title || ""}
+          style={{
+            width: "100%",
+            height: "auto",
+            display: "block",
+            borderRadius: "12px",
+            boxShadow: "0 8px 24px -8px rgba(15, 23, 42, 0.18)",
+          }}
+        />
+        {payload.ctaLabel && payload.ctaHref ? (
+          <a
+            href={payload.ctaHref}
+            style={{
+              alignSelf: "flex-start",
+              display: "inline-flex",
+              height: "44px",
+              alignItems: "center",
+              padding: "0 20px",
+              borderRadius: "12px",
+              fontSize: "14px",
+              fontWeight: 500,
+              color: "#ffffff",
+              backgroundColor: accent,
+              textDecoration: "none",
+            }}
+          >
+            {payload.ctaLabel}
+          </a>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <article className="space-y-8" style={{ ["--accent" as string]: accent }}>
       {payload.brandLogo ? (

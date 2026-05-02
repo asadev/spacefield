@@ -752,7 +752,7 @@ function PosterMobileFlow({
   exporting: boolean;
   onExport: () => void;
   onReset: () => void;
-  buildSharePayload: () => PagePayload;
+  buildSharePayload: () => Promise<PagePayload>;
   canShare: boolean;
   workspaceId: string | undefined;
 }) {
@@ -963,7 +963,7 @@ function PosterMobileFlow({
               </div>
               <MintShareButton
                 type="page"
-                payload={() => buildSharePayload() as unknown as Record<string, unknown>}
+                payload={async () => (await buildSharePayload()) as unknown as Record<string, unknown>}
                 sourceTool="property-poster-creator"
                 workspaceId={workspaceId}
                 disabled={!canShare}
@@ -1222,10 +1222,77 @@ export default function PropertyPosterCreatorApp({
   }, [activeRef, data.propertyTitle, downloadFormat]);
 
   /* ─── Public-page share payload ──────────────────────────────────────────
-   * Build a toshare.net `page` payload from the current poster state. The
-   * factory closes over `data` so MintShareButton always reads fresh values
-   * at click-time. */
-  const buildSharePayload = useCallback((): PagePayload => {
+   * Renders the EXACT poster the user designed by rasterizing the live
+   * poster element via html2canvas, uploading the PNG, and embedding the
+   * URL as `posterImage` on a page link. The viewer renders that image
+   * full-bleed — no re-layout, no font drift, no missing template style.
+   *
+   * Falls back to a generic data-driven layout if the rasterize fails.
+   * Async so MintShareButton awaits before minting. */
+  const buildSharePayload = useCallback(async (): Promise<PagePayload> => {
+    const ctaHref = data.agentEmail
+      ? `mailto:${data.agentEmail}?subject=${encodeURIComponent(data.propertyTitle || "Property enquiry")}`
+      : data.agentPhone
+        ? `tel:${data.agentPhone.replace(/\s+/g, "")}`
+        : undefined;
+
+    const baseTitle = data.propertyTitle || data.location || "Property Listing";
+
+    // Try to rasterize + upload the active poster snapshot
+    let posterImageUrl: string | undefined;
+    if (activeRef.current) {
+      try {
+        const html2canvas = (await import("html2canvas-pro")).default;
+        const el = activeRef.current;
+        const rect = el.getBoundingClientRect();
+        const scale = Math.min(2160 / Math.max(rect.width, 1), 3);
+        const canvas = await html2canvas(el, {
+          scale,
+          useCORS: true,
+          allowTaint: true,
+          backgroundColor: null,
+          logging: false,
+        });
+        const blob: Blob | null = await new Promise((resolve) =>
+          canvas.toBlob(resolve, "image/jpeg", 0.92)
+        );
+        if (blob) {
+          const slug = (data.propertyTitle || "poster")
+            .replace(/\s+/g, "-")
+            .toLowerCase()
+            .slice(0, 60);
+          const fd = new FormData();
+          fd.set("file", blob, `${slug}.jpg`);
+          const res = await fetch("/api/toshare/upload-image", {
+            method: "POST",
+            body: fd,
+          });
+          const j = await res.json();
+          if (res.ok && typeof j.url === "string") {
+            posterImageUrl = j.url;
+          } else {
+            console.warn("[poster-share] upload failed:", j.error);
+          }
+        }
+      } catch (err) {
+        console.warn("[poster-share] rasterize failed, falling back to generic blocks:", err);
+      }
+    }
+
+    // If we got a poster image, return the minimal payload — the viewer
+    // shows the image full-bleed, ignoring blocks.
+    if (posterImageUrl) {
+      return {
+        title: baseTitle,
+        posterImage: posterImageUrl,
+        blocks: [],
+        ctaLabel: ctaHref ? "Contact agent" : undefined,
+        ctaHref,
+        brandLogo: data.logoImage?.src,
+      };
+    }
+
+    // Fallback: build the original block-based layout from form data.
     const heroImg = data.propertyImage?.src;
     const galleryItems = [data.propertyImage2, data.propertyImage3]
       .filter((img): img is ImageState => Boolean(img?.src))
@@ -1269,14 +1336,8 @@ export default function PropertyPosterCreatorApp({
       blocks.push({ kind: "paragraph", text: contactLine });
     }
 
-    const ctaHref = data.agentEmail
-      ? `mailto:${data.agentEmail}?subject=${encodeURIComponent(data.propertyTitle || "Property enquiry")}`
-      : data.agentPhone
-        ? `tel:${data.agentPhone.replace(/\s+/g, "")}`
-        : undefined;
-
     return {
-      title: data.propertyTitle || data.location || "Property Listing",
+      title: baseTitle,
       hero: heroImg
         ? { kind: "image", src: heroImg, alt: data.propertyTitle || "Property" }
         : undefined,
@@ -1285,7 +1346,7 @@ export default function PropertyPosterCreatorApp({
       ctaHref,
       brandLogo: data.logoImage?.src,
     };
-  }, [data]);
+  }, [data, activeRef]);
 
   // Need at least a title or a hero image before sharing makes sense.
   const canShare = Boolean(data.propertyTitle.trim() || data.propertyImage?.src);
@@ -1587,7 +1648,7 @@ export default function PropertyPosterCreatorApp({
               <div className="flex-1" />
               <MintShareButton
                 type="page"
-                payload={() => buildSharePayload() as unknown as Record<string, unknown>}
+                payload={async () => (await buildSharePayload()) as unknown as Record<string, unknown>}
                 sourceTool="property-poster-creator"
                 workspaceId={workspaceId}
                 disabled={!canShare}

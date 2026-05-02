@@ -27,7 +27,13 @@ import { renderStyledQrPng } from "@/lib/qr/render";
 
 interface Props {
   type: MintShareLinkInput["type"];
-  payload: () => Record<string, unknown>;
+  /**
+   * Returns the link payload. May be sync OR async — async lets the
+   * caller do work like rasterizing a canvas + uploading the result
+   * before the link is minted (e.g. property poster's "share exact
+   * poster" flow).
+   */
+  payload: () => Record<string, unknown> | Promise<Record<string, unknown>>;
   sourceTool: string;
   workspaceId?: string;
   label?: string;
@@ -87,9 +93,16 @@ export default function MintShareButton({
   async function go() {
     if (disabled) return;
     setState({ kind: "loading" });
+    let resolvedPayload: Record<string, unknown>;
+    try {
+      resolvedPayload = await Promise.resolve(payload());
+    } catch (err) {
+      setState({ kind: "error", message: err instanceof Error ? err.message : "Failed to prepare link." });
+      return;
+    }
     const result = await mintShareLink({
       type,
-      payload: payload(),
+      payload: resolvedPayload,
       sourceTool,
       workspaceId,
     });
