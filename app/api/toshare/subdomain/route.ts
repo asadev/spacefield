@@ -1,9 +1,11 @@
-/* Workspace custom-subdomain + brand-color endpoint.
+/* Workspace toShare config endpoint.
  *
- * GET  ?workspaceId=X           → { subdomain, brandColor }
+ * GET  ?workspaceId=X           → { subdomain, brandColor, webhookSecret }
+ *                                 (webhookSecret only returned to admin/owner)
  * POST { workspaceId, subdomain }                → claim subdomain
  * POST { workspaceId, brandColor }               → set brand color
- *      (pass nulls to clear the respective field)
+ * POST { workspaceId, rotateWebhookSecret: true }→ rotate secret
+ *      (pass nulls on subdomain/brandColor to clear the respective field)
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -19,15 +21,31 @@ export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("workspaces")
-    .select("toshare_subdomain, toshare_brand_color")
+    .select("toshare_subdomain, toshare_brand_color, toshare_webhook_secret")
     .eq("id", workspaceId)
     .maybeSingle();
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
+  // Only surface the webhook secret to admins/owners (RLS already hides
+  // the row from non-members; this gates display from regular members).
+  let webhookSecret: string | null = null;
+  const { data: userData } = await supabase.auth.getUser();
+  if (userData.user) {
+    const { data: mem } = await supabase
+      .from("workspace_members")
+      .select("role")
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", userData.user.id)
+      .maybeSingle();
+    if (mem && (mem.role === "owner" || mem.role === "admin")) {
+      webhookSecret = (data?.toshare_webhook_secret as string | null) ?? null;
+    }
+  }
   return NextResponse.json({
     subdomain: data?.toshare_subdomain ?? null,
     brandColor: data?.toshare_brand_color ?? null,
+    webhookSecret,
   });
 }
 
@@ -37,6 +55,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "workspaceId required" }, { status: 400 });
   }
   const supabase = await createClient();
+
+  // Rotate webhook secret path
+  if (body.rotateWebhookSecret === true) {
+    const { data, error } = await supabase.rpc("toshare_rotate_webhook_secret", {
+      p_workspace_id: body.workspaceId,
+    });
+    if (error) {
+      const status = error.message.includes("only owners") ? 403 : 500;
+      return NextResponse.json({ error: error.message }, { status });
+    }
+    return NextResponse.json({ webhookSecret: data });
+  }
 
   // Brand-color update path
   if ("brandColor" in body) {

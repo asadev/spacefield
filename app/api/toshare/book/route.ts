@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getLinkById } from "@/lib/toshare/server";
 import { hashClientFingerprint } from "@/lib/toshare/fingerprint";
 import { sendEmail } from "@/lib/email";
+import { deliverSignedWebhook } from "@/lib/toshare/webhook-sign";
 import type { BookingPayload, ToShareLinkRow } from "@/lib/toshare/types";
 import { buildToShareUrl } from "@/lib/toshare/types";
 
@@ -95,35 +96,26 @@ async function notifyBooking(args: { link: ToShareLinkRow; body: Record<string, 
   const startLocal = String(args.body.startLocal);
   const notes = typeof args.body.notes === "string" ? args.body.notes.trim() : "";
 
-  // Webhook
+  // Webhook (signed)
   if (payload.webhookUrl) {
-    try {
-      const ac = new AbortController();
-      const timer = setTimeout(() => ac.abort(), 5000);
-      await fetch(payload.webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          event: "booking.created",
-          timestamp: new Date().toISOString(),
-          linkId: args.link.id,
-          slug: args.link.slug,
-          publicUrl: url,
-          booking: {
-            title: payload.title,
-            startLocal,
-            timezone: payload.timezone,
-            durationMinutes: payload.durationMinutes,
-            invitee: { name: inviteeName, email: inviteeEmail },
-            notes,
-          },
-        }),
-        signal: ac.signal,
-      });
-      clearTimeout(timer);
-    } catch (err) {
-      console.warn("[toshare/book] webhook failed:", err);
-    }
+    await deliverSignedWebhook({
+      workspaceId: args.link.workspace_id,
+      webhookUrl: payload.webhookUrl,
+      event: "booking.created",
+      body: {
+        linkId: args.link.id,
+        slug: args.link.slug,
+        publicUrl: url,
+        booking: {
+          title: payload.title,
+          startLocal,
+          timezone: payload.timezone,
+          durationMinutes: payload.durationMinutes,
+          invitee: { name: inviteeName, email: inviteeEmail },
+          notes,
+        },
+      },
+    });
   }
 
   const escape = (s: string) =>
