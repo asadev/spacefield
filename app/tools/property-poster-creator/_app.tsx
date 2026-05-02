@@ -16,6 +16,9 @@
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUserPreferences } from "@/lib/useUserPreferences";
+import { useWorkspace } from "@/lib/workspaces/client";
+import MintShareButton from "@/app/_share/_components/MintShareButton";
+import type { PageBlock, PagePayload } from "@/lib/toshare/types";
 import type { NativeAppProps } from "../_data/tools-list";
 
 const ease: [number, number, number, number] = [0.25, 0.46, 0.45, 0.94];
@@ -731,6 +734,9 @@ function PosterMobileFlow({
   exporting,
   onExport,
   onReset,
+  buildSharePayload,
+  canShare,
+  workspaceId,
 }: {
   templates: TemplateConfig[];
   selectedTemplate: TemplateId;
@@ -746,6 +752,9 @@ function PosterMobileFlow({
   exporting: boolean;
   onExport: () => void;
   onReset: () => void;
+  buildSharePayload: () => PagePayload;
+  canShare: boolean;
+  workspaceId: string | undefined;
 }) {
   const [tab, setTab] = useState<MobilePosterTab>("template");
   const tabIndex = MOBILE_TABS.findIndex((t) => t.id === tab);
@@ -941,6 +950,27 @@ function PosterMobileFlow({
                 <PosterTemplate data={data} posterRef={activeRef} format={currentFormat} />
               </div>
             </div>
+
+            {/* Share as public page */}
+            <div className="w-full rounded-xl border border-app bg-app-elevated p-3 space-y-2">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-faint">
+                  Share as public page
+                </p>
+                <p className="text-[11px] text-muted">
+                  Buyers open the listing on any browser via toshare.net.
+                </p>
+              </div>
+              <MintShareButton
+                type="page"
+                payload={() => buildSharePayload() as unknown as Record<string, unknown>}
+                sourceTool="property-poster-creator"
+                workspaceId={workspaceId}
+                disabled={!canShare}
+                label="Share link"
+                variant="ghost"
+              />
+            </div>
           </div>
         )}
       </div>
@@ -1017,6 +1047,9 @@ export default function PropertyPosterCreatorApp({
   initialParamsKey,
 }: NativeAppProps) {
   const { prefs } = useUserPreferences();
+  const { current: currentWorkspace } = useWorkspace();
+  const workspaceId =
+    currentWorkspace.kind === "team" ? currentWorkspace.id : undefined;
   const posterRef = useRef<HTMLDivElement>(null);
   const storyRef = useRef<HTMLDivElement>(null);
   const [selectedTemplate, setSelectedTemplate] = useState<TemplateId>("luxury-dark");
@@ -1187,6 +1220,75 @@ export default function PropertyPosterCreatorApp({
     }
   }, [activeRef, data.propertyTitle, downloadFormat]);
 
+  /* ─── Public-page share payload ──────────────────────────────────────────
+   * Build a toshare.net `page` payload from the current poster state. The
+   * factory closes over `data` so MintShareButton always reads fresh values
+   * at click-time. */
+  const buildSharePayload = useCallback((): PagePayload => {
+    const heroImg = data.propertyImage?.src;
+    const galleryItems = [data.propertyImage2, data.propertyImage3]
+      .filter((img): img is ImageState => Boolean(img?.src))
+      .map((img) => ({ src: img.src, alt: data.propertyTitle || "Property photo" }));
+
+    const priceText = data.price
+      ? `AED ${data.price}${data.statusLabel === "FOR RENT" ? " / yr" : ""}`
+      : "";
+
+    const statItems: { label: string; value: string }[] = [];
+    if (priceText) statItems.push({ label: "Price", value: priceText });
+    if (data.bedrooms) statItems.push({ label: "Bedrooms", value: data.bedrooms });
+    if (data.bathrooms) statItems.push({ label: "Bathrooms", value: data.bathrooms });
+    if (data.area) statItems.push({ label: "Area", value: `${data.area} sqft` });
+
+    const blocks: PageBlock[] = [];
+    if (statItems.length > 0) blocks.push({ kind: "stats", items: statItems });
+    if (data.location)
+      blocks.push({
+        kind: "paragraph",
+        text: `${data.propertyType ? `${data.propertyType} · ` : ""}${data.location}`,
+      });
+    if (data.features) {
+      const featureList = data.features
+        .split(/[•·,|]/)
+        .map((s) => s.trim())
+        .filter(Boolean);
+      if (featureList.length > 0) {
+        blocks.push({ kind: "heading", text: "Highlights", level: 2 });
+        blocks.push({ kind: "list", items: featureList });
+      }
+    }
+    if (galleryItems.length > 0)
+      blocks.push({ kind: "gallery", items: galleryItems });
+
+    const contactLine = [data.agentName, data.agentPhone, data.agentEmail, data.companyName]
+      .filter(Boolean)
+      .join(" · ");
+    if (contactLine) {
+      blocks.push({ kind: "heading", text: "Contact", level: 2 });
+      blocks.push({ kind: "paragraph", text: contactLine });
+    }
+
+    const ctaHref = data.agentEmail
+      ? `mailto:${data.agentEmail}?subject=${encodeURIComponent(data.propertyTitle || "Property enquiry")}`
+      : data.agentPhone
+        ? `tel:${data.agentPhone.replace(/\s+/g, "")}`
+        : undefined;
+
+    return {
+      title: data.propertyTitle || data.location || "Property Listing",
+      hero: heroImg
+        ? { kind: "image", src: heroImg, alt: data.propertyTitle || "Property" }
+        : undefined,
+      blocks,
+      ctaLabel: ctaHref ? "Contact agent" : undefined,
+      ctaHref,
+      brandLogo: data.logoImage?.src,
+    };
+  }, [data]);
+
+  // Need at least a title or a hero image before sharing makes sense.
+  const canShare = Boolean(data.propertyTitle.trim() || data.propertyImage?.src);
+
   // Side-panel content lives in its own component so we can mount it either
   // beside the canvas (wide) or stacked below it (narrow) without duplication.
   const sidePanel = (
@@ -1336,6 +1438,9 @@ export default function PropertyPosterCreatorApp({
         exporting={exporting}
         onExport={handleExport}
         onReset={handleReset}
+        buildSharePayload={buildSharePayload}
+        canShare={canShare}
+        workspaceId={workspaceId}
       />
     );
   }
@@ -1466,6 +1571,28 @@ export default function PropertyPosterCreatorApp({
                   </>
                 )}
               </button>
+            </div>
+
+            {/* Share as public page — toshare.net link */}
+            <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-app pt-3">
+              <div className="flex flex-col">
+                <span className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-faint">
+                  Share as public page
+                </span>
+                <span className="text-[0.65rem] text-muted">
+                  Mints a toshare.net link buyers can open in any browser.
+                </span>
+              </div>
+              <div className="flex-1" />
+              <MintShareButton
+                type="page"
+                payload={() => buildSharePayload() as unknown as Record<string, unknown>}
+                sourceTool="property-poster-creator"
+                workspaceId={workspaceId}
+                disabled={!canShare}
+                label="Share link"
+                variant="ghost"
+              />
             </div>
           </div>
         </div>
