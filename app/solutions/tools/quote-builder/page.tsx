@@ -25,6 +25,10 @@ type Quote = {
   terms: string;
   notes: string;
   lines: Line[];
+  /** Email notified when recipient accepts the public toshare.net quote. */
+  notifyEmail?: string;
+  /** Webhook fired when recipient accepts the public toshare.net quote. */
+  webhookUrl?: string;
 };
 
 const STORAGE_KEY = "spacefield.quoteBuilder.v1";
@@ -805,8 +809,41 @@ export default function QuoteBuilderPage() {
                     termsHtml: quote.terms
                       ? `<p>${quote.terms.replace(/\n/g, "</p><p>")}</p>`
                       : undefined,
+                    notifyEmail: quote.notifyEmail || undefined,
+                    webhookUrl: quote.webhookUrl || undefined,
                   })}
                 />
+
+                <div className="mt-4 grid grid-cols-1 gap-3 border-t border-app pt-4 sm:grid-cols-2">
+                  <label className="block">
+                    <span className="font-mono text-[0.55rem] uppercase tracking-[0.2em] text-muted">
+                      Notify on accept
+                    </span>
+                    <input
+                      type="email"
+                      placeholder="you@company.com"
+                      value={quote.notifyEmail ?? ""}
+                      onChange={(e) =>
+                        setQuote((q) => ({ ...q, notifyEmail: e.target.value || undefined }))
+                      }
+                      className="mt-1 w-full rounded-md border border-app bg-app-elevated px-2 py-1.5 text-sm text-app placeholder:text-faint focus:border-tool-accent focus:outline-none"
+                    />
+                  </label>
+                  <label className="block">
+                    <span className="font-mono text-[0.55rem] uppercase tracking-[0.2em] text-muted">
+                      Webhook on accept
+                    </span>
+                    <input
+                      type="url"
+                      placeholder="https://hooks.zapier.com/…"
+                      value={quote.webhookUrl ?? ""}
+                      onChange={(e) =>
+                        setQuote((q) => ({ ...q, webhookUrl: e.target.value || undefined }))
+                      }
+                      className="mt-1 w-full rounded-md border border-app bg-app-elevated px-2 py-1.5 text-sm text-app placeholder:text-faint focus:border-tool-accent focus:outline-none"
+                    />
+                  </label>
+                </div>
               </div>
               <div className="mt-5 rounded-xl border border-app bg-app p-4">
                 <div className="font-mono text-[0.55rem] uppercase tracking-[0.2em] text-tool-accent">

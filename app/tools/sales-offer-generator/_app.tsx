@@ -36,6 +36,10 @@ interface FormData {
   agentName: string;
   agentPhone: string;
   companyName: string;
+  /** Email notified when recipient accepts the public quote link. */
+  notifyEmail?: string;
+  /** Webhook fired when recipient accepts the public quote link. */
+  webhookUrl?: string;
 }
 
 interface ImageSlot {
@@ -600,16 +604,17 @@ export default function SalesOfferGeneratorApp(props: NativeAppProps) {
         </div>
 
         {/* Share as public link — mints a toshare.net/q/* URL for the offer */}
-        <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-app bg-app-elevated px-4 py-2.5">
-          <div className="min-w-0">
-            <div className="text-[0.65rem] font-medium uppercase tracking-[0.15em] text-tool-accent">
-              Share as link
+        <div className="mb-4 space-y-2 rounded-xl border border-app bg-app-elevated px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[0.65rem] font-medium uppercase tracking-[0.15em] text-tool-accent">
+                Share as link
+              </div>
+              <div className="mt-0.5 text-[0.65rem] text-muted">
+                Publish at toshare.net/q/… — recipient sees an itemized quote and can Accept.
+              </div>
             </div>
-            <div className="mt-0.5 text-[0.65rem] text-muted">
-              Publish this offer at toshare.net/q/… — recipient sees an itemized quote.
-            </div>
-          </div>
-          <MintShareButton
+            <MintShareButton
             type="quote"
             sourceTool="sales-offer-generator"
             label="Share as link"
@@ -676,9 +681,43 @@ export default function SalesOfferGeneratorApp(props: NativeAppProps) {
                 notes: notesParts.join(" · ") || undefined,
                 termsHtml:
                   "<p>This offer is valid for 7 business days from the issue date. To proceed, please confirm your interest and we will initiate the booking process.</p>",
+                notifyEmail: form.notifyEmail || undefined,
+                webhookUrl: form.webhookUrl || undefined,
               };
             }}
           />
+          </div>
+
+          <div className="grid grid-cols-1 gap-2 border-t border-app pt-2 sm:grid-cols-2">
+            <label className="block">
+              <span className="text-[0.6rem] uppercase tracking-[0.14em] text-muted">
+                Notify on accept (email)
+              </span>
+              <input
+                type="email"
+                placeholder="agent@company.com"
+                value={form.notifyEmail ?? ""}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, notifyEmail: e.target.value || undefined }))
+                }
+                className="mt-1 w-full rounded-md border border-app bg-app px-2 py-1.5 text-sm text-app placeholder:text-faint focus:border-tool-accent focus:outline-none"
+              />
+            </label>
+            <label className="block">
+              <span className="text-[0.6rem] uppercase tracking-[0.14em] text-muted">
+                Webhook on accept
+              </span>
+              <input
+                type="url"
+                placeholder="https://hooks.zapier.com/…"
+                value={form.webhookUrl ?? ""}
+                onChange={(e) =>
+                  setForm((f) => ({ ...f, webhookUrl: e.target.value || undefined }))
+                }
+                className="mt-1 w-full rounded-md border border-app bg-app px-2 py-1.5 text-sm text-app placeholder:text-faint focus:border-tool-accent focus:outline-none"
+              />
+            </label>
+          </div>
         </div>
 
         {/* Template picker pill row */}
