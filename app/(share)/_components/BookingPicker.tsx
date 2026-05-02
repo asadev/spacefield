@@ -89,7 +89,7 @@ export default function BookingPicker({ linkId, payload, bookedSlots }: Props) {
   if (confirmed) {
     const slotLabel = formatSlotLabel(confirmed.slot, payload.timezone);
     return (
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-6 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-6">
         <div className="flex items-center gap-3">
           <div
             className="flex h-9 w-9 items-center justify-center rounded-full text-white"
@@ -100,15 +100,15 @@ export default function BookingPicker({ linkId, payload, bookedSlots }: Props) {
             </svg>
           </div>
           <div>
-            <div className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
+            <div className="text-sm font-semibold text-emerald-900">
               You're booked
             </div>
-            <div className="text-xs text-emerald-800 dark:text-emerald-200">
+            <div className="text-xs text-emerald-800">
               {slotLabel}
             </div>
           </div>
         </div>
-        <p className="mt-3 text-sm text-emerald-900 dark:text-emerald-100">
+        <p className="mt-3 text-sm text-emerald-900">
           A confirmation email is on its way to <strong>{email}</strong>.
         </p>
       </div>
@@ -123,7 +123,7 @@ export default function BookingPicker({ linkId, payload, bookedSlots }: Props) {
           Pick a day
         </div>
         {dates.length === 0 ? (
-          <div className="rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-500 dark:border-slate-800">
+          <div className="rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-500">
             No availability in the next {horizon} days.
           </div>
         ) : (
@@ -141,8 +141,8 @@ export default function BookingPicker({ linkId, payload, bookedSlots }: Props) {
                   }}
                   className={`flex min-w-[72px] flex-col items-center rounded-lg border px-3 py-2 text-sm transition ${
                     isSelected
-                      ? "border-slate-900 bg-slate-900 text-white dark:border-white dark:bg-white dark:text-slate-900"
-                      : "border-slate-200 bg-white hover:border-slate-400 dark:border-slate-700 dark:bg-slate-900"
+                      ? "border-slate-900 bg-slate-900 text-white"
+                      : "border-slate-200 bg-white hover:border-slate-400"
                   }`}
                   style={isSelected ? { backgroundColor: accent, borderColor: accent } : undefined}
                 >
@@ -174,7 +174,7 @@ export default function BookingPicker({ linkId, payload, bookedSlots }: Props) {
             </div>
           </div>
           {slotsForDate.length === 0 ? (
-            <div className="rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-500 dark:border-slate-800">
+            <div className="rounded-lg border border-slate-200 px-4 py-3 text-sm text-slate-500">
               No times left on this day.
             </div>
           ) : (
@@ -189,7 +189,7 @@ export default function BookingPicker({ linkId, payload, bookedSlots }: Props) {
                     className={`rounded-lg border px-2 py-2 text-sm transition ${
                       isSelected
                         ? "text-white"
-                        : "border-slate-200 bg-white hover:border-slate-400 dark:border-slate-700 dark:bg-slate-900"
+                        : "border-slate-200 bg-white hover:border-slate-400"
                     }`}
                     style={
                       isSelected
@@ -208,22 +208,22 @@ export default function BookingPicker({ linkId, payload, bookedSlots }: Props) {
 
       {/* Confirm form */}
       {selectedSlot && (
-        <form onSubmit={submit} className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-900/40">
+        <form onSubmit={submit} className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-5">
           <div className="text-sm font-semibold tracking-tight">Your details</div>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <label className="block space-y-1">
-              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+              <span className="text-xs font-medium text-slate-600">
                 Name <span className="text-red-500">*</span>
               </span>
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 required
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
               />
             </label>
             <label className="block space-y-1">
-              <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+              <span className="text-xs font-medium text-slate-600">
                 Email <span className="text-red-500">*</span>
               </span>
               <input
@@ -231,23 +231,23 @@ export default function BookingPicker({ linkId, payload, bookedSlots }: Props) {
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 required
-                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+                className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
               />
             </label>
           </div>
           <label className="block space-y-1">
-            <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+            <span className="text-xs font-medium text-slate-600">
               Anything you'd like to share?
             </span>
             <textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
               rows={3}
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
             />
           </label>
           {error ? (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-200">
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
               {error}
             </p>
           ) : null}

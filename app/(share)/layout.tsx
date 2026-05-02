@@ -4,6 +4,14 @@
  * This is what visitors of share.example.com see. They've never heard of
  * Spacefield and shouldn't be marketed to. The shell is minimal: just a
  * footer with "Powered by share.example.com" (paid tier can hide it).
+ *
+ * IMPORTANT: We force a self-contained LIGHT theme via inline styles
+ * instead of relying on Tailwind `dark:` variants. The Spacefield root
+ * sets `data-theme="dark"` on <html> by default for anonymous visitors,
+ * which made `dark:` variants fire AND inherit the spacefield body's
+ * color tokens — leading to dark-on-dark unreadable text. Public share
+ * pages should look clean and identical regardless of the visitor's
+ * theme preference. Light mode for everyone.
  * ───────────────────────────────────────────────────────────────────── */
 
 import type { Metadata } from "next";
@@ -16,7 +24,6 @@ export const metadata: Metadata = {
   description: "",
   metadataBase: new URL("https://share.example.com"),
   robots: { index: false, follow: false },
-  // Override every Spacefield-branded field the root layout sets.
   openGraph: {
     title: "Share",
     description: "",
@@ -31,11 +38,37 @@ export const metadata: Metadata = {
 
 export default function ShareLayout({ children }: { children: React.ReactNode }) {
   return (
-    <div className="min-h-dvh bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100">
-      <div className="mx-auto flex min-h-dvh max-w-3xl flex-col">
-        <main className="flex-1 px-4 py-10 sm:px-6 sm:py-16">{children}</main>
-        <footer className="px-4 py-6 text-center text-xs text-slate-400 dark:text-slate-600">
-          <a href="https://share.example.com" className="hover:text-slate-700 dark:hover:text-slate-400">
+    <div
+      style={{
+        minHeight: "100dvh",
+        backgroundColor: "#ffffff",
+        color: "#0f172a",
+      }}
+    >
+      <div
+        style={{
+          maxWidth: "768px",
+          margin: "0 auto",
+          minHeight: "100dvh",
+          display: "flex",
+          flexDirection: "column",
+        }}
+      >
+        <main style={{ flex: 1, padding: "40px 16px" }} className="sm:!p-16">
+          {children}
+        </main>
+        <footer
+          style={{
+            padding: "24px 16px",
+            textAlign: "center",
+            fontSize: "12px",
+            color: "#94a3b8",
+          }}
+        >
+          <a
+            href="https://share.example.com"
+            style={{ color: "inherit", textDecoration: "none" }}
+          >
             share.example.com
           </a>
         </footer>

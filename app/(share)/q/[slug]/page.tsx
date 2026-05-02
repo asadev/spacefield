@@ -70,9 +70,9 @@ export default async function QuoteViewer({ params, searchParams }: Props) {
         ) : null}
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-slate-200 dark:border-slate-800">
+      <div className="overflow-x-auto rounded-xl border border-slate-200">
         <table className="w-full text-sm">
-          <thead className="bg-slate-50 text-left dark:bg-slate-900">
+          <thead className="bg-slate-50 text-left">
             <tr>
               <th className="px-4 py-3 font-medium">Description</th>
               <th className="px-4 py-3 text-right font-medium">Qty</th>
@@ -82,7 +82,7 @@ export default async function QuoteViewer({ params, searchParams }: Props) {
           </thead>
           <tbody>
             {payload.lineItems.map((li, i) => (
-              <tr key={i} className="border-t border-slate-200 dark:border-slate-800">
+              <tr key={i} className="border-t border-slate-200">
                 <td className="px-4 py-3">{li.description}</td>
                 <td className="px-4 py-3 text-right tabular-nums">{li.quantity}</td>
                 <td className="px-4 py-3 text-right tabular-nums">
@@ -95,7 +95,7 @@ export default async function QuoteViewer({ params, searchParams }: Props) {
             ))}
           </tbody>
           <tfoot>
-            <tr className="border-t border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-900">
+            <tr className="border-t border-slate-300 bg-slate-50">
               <td colSpan={3} className="px-4 py-3 text-right text-sm font-semibold">
                 Total
               </td>
@@ -110,17 +110,17 @@ export default async function QuoteViewer({ params, searchParams }: Props) {
       {payload.notes ? (
         <div>
           <h3 className="text-sm font-semibold">Notes</h3>
-          <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-300">
+          <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">
             {payload.notes}
           </p>
         </div>
       ) : null}
 
       {payload.termsHtml ? (
-        <details className="rounded-lg border border-slate-200 px-4 py-3 dark:border-slate-800">
+        <details className="rounded-lg border border-slate-200 px-4 py-3">
           <summary className="cursor-pointer text-sm font-medium">Terms</summary>
           <div
-            className="prose prose-sm mt-2 max-w-none dark:prose-invert"
+            className="prose prose-sm mt-2 max-w-none"
             dangerouslySetInnerHTML={{ __html: payload.termsHtml }}
           />
         </details>

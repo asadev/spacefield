@@ -18,7 +18,7 @@ export default function ShareLanding() {
   return (
     <div className="flex min-h-[60vh] items-center justify-center">
       <div className="space-y-3 text-center">
-        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 text-base font-semibold text-white dark:bg-white dark:text-slate-900">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 text-base font-semibold text-white">
           ts
         </div>
         <h1 className="text-2xl font-semibold tracking-tight">Share</h1>
