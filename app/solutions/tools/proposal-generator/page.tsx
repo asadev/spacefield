@@ -545,6 +545,7 @@ function Inner() {
               label="Share link"
               variant="ghost"
               disabled={!state.proposalTitle.trim()}
+              resetKey={`${state.proposalTitle}|${state.clientName}|${state.items.length}`}
               payload={() => buildProposalSharePayload(state, total)}
             />
             <button
@@ -605,6 +606,7 @@ function Inner() {
                     sourceTool="proposal-generator"
                     label="Create share link"
                     disabled={!state.proposalTitle.trim()}
+                    resetKey={`${state.proposalTitle}|${state.clientName}|${state.items.length}`}
                     payload={() => buildProposalSharePayload(state, total)}
                   />
                 </div>

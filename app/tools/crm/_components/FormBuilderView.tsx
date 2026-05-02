@@ -568,6 +568,7 @@ export default function FormBuilderView({
                 workspaceId={current.kind === "team" ? current.id : undefined}
                 disabled={form.fields.length === 0}
                 label="Publish form link"
+                resetKey={`${form.id}|${form.name}|${form.fields.length}`}
                 payload={() => ({
                   title: form.name || "Untitled form",
                   fields: form.fields.map((f) => ({

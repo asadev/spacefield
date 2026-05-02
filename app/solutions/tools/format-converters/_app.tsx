@@ -12,6 +12,8 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import QRCode from "qrcode";
+import { useQrPrefs } from "@/lib/qr/preferences";
+import { renderStyledQrPng } from "@/lib/qr/render";
 import type { NativeAppProps } from "../../../tools/_data/tools-list";
 
 /* ───────────────────────── Shared mini primitives ───────────────────────── */
@@ -1582,11 +1584,19 @@ function escapeWifi(v: string) {
 function QrPane() {
   const [mode, setMode] = useState<QrMode>("url");
   const [text, setText] = useState("https://spacefield.co");
-  const [size, setSize] = useState("320");
-  const [margin, setMargin] = useState("2");
-  const [ecl, setEcl] = useState<"L" | "M" | "Q" | "H">("M");
-  const [dark, setDark] = useState("#0a0a0a");
-  const [light, setLight] = useState("#ffffff");
+  // QR style preferences are SHARED with the rest of the app
+  // (MintShareButton uses the same store). Edit once → applied everywhere.
+  const [qrPrefs, updateQrPrefs] = useQrPrefs();
+  const dark = qrPrefs.dark;
+  const light = qrPrefs.light;
+  const ecl = qrPrefs.ecl;
+  const margin = String(qrPrefs.margin);
+  const size = String(qrPrefs.width);
+  const setDark = (v: string) => updateQrPrefs({ dark: v });
+  const setLight = (v: string) => updateQrPrefs({ light: v });
+  const setEcl = (v: "L" | "M" | "Q" | "H") => updateQrPrefs({ ecl: v });
+  const setMargin = (v: string) => updateQrPrefs({ margin: parseInt(v) || 0 });
+  const setSize = (v: string) => updateQrPrefs({ width: parseInt(v) || 320 });
   const [svg, setSvg] = useState("");
   const [dataUrl, setDataUrl] = useState("");
 
@@ -1673,28 +1683,23 @@ function QrPane() {
   useEffect(() => {
     let cancelled = false;
     const input = (payload || "").trim() || " ";
+    const ecLevel = qrPrefs.logoUrl ? "H" : ecl;
     const stringOpts = {
-      errorCorrectionLevel: ecl,
-      margin: parseInt(margin) || 0,
-      width: parseInt(size) || 320,
+      errorCorrectionLevel: ecLevel,
+      margin: qrPrefs.margin,
+      width: qrPrefs.width,
       color: { dark, light },
       type: "svg" as const,
     };
-    const dataUrlOpts = {
-      errorCorrectionLevel: ecl,
-      margin: parseInt(margin) || 0,
-      width: parseInt(size) || 320,
-      color: { dark, light },
-    };
     const run = async () => {
       try {
-        const [s, baseDataUrl] = await Promise.all([
+        const [s, styled] = await Promise.all([
           QRCode.toString(input, stringOpts),
-          QRCode.toDataURL(input, dataUrlOpts),
+          renderStyledQrPng(input, qrPrefs),
         ]);
         if (cancelled) return;
         setSvg(s);
-        setDataUrl(baseDataUrl);
+        setDataUrl(styled);
       } catch {
         if (!cancelled) {
           setSvg("");
@@ -1706,7 +1711,7 @@ function QrPane() {
     return () => {
       cancelled = true;
     };
-  }, [payload, size, margin, ecl, dark, light]);
+  }, [payload, qrPrefs, ecl, dark, light]);
 
   const downloadSvg = () => {
     if (!svg) return;
@@ -2049,6 +2054,95 @@ function QrPane() {
               </div>
             </button>
           ))}
+        </div>
+        {qrPrefs.logoUrl ? (
+          <p className="mt-2 text-[0.65rem] text-muted">
+            Auto-bumped to <strong>H</strong> while a logo is set (recommended for scannability).
+          </p>
+        ) : null}
+      </Section>
+
+      <Section label="logo">
+        <div className="space-y-2">
+          {qrPrefs.logoUrl ? (
+            <div className="flex items-center gap-3">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={qrPrefs.logoUrl}
+                alt=""
+                className="h-12 w-12 rounded border border-app bg-white object-contain"
+              />
+              <div className="flex-1 text-xs text-secondary">
+                Embedded in the center of every QR you generate (here and in Share buttons across the app).
+              </div>
+              <button
+                type="button"
+                onClick={() => updateQrPrefs({ logoUrl: null })}
+                className="h-8 rounded-md border border-app bg-app-elevated px-2 text-xs text-app hover:border-tool-accent"
+              >
+                Remove
+              </button>
+            </div>
+          ) : (
+            <label className="flex cursor-pointer items-center justify-between gap-2 rounded-md border border-dashed border-app bg-app-elevated px-3 py-2 text-xs text-secondary hover:border-tool-accent">
+              <span>Upload a logo (PNG / SVG / JPG, ~256px)</span>
+              <span className="rounded-md border border-app bg-app px-2 py-0.5 text-[0.6rem] text-app">
+                Choose
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  if (!file) return;
+                  if (file.size > 512 * 1024) {
+                    alert("Logo must be under 512KB.");
+                    return;
+                  }
+                  const r = new FileReader();
+                  r.onload = () => {
+                    if (typeof r.result === "string") {
+                      updateQrPrefs({ logoUrl: r.result });
+                    }
+                  };
+                  r.readAsDataURL(file);
+                }}
+              />
+            </label>
+          )}
+          {qrPrefs.logoUrl ? (
+            <div className="grid grid-cols-2 gap-2">
+              <label className="block">
+                <span className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-muted">
+                  Logo size
+                </span>
+                <input
+                  type="range"
+                  min={0.1}
+                  max={0.3}
+                  step={0.01}
+                  value={qrPrefs.logoScale}
+                  onChange={(e) => updateQrPrefs({ logoScale: parseFloat(e.target.value) })}
+                  className="mt-1 w-full"
+                />
+              </label>
+              <label className="block">
+                <span className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-muted">
+                  Padding
+                </span>
+                <input
+                  type="range"
+                  min={0}
+                  max={20}
+                  step={1}
+                  value={qrPrefs.logoPadding}
+                  onChange={(e) => updateQrPrefs({ logoPadding: parseInt(e.target.value) || 0 })}
+                  className="mt-1 w-full"
+                />
+              </label>
+            </div>
+          ) : null}
         </div>
       </Section>
     </div>
