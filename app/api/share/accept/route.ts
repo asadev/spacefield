@@ -10,6 +10,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getLinkById } from "@/lib/share/server";
 import { hashClientFingerprint } from "@/lib/share/fingerprint";
 import { sendEmail } from "@/lib/email";
+import { deliverSignedWebhook } from "@/lib/share/webhook-sign";
 import type { QuotePayload, ShareLinkRow } from "@/lib/share/types";
 import { buildShareUrl } from "@/lib/share/types";
 
@@ -91,29 +92,20 @@ async function notifyAccept(args: { link: ShareLinkRow; body: Record<string, unk
     typeof args.body.signerCompany === "string" ? args.body.signerCompany.trim() : "";
   const total = payload.lineItems.reduce((s, li) => s + li.quantity * li.unitPrice, 0);
 
-  // Webhook
+  // Webhook (signed)
   if (payload.webhookUrl) {
-    try {
-      const ac = new AbortController();
-      const timer = setTimeout(() => ac.abort(), 5000);
-      await fetch(payload.webhookUrl, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          event: "quote.accepted",
-          timestamp: new Date().toISOString(),
-          linkId: args.link.id,
-          slug: args.link.slug,
-          publicUrl: url,
-          quote: { title: payload.title, currency: payload.currency, total },
-          signer: { name: signerName, email: signerEmail, company: signerCompany },
-        }),
-        signal: ac.signal,
-      });
-      clearTimeout(timer);
-    } catch (err) {
-      console.warn("[share/accept] webhook failed:", err instanceof Error ? err.message : err);
-    }
+    await deliverSignedWebhook({
+      workspaceId: args.link.workspace_id,
+      webhookUrl: payload.webhookUrl,
+      event: "quote.accepted",
+      body: {
+        linkId: args.link.id,
+        slug: args.link.slug,
+        publicUrl: url,
+        quote: { title: payload.title, currency: payload.currency, total },
+        signer: { name: signerName, email: signerEmail, company: signerCompany },
+      },
+    });
   }
 
   // Email

@@ -56,6 +56,11 @@ export default function SharedLinksSection({ workspaceId, workspaceLabel }: Prop
   const [brandColor, setBrandColor] = useState<string | null>(null);
   const [brandBusy, setBrandBusy] = useState(false);
 
+  const [webhookSecret, setWebhookSecret] = useState<string | null>(null);
+  const [secretRevealed, setSecretRevealed] = useState(false);
+  const [secretBusy, setSecretBusy] = useState(false);
+  const [secretCopied, setSecretCopied] = useState(false);
+
   useEffect(() => {
     fetch(`/api/share/subdomain?workspaceId=${encodeURIComponent(workspaceId)}`, {
       cache: "no-store",
@@ -65,6 +70,7 @@ export default function SharedLinksSection({ workspaceId, workspaceLabel }: Prop
         setSubdomain(typeof j.subdomain === "string" ? j.subdomain : null);
         setSubdomainDraft(typeof j.subdomain === "string" ? j.subdomain : "");
         setBrandColor(typeof j.brandColor === "string" ? j.brandColor : null);
+        setWebhookSecret(typeof j.webhookSecret === "string" ? j.webhookSecret : null);
       })
       .catch(() => {});
   }, [workspaceId]);
@@ -84,6 +90,38 @@ export default function SharedLinksSection({ workspaceId, workspaceLabel }: Prop
     } finally {
       setBrandBusy(false);
     }
+  }
+
+  async function rotateWebhookSecret() {
+    if (!confirm(
+      "Rotate the webhook signing secret? Existing webhook receivers using the old secret will start rejecting requests until you update them with the new secret."
+    )) {
+      return;
+    }
+    setSecretBusy(true);
+    try {
+      const res = await fetch("/api/share/subdomain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId, rotateWebhookSecret: true }),
+      });
+      const j = await res.json();
+      if (res.ok && typeof j.webhookSecret === "string") {
+        setWebhookSecret(j.webhookSecret);
+        setSecretRevealed(true);
+      }
+    } finally {
+      setSecretBusy(false);
+    }
+  }
+
+  async function copySecret() {
+    if (!webhookSecret) return;
+    try {
+      await navigator.clipboard.writeText(webhookSecret);
+      setSecretCopied(true);
+      setTimeout(() => setSecretCopied(false), 1500);
+    } catch {}
   }
 
   async function saveSubdomain(value: string | null) {
@@ -347,6 +385,74 @@ export default function SharedLinksSection({ workspaceId, workspaceLabel }: Prop
           </div>
         ) : null}
       </div>
+
+      {/* Webhook signing secret panel — only shown to admin/owner (the
+          API only returns the secret for those roles). */}
+      {webhookSecret ? (
+        <div className="rounded-lg border border-app bg-app-elevated p-4">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="text-sm font-semibold">Webhook signing secret</div>
+                <div className="mt-0.5 text-xs text-faint">
+                  Every webhook fired from this workspace is signed with HMAC-SHA256.
+                  Receivers should verify by computing the same hash on the request body
+                  and comparing the <code>X-Share-Signature</code> header.
+                </div>
+              </div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <input
+                type={secretRevealed ? "text" : "password"}
+                readOnly
+                value={webhookSecret}
+                onFocus={(e) => e.currentTarget.select()}
+                className="min-w-0 flex-1 rounded-md border border-app bg-app px-2 py-1.5 font-mono text-xs text-app"
+              />
+              <button
+                type="button"
+                onClick={() => setSecretRevealed((v) => !v)}
+                className="h-8 rounded-md border border-app bg-app px-2 text-xs text-app hover:border-tool-accent"
+              >
+                {secretRevealed ? "Hide" : "Reveal"}
+              </button>
+              <button
+                type="button"
+                onClick={copySecret}
+                className="h-8 rounded-md border border-app bg-app px-2 text-xs text-app hover:border-tool-accent"
+              >
+                {secretCopied ? "Copied" : "Copy"}
+              </button>
+              <button
+                type="button"
+                onClick={rotateWebhookSecret}
+                disabled={secretBusy}
+                className="h-8 rounded-md border border-amber-300 bg-amber-50 px-2 text-xs text-amber-700 hover:bg-amber-100 disabled:opacity-50 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-300"
+              >
+                {secretBusy ? "Rotating…" : "Rotate"}
+              </button>
+            </div>
+            <details className="text-xs text-faint">
+              <summary className="cursor-pointer">Verification snippet (Node.js)</summary>
+              <pre className="mt-2 overflow-x-auto rounded bg-app p-2 text-[0.7rem]">
+{`import crypto from "crypto";
+
+function verify(req, secret) {
+  const sig = req.headers["x-share-signature"]?.replace(/^sha256=/, "");
+  const expected = crypto
+    .createHmac("sha256", secret)
+    .update(req.rawBody)
+    .digest("hex");
+  return sig && crypto.timingSafeEqual(
+    Buffer.from(sig, "hex"),
+    Buffer.from(expected, "hex"),
+  );
+}`}
+              </pre>
+            </details>
+          </div>
+        </div>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         <select

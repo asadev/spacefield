@@ -8,10 +8,9 @@
 
 import "server-only";
 import { sendEmail } from "@/lib/email";
+import { deliverSignedWebhook } from "./webhook-sign";
 import type { FormPayload, ShareLinkRow } from "./types";
 import { buildShareUrl } from "./types";
-
-const WEBHOOK_TIMEOUT_MS = 5_000;
 
 export interface SubmitNotifyInput {
   link: ShareLinkRow;
@@ -29,7 +28,20 @@ export async function notifyOnSubmit(input: SubmitNotifyInput): Promise<void> {
   const summary = formatSummary(payload, values);
 
   await Promise.allSettled([
-    payload.webhookUrl ? fireWebhook(payload.webhookUrl, link, values, url) : Promise.resolve(),
+    payload.webhookUrl
+      ? deliverSignedWebhook({
+          workspaceId: link.workspace_id,
+          webhookUrl: payload.webhookUrl,
+          event: "form.submitted",
+          body: {
+            linkId: link.id,
+            slug: link.slug,
+            sourceTool: link.source_tool,
+            publicUrl: url,
+            values,
+          },
+        })
+      : Promise.resolve(),
     payload.notifyEmail ? fireEmail(payload.notifyEmail, payload, summary, url) : Promise.resolve(),
   ]);
 }
@@ -43,38 +55,6 @@ function formatSummary(payload: FormPayload, values: Record<string, unknown>): s
     lines.push(`${f.label}: ${typeof v === "boolean" ? (v ? "✓" : "✗") : String(v)}`);
   }
   return lines.join("\n");
-}
-
-async function fireWebhook(
-  webhookUrl: string,
-  link: ShareLinkRow,
-  values: Record<string, unknown>,
-  publicUrl: string
-): Promise<void> {
-  try {
-    const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), WEBHOOK_TIMEOUT_MS);
-    await fetch(webhookUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "User-Agent": "share-webhook/1.0",
-      },
-      body: JSON.stringify({
-        event: "form.submitted",
-        timestamp: new Date().toISOString(),
-        linkId: link.id,
-        slug: link.slug,
-        sourceTool: link.source_tool,
-        publicUrl,
-        values,
-      }),
-      signal: ac.signal,
-    });
-    clearTimeout(timer);
-  } catch (err) {
-    console.warn("[share] webhook failed:", err instanceof Error ? err.message : err);
-  }
 }
 
 async function fireEmail(
