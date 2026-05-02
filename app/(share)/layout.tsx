@@ -10,9 +10,23 @@ import type { Metadata } from "next";
 import "../globals.css";
 
 export const metadata: Metadata = {
-  title: "toShare",
-  description: "A page someone shared with you.",
+  // `absolute` overrides the root layout's "%s | Space Field" template
+  // so titles on toshare.net don't leak the spacefield brand.
+  title: { absolute: "toShare" },
+  description: "",
+  metadataBase: new URL("https://toshare.net"),
   robots: { index: false, follow: false },
+  // Override every Spacefield-branded field the root layout sets.
+  openGraph: {
+    title: "toShare",
+    description: "",
+    siteName: "toShare",
+    url: "https://toshare.net",
+    images: [],
+    type: "website",
+  },
+  twitter: { title: "toShare", description: "", images: [] },
+  alternates: { canonical: "https://toshare.net" },
 };
 
 export default function ShareLayout({ children }: { children: React.ReactNode }) {
