@@ -1843,74 +1843,90 @@ function MainPane({
     );
   }
 
-  // Trash: soft-deleted files with restore + delete-forever actions.
-  if (location.kind === "trash") {
+  // Keep-alive: all file panes mount on Launchpad open so the user sees
+  // instant tab switches across Home / Trash / Downloads / Documents /
+  // Favorites / Shared. Each pane fires its own fetch on mount in
+  // parallel; switching is just toggling visibility from then on.
+  const FilePane = ({
+    active,
+    children,
+  }: { active: boolean; children: React.ReactNode }) => (
+    <div
+      className="absolute inset-0 overflow-auto"
+      style={{ display: active ? undefined : "none" }}
+      aria-hidden={!active}
+    >
+      {children}
+    </div>
+  );
+
+  const showingFilePane =
+    location.kind === "trash" ||
+    location.kind === "home" ||
+    location.kind === "downloads" ||
+    location.kind === "documents" ||
+    location.kind === "favorites" ||
+    location.kind === "shared";
+
+  if (showingFilePane && workspaceId) {
     return (
-      <LaunchpadTrashView
-        workspaceId={workspaceId}
-        refreshTick={refreshTick}
-        onContextMenu={onFileContext}
-      />
-    );
-  }
-  // Home: workspace's full drive — folder tree + files.
-  if (location.kind === "home") {
-    return (
-      <LaunchpadHomeView
-        workspaceId={workspaceId}
-        refreshTick={refreshTick}
-        onOpenFile={onOpenFile}
-        onContextMenu={onFileContext}
-      />
-    );
-  }
-  // Downloads — every workspace file, newest first.
-  if (location.kind === "downloads") {
-    return (
-      <LaunchpadFilesPane
-        workspaceId={workspaceId}
-        limit={100}
-        refreshTick={refreshTick}
-        emptyTitle="No files yet"
-        emptyHint="Files you save to this workspace will show up here."
-        onOpenFile={onOpenFile}
-        onContextMenu={onFileContext}
-      />
-    );
-  }
-  if (location.kind === "documents") {
-    return (
-      <LaunchpadFilesPane
-        workspaceId={workspaceId}
-        limit={100}
-        kinds="document,sheet"
-        filterKinds={["document", "sheet"] as LaunchpadFileKind[]}
-        refreshTick={refreshTick}
-        emptyTitle="No documents yet"
-        emptyHint="Text documents and spreadsheets will appear here."
-        onOpenFile={onOpenFile}
-        onContextMenu={onFileContext}
-      />
-    );
-  }
-  if (location.kind === "favorites") {
-    return (
-      <LaunchpadFavoritesPane
-        workspaceId={workspaceId}
-        refreshTick={refreshTick}
-        onOpenFile={onOpenFile}
-        onContextMenu={onFileContext}
-      />
-    );
-  }
-  if (location.kind === "shared") {
-    return (
-      <LaunchpadSharedPane
-        workspaceId={workspaceId}
-        refreshTick={refreshTick}
-        onOpenFile={onOpenFile}
-        onContextMenu={onSharedContext}
-      />
+      <div className="relative h-full">
+        <FilePane active={location.kind === "trash"}>
+          <LaunchpadTrashView
+            workspaceId={workspaceId}
+            refreshTick={refreshTick}
+            onContextMenu={onFileContext}
+          />
+        </FilePane>
+        <FilePane active={location.kind === "home"}>
+          <LaunchpadHomeView
+            workspaceId={workspaceId}
+            refreshTick={refreshTick}
+            onOpenFile={onOpenFile}
+            onContextMenu={onFileContext}
+          />
+        </FilePane>
+        <FilePane active={location.kind === "downloads"}>
+          <LaunchpadFilesPane
+            workspaceId={workspaceId}
+            limit={100}
+            refreshTick={refreshTick}
+            emptyTitle="No files yet"
+            emptyHint="Files you save to this workspace will show up here."
+            onOpenFile={onOpenFile}
+            onContextMenu={onFileContext}
+          />
+        </FilePane>
+        <FilePane active={location.kind === "documents"}>
+          <LaunchpadFilesPane
+            workspaceId={workspaceId}
+            limit={100}
+            kinds="document,sheet"
+            filterKinds={["document", "sheet"] as LaunchpadFileKind[]}
+            refreshTick={refreshTick}
+            emptyTitle="No documents yet"
+            emptyHint="Text documents and spreadsheets will appear here."
+            onOpenFile={onOpenFile}
+            onContextMenu={onFileContext}
+          />
+        </FilePane>
+        <FilePane active={location.kind === "favorites"}>
+          <LaunchpadFavoritesPane
+            workspaceId={workspaceId}
+            refreshTick={refreshTick}
+            onOpenFile={onOpenFile}
+            onContextMenu={onFileContext}
+          />
+        </FilePane>
+        <FilePane active={location.kind === "shared"}>
+          <LaunchpadSharedPane
+            workspaceId={workspaceId}
+            refreshTick={refreshTick}
+            onOpenFile={onOpenFile}
+            onContextMenu={onSharedContext}
+          />
+        </FilePane>
+      </div>
     );
   }
 
