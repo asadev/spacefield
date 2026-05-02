@@ -18,6 +18,7 @@ import {
   useWorkspace,
 } from "@/lib/workspaces/client";
 import { saveWorkspaceData } from "@/lib/workspaces/server";
+import MintShareButton from "@/app/_share/_components/MintShareButton";
 import {
   FORM_PRESETS,
   type PresetField,
@@ -540,7 +541,42 @@ export default function FormBuilderView({
         )}
 
         {mode === "embed" && (
-          <section className="rounded-md border border-app bg-app-elevated p-3">
+          <div className="space-y-3">
+            <section className="rounded-md border border-app bg-app-elevated p-3">
+              <div className="mb-2 flex items-center justify-between gap-2">
+                <div>
+                  <div className="font-mono text-[0.55rem] uppercase tracking-[0.18em] text-tool-accent">
+                    Publish as public link
+                  </div>
+                  <div className="mt-0.5 text-xs text-secondary">
+                    Mint a toshare.net URL to send to leads — no embed needed.
+                  </div>
+                </div>
+                <span className="rounded-md border border-app bg-app px-2 py-0.5 font-mono text-[0.55rem] uppercase tracking-[0.16em] text-faint">
+                  {form.fields.length === 0 ? "add fields first" : "ready"}
+                </span>
+              </div>
+              <MintShareButton
+                type="form"
+                sourceTool="crm-form-builder"
+                workspaceId={current.kind === "team" ? current.id : undefined}
+                disabled={form.fields.length === 0}
+                label="Publish form link"
+                payload={() => ({
+                  title: form.name || "Untitled form",
+                  fields: form.fields.map((f) => ({
+                    id: f.id,
+                    label: f.label,
+                    type: f.type === "phone" ? "phone" : f.type,
+                    required: f.required,
+                    placeholder: f.placeholder,
+                    options: f.options,
+                  })),
+                  submitLabel: form.submitLabel || "Submit",
+                })}
+              />
+            </section>
+            <section className="rounded-md border border-app bg-app-elevated p-3">
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <div className="inline-flex overflow-hidden rounded-md border border-app bg-app">
                 <button
@@ -592,7 +628,8 @@ export default function FormBuilderView({
               Heuristic: each required field trims est. completion ~3pp;
               multi-step recovers ~2pp.
             </div>
-          </section>
+            </section>
+          </div>
         )}
 
         {mode === "build" && (
