@@ -6,6 +6,51 @@ const LEGACY_TOOL_SLUGS: Record<string, string> = {
   "files-manager": "launchpad",
 };
 
+const SHARE_DOMAIN = "share.example.com";
+
+/* Host-router for the share.example.com link surface.
+ *
+ * share.example.com is hosted on the SAME Vercel project as spacefield.io for
+ * MVP simplicity. We split traffic by Host header in middleware:
+ *
+ *   - host = share.example.com           → rewrite to /_share/<type>/<slug>
+ *   - host = <ws>.share.example.com      → rewrite to /_share/<ws>/<type>/<slug>
+ *   - host = spacefield.io / .co   → existing app (no rewrite)
+ *
+ * Edge rewrite preserves the original URL in the browser bar; the page
+ * route lives at app/_share/... internally.
+ */
+function shareRewrite(request: NextRequest): NextResponse | null {
+  const host = (request.headers.get("host") ?? "").toLowerCase().split(":")[0];
+  if (host !== SHARE_DOMAIN && !host.endsWith("." + SHARE_DOMAIN)) return null;
+
+  const url = request.nextUrl.clone();
+  const subdomain = host === SHARE_DOMAIN ? null : host.slice(0, -1 - SHARE_DOMAIN.length);
+  const path = url.pathname;
+
+  // root → simple landing page
+  if (path === "/" || path === "") {
+    url.pathname = "/_share/landing";
+    if (subdomain) url.searchParams.set("ws", subdomain);
+    return NextResponse.rewrite(url);
+  }
+
+  // submit endpoint (form POSTs) — pass through to api route
+  if (path.startsWith("/api/")) return null;
+
+  // typed-slug routes: /<type>/<slug>
+  const m = path.match(/^\/([a-z])\/([a-z0-9-]+)\/?$/i);
+  if (m) {
+    url.pathname = `/_share/${m[1].toLowerCase()}/${m[2].toLowerCase()}`;
+    if (subdomain) url.searchParams.set("ws", subdomain);
+    return NextResponse.rewrite(url);
+  }
+
+  // anything else on share.example.com → 404 page
+  url.pathname = "/_share/not-found";
+  return NextResponse.rewrite(url);
+}
+
 function isShellFrameRequest(request: NextRequest): boolean {
   if (request.nextUrl.searchParams.get("frame") !== "1") return false;
   if (request.headers.get("sec-fetch-dest") !== "iframe") return false;
@@ -73,6 +118,10 @@ function shellRedirectForStandaloneTool(request: NextRequest): NextResponse | nu
  * sign-in) and returns 401 even though the browser thinks it's signed in.
  */
 export async function middleware(request: NextRequest) {
+  // share.example.com host routing — runs FIRST so /tools redirects don't fire
+  const shareResp = shareRewrite(request);
+  if (shareResp) return shareResp;
+
   const toolRedirect = shellRedirectForStandaloneTool(request);
   if (toolRedirect) return toolRedirect;
 
