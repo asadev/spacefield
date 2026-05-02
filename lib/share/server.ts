@@ -45,6 +45,21 @@ export async function mintLink(input: MintLinkInput): Promise<MintLinkResult> {
     return { ok: false, error: "not signed in" };
   }
 
+  // If a workspace is set and the caller didn't override the subdomain,
+  // pick up the workspace's claimed subdomain so links land at the
+  // workspace's custom URL by default.
+  let resolvedSubdomain = input.customSubdomain ?? null;
+  if (input.workspaceId && !resolvedSubdomain) {
+    const { data: ws } = await supabase
+      .from("workspaces")
+      .select("share_subdomain")
+      .eq("id", input.workspaceId)
+      .maybeSingle();
+    if (ws?.share_subdomain) {
+      resolvedSubdomain = ws.share_subdomain;
+    }
+  }
+
   const { data, error } = await supabase.rpc("share_mint", {
     p_workspace_id: input.workspaceId ?? null,
     p_owner_user_id: userData.user.id,
@@ -52,7 +67,7 @@ export async function mintLink(input: MintLinkInput): Promise<MintLinkResult> {
     p_payload: input.payload,
     p_source_tool: input.sourceTool ?? null,
     p_custom_slug: input.customSlug ?? null,
-    p_custom_subdomain: input.customSubdomain ?? null,
+    p_custom_subdomain: resolvedSubdomain,
     p_expires_at: input.expiresAt?.toISOString() ?? null,
   });
 
