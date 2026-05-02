@@ -78,6 +78,10 @@ export interface QuotePayload {
   acceptCtaLabel?: string;
   brandColor?: string;
   brandLogo?: string;
+  /** Email address notified when someone accepts the quote. Optional. */
+  notifyEmail?: string;
+  /** Webhook fired on accept. Optional. */
+  webhookUrl?: string;
 }
 
 export interface BookingPayload {
