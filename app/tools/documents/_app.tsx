@@ -674,6 +674,15 @@ export default function DocumentsApp({
     }
   }, []);
 
+  // Eagerly prefetch the _pro_panels chunk on app open. The dynamic()
+  // imports above defer-load it on first feature use (slash menu,
+  // find/replace, outline, comments, shortcuts) which adds a perceptible
+  // delay the first time. Prefetching here primes the cache so every
+  // panel feels instant when invoked.
+  useEffect(() => {
+    void import("./_pro_panels").catch(() => {});
+  }, []);
+
   // Lazy materializer.
   const [ensured, setEnsured] = useState(false);
   const [ensureError, setEnsureError] = useState<string | null>(null);
