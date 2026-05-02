@@ -101,20 +101,6 @@ export const SOLUTION_CATEGORIES: SolutionCategory[] = [
 export const SOLUTION_TOOLS: SolutionTool[] = [
   // Productivity
   {
-    slug: "meeting-cost-calculator",
-    title: "Meeting Cost Calculator",
-    description:
-      "Add attendees, set hourly rates, pick a duration. See exactly what a meeting costs before you book it.",
-    category: "productivity",
-  },
-  {
-    slug: "time-zone-planner",
-    title: "Time-zone Meeting Planner",
-    description:
-      "Compare business hours across up to five time zones and pick the least painful overlap.",
-    category: "productivity",
-  },
-  {
     slug: "project-estimator",
     title: "Project Estimator",
     description:
@@ -123,20 +109,6 @@ export const SOLUTION_TOOLS: SolutionTool[] = [
   },
 
   // Finance
-  {
-    slug: "loan-calculator",
-    title: "Loan / EMI Calculator",
-    description:
-      "Calculate monthly payment, total interest, and full amortization schedule for any fixed-rate loan.",
-    category: "finance",
-  },
-  {
-    slug: "compound-interest",
-    title: "Compound Interest Calculator",
-    description:
-      "Model investment growth with monthly contributions and compounding. See the curve, not just the number.",
-    category: "finance",
-  },
   {
     slug: "break-even",
     title: "Break-even Analysis",
@@ -195,24 +167,10 @@ export const SOLUTION_TOOLS: SolutionTool[] = [
 
   // Data / Developer
   {
-    slug: "qr-code-generator",
-    title: "QR Code Generator",
-    description:
-      "Generate a QR code from any URL or text. Download as SVG. Runs entirely in your browser.",
-    category: "data",
-  },
-  {
     slug: "json-formatter",
     title: "JSON Formatter & Validator",
     description:
       "Pretty-print, minify, and validate JSON. Identifies the exact line and column of any syntax error.",
-    category: "data",
-  },
-  {
-    slug: "password-strength",
-    title: "Password Strength & Entropy",
-    description:
-      "Measure entropy in bits, estimate brute-force time, and see what's weakening your password.",
     category: "data",
   },
 
@@ -243,13 +201,6 @@ export const SOLUTION_TOOLS: SolutionTool[] = [
     title: "Ad Budget Allocator",
     description:
       "Distribute a paid budget across Google, Meta, LinkedIn, TikTok, and YouTube by marginal conversions. Proposed splits with a bar chart.",
-    category: "marketing",
-  },
-  {
-    slug: "cohort-retention",
-    title: "Cohort Retention Analyzer",
-    description:
-      "Paste signup + last-active CSV and render a monthly cohort retention heatmap up to 12 months out.",
     category: "marketing",
   },
   {
@@ -318,13 +269,6 @@ export const SOLUTION_TOOLS: SolutionTool[] = [
     category: "productivity",
   },
   {
-    slug: "world-clock",
-    title: "World Clock",
-    description:
-      "Track up to 12 cities with live times and business-hours indicators. Know who's working, who's asleep, who's on the edge.",
-    category: "productivity",
-  },
-  {
     slug: "scrum-velocity",
     title: "Scrum Velocity Tracker",
     description:
@@ -382,20 +326,6 @@ export const SOLUTION_TOOLS: SolutionTool[] = [
     title: "Regex Tester",
     description:
       "Pattern + flags with live match highlighting, capture groups table, and replacement preview. Recent expressions saved in your browser.",
-    category: "data",
-  },
-  {
-    slug: "jwt-decoder",
-    title: "JWT Decoder",
-    description:
-      "Decode JWT header, payload, and signature. Detect expired tokens and verify HS256 signatures locally via SubtleCrypto.",
-    category: "data",
-  },
-  {
-    slug: "url-encoder-parser",
-    title: "URL Encoder & Parser",
-    description:
-      "Split a URL into protocol, host, path, and editable query params. Tabs for encodeURIComponent, decodeURIComponent, and base64.",
     category: "data",
   },
   {
@@ -566,14 +496,6 @@ export const SOLUTION_TOOLS: SolutionTool[] = [
     category: "support",
   },
   {
-    slug: "oncall-schedule-builder",
-    title: "On-call Schedule Builder",
-    description:
-      "Generate a rotation from a team list. Daily or weekly shifts, custom handoff time, ICS calendar export. Team mode shares the schedule across the workspace.",
-    category: "support",
-    teamEnabled: true,
-  },
-  {
     slug: "ticket-backlog-tracker",
     title: "Ticket Backlog Tracker",
     description:
@@ -641,27 +563,6 @@ export const SOLUTION_TOOLS: SolutionTool[] = [
 
   // Finance (advanced)
   {
-    slug: "rule-of-40",
-    title: "Rule of 40 Calculator",
-    description:
-      "SaaS Rule of 40 score with FCF or EBITDA margin toggle. Verdict tiers plus a public-SaaS benchmark table for context.",
-    category: "finance",
-  },
-  {
-    slug: "saas-quick-ratio",
-    title: "SaaS Quick Ratio",
-    description:
-      "(New + expansion) / (churn + contraction). Get Quick Ratio, NRR, GRR, net new MRR, and ending MRR from one month of flows.",
-    category: "finance",
-  },
-  {
-    slug: "cohort-arr-projection",
-    title: "Cohort ARR Projection",
-    description:
-      "Project ARR over 24 months from monthly new-customer cohorts and a logo retention curve. Steady-state ARR and effective churn included.",
-    category: "finance",
-  },
-  {
     slug: "runway-scenarios",
     title: "Runway Scenarios",
     description:
@@ -696,14 +597,6 @@ export const SOLUTION_TOOLS: SolutionTool[] = [
     title: "Pricing Calculator",
     description:
       "Design 3–5 pricing tiers with feature checkboxes, monthly + annual rates, and a live comparison matrix. Export as HTML embed or JSON. Team-shared.",
-    category: "growth",
-    teamEnabled: true,
-  },
-  {
-    slug: "pirate-metrics-tracker",
-    title: "Pirate Metrics Tracker (AARRR)",
-    description:
-      "Monthly Acquisition → Activation → Retention → Referral → Revenue tracker with stage conversions and trend charts. Team-shared.",
     category: "growth",
     teamEnabled: true,
   },
@@ -743,34 +636,6 @@ export const SOLUTION_TOOLS: SolutionTool[] = [
     title: "Cron Expression Parser",
     description:
       "Parse 5- or 6-field cron, translate to English, and see the next 5 runs in your timezone. Common-pattern presets built in.",
-    category: "data",
-  },
-  {
-    slug: "base64-encoder",
-    title: "Base64 Encoder / Decoder",
-    description:
-      "Encode or decode text and files to Base64 or URL-safe Base64. Auto-detects encoded input. Runs entirely in your browser.",
-    category: "data",
-  },
-  {
-    slug: "hash-generator",
-    title: "Hash Generator",
-    description:
-      "Compute MD5, SHA-1, SHA-256, SHA-512 of text or files. MD5 via pure-JS, SHA family via SubtleCrypto. No upload — local only.",
-    category: "data",
-  },
-  {
-    slug: "http-status-reference",
-    title: "HTTP Status Reference",
-    description:
-      "Searchable reference for every HTTP status code with plain-English descriptions, real-world scenarios, and RFC pointers.",
-    category: "data",
-  },
-  {
-    slug: "lorem-ipsum-generator",
-    title: "Lorem Ipsum Generator",
-    description:
-      "Generate placeholder text — classic, hipster, corporate, or pirate. Configure paragraphs, sentences, or raw word count.",
     category: "data",
   },
 
@@ -813,22 +678,6 @@ export const SOLUTION_TOOLS: SolutionTool[] = [
 
   // CRM & Sales Ops
   {
-    slug: "contact-manager",
-    title: "Contact Manager",
-    description:
-      "Lightweight CRM contact book with tags, statuses, owners, sources, and notes. Search, filter, merge duplicates, CSV import/export. Team-shared.",
-    category: "crm",
-    teamEnabled: true,
-  },
-  {
-    slug: "activity-timeline",
-    title: "Activity Timeline",
-    description:
-      "Log emails, calls, meetings, notes, and tasks against contacts. Chronological timeline with type and owner filters. Team-shared.",
-    category: "crm",
-    teamEnabled: true,
-  },
-  {
     slug: "deal-pipeline-board",
     title: "Deal Pipeline Board",
     description:
@@ -837,40 +686,10 @@ export const SOLUTION_TOOLS: SolutionTool[] = [
     teamEnabled: true,
   },
   {
-    slug: "email-template-library",
-    title: "Email Template Library",
-    description:
-      "Named email templates with merge variables. Categories for cold outreach, follow-up, meeting, proposal, closing. Preview and copy. Team-shared.",
-    category: "crm",
-    teamEnabled: true,
-  },
-  {
-    slug: "lead-capture-form-builder",
-    title: "Lead Capture Form Builder",
-    description:
-      "Drag-add field designer for lead forms. Text, email, phone, select, checkbox, textarea. Export as HTML snippet or JSON schema. No backend required.",
-    category: "crm",
-  },
-  {
-    slug: "follow-up-reminder",
-    title: "Follow-up Reminder",
-    description:
-      "Reminder list tied to contacts. Overdue and upcoming views, snooze by days or weeks, owner filter. Team-shared.",
-    category: "crm",
-    teamEnabled: true,
-  },
-  {
     slug: "sales-call-script-builder",
     title: "Sales Call Script Builder",
     description:
       "Structured scripts for discovery, demo, objection handling, and closing calls. Opener, agenda, qualifying questions, value props, next steps. Export markdown.",
-    category: "crm",
-  },
-  {
-    slug: "territory-mapper",
-    title: "Territory Mapper",
-    description:
-      "Assign regions and ZIP codes to reps. Flags overlapping territories and uncovered zones, exports assignments as CSV.",
     category: "crm",
   },
   {

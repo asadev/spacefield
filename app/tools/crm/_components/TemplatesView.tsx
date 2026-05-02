@@ -24,7 +24,7 @@ import {
   SEEDED_CATEGORIES,
   SEEDED_VARIABLES,
   type SeededCategory,
-} from "../../../solutions/tools/email-template-library/templates";
+} from "../_data/templates";
 
 type Category = SeededCategory | string;
 

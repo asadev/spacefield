@@ -102,8 +102,6 @@ export const WORKSPACE_TEMPLATES: WorkspaceTemplate[] = [
       "Loan, NPV/IRR, cash burn, runway scenarios — running the numbers.",
     defaultWorkspaceName: "Finance",
     install: [
-      "loan-calculator",
-      "compound-interest",
       "npv-irr",
       "cash-burn-runway",
       "runway-scenarios",
@@ -112,7 +110,6 @@ export const WORKSPACE_TEMPLATES: WorkspaceTemplate[] = [
       "documents",
     ],
     dock: [
-      "loan-calculator",
       "npv-irr",
       "cash-burn-runway",
       "runway-scenarios",

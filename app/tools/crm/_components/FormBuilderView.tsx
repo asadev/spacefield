@@ -21,7 +21,7 @@ import { saveWorkspaceData } from "@/lib/workspaces/server";
 import {
   FORM_PRESETS,
   type PresetField,
-} from "../../../solutions/tools/lead-capture-form-builder/presets";
+} from "../_data/form-presets";
 
 type FieldType = "text" | "email" | "phone" | "select" | "checkbox" | "textarea";
 

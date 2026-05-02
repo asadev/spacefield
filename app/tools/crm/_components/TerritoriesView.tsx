@@ -13,7 +13,7 @@ import { useEffect, useMemo, useState } from "react";
 import {
   US_STATES,
   resolveToState,
-} from "../../../solutions/tools/territory-mapper/us-states";
+} from "../_data/us-states";
 
 interface Territory {
   id: string;
