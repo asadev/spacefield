@@ -32,6 +32,7 @@ import PermissionsSection from "./PermissionsSection";
 import ActivitySection from "./ActivitySection";
 import AISection from "./AISection";
 import DangerSection from "./DangerSection";
+import SharedLinksSection from "./SharedLinksSection";
 import {
   PILL,
   type SectionId,
@@ -324,6 +325,12 @@ export default function WorkspaceScopedSection({ section }: Props) {
           )}
           {section === "activity" && (
             <ActivitySection workspaceId={active.id} onError={onError} />
+          )}
+          {section === "shared-links" && (
+            <SharedLinksSection
+              workspaceId={active.id}
+              workspaceLabel={full?.name ?? active.name}
+            />
           )}
           {section === "ai" && (
             <AISection

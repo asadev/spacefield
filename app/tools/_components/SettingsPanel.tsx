@@ -12,6 +12,7 @@ import { useWorkspaceKey } from "./useWorkspaces";
 import ProfilePane from "./ProfilePane";
 import WorkspacesPane from "./WorkspacesPane";
 import WorkspaceScopedSection from "./workspace-settings/WorkspaceScopedSection";
+import SharedLinksSection from "./workspace-settings/SharedLinksSection";
 
 /* SettingsPanel — single-pane macOS-style System Settings clone.
  *
@@ -33,6 +34,7 @@ type SectionId =
   | "ai"
   | "storage"
   | "activity"
+  | "shared-links"
   | "danger"
   // Workspaces list (manage / switch / archive)
   | "workspaces"
@@ -107,6 +109,13 @@ const SECTIONS: SectionDef[] = [
     label: "Activity",
     description: "Recent member, role, and settings changes.",
     iconPath: TOOL_ICONS.pulse,
+  },
+  {
+    group: "Workspace",
+    id: "shared-links",
+    label: "Shared links",
+    description: "Forms, pages, and quotes you've published to toshare.net.",
+    iconPath: TOOL_ICONS.globe ?? TOOL_ICONS.code,
   },
   {
     group: "Workspace",
@@ -554,6 +563,9 @@ export default function SettingsPanel({
                 )}
                 {section === "activity" && (
                   <WorkspaceScopedSection section="activity" />
+                )}
+                {section === "shared-links" && (
+                  <WorkspaceScopedSection section="shared-links" />
                 )}
                 {section === "danger" && (
                   <WorkspaceScopedSection section="danger" />
