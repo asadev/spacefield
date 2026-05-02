@@ -20,9 +20,8 @@ export default function ShareLayout({ children }: { children: React.ReactNode })
     <div className="min-h-dvh bg-white text-slate-900 dark:bg-slate-950 dark:text-slate-100">
       <div className="mx-auto flex min-h-dvh max-w-3xl flex-col">
         <main className="flex-1 px-4 py-10 sm:px-6 sm:py-16">{children}</main>
-        <footer className="border-t border-slate-200 px-4 py-4 text-xs text-slate-500 dark:border-slate-800">
-          Powered by{" "}
-          <a href="https://share.example.com" className="font-medium hover:underline">
+        <footer className="px-4 py-6 text-center text-xs text-slate-400 dark:text-slate-600">
+          <a href="https://share.example.com" className="hover:text-slate-700 dark:hover:text-slate-400">
             share.example.com
           </a>
         </footer>

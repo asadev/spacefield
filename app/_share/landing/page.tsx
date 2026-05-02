@@ -1,23 +1,27 @@
-/* Bare landing for share.example.com root — most traffic here is mistyped. */
+/* share.example.com landing — clean, professional, no marketing copy.
+ *
+ * Visitors hit this when they mistype or visit the apex. Just brand mark,
+ * no preachy explanation. Real links bypass this via the /p/ /f/ /q/ etc
+ * route handlers.
+ */
 
 export const dynamic = "force-static";
 
+export const metadata = {
+  title: "Share",
+  description: "",
+  robots: { index: true, follow: true },
+};
+
 export default function ShareLanding() {
   return (
-    <div className="space-y-6 text-center">
-      <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-2xl bg-slate-900 text-white text-2xl font-semibold dark:bg-white dark:text-slate-900">
-        ts
+    <div className="flex min-h-[60vh] items-center justify-center">
+      <div className="space-y-3 text-center">
+        <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 text-base font-semibold text-white dark:bg-white dark:text-slate-900">
+          ts
+        </div>
+        <h1 className="text-2xl font-semibold tracking-tight">Share</h1>
       </div>
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight">share.example.com</h1>
-        <p className="mt-2 text-sm text-slate-500">
-          A simple way to share a form, page, or file with someone.
-        </p>
-      </div>
-      <p className="mx-auto max-w-md text-sm text-slate-500">
-        If someone gave you a share link, paste it in your browser to open it.
-        Each link looks like <code className="rounded bg-slate-100 px-1.5 py-0.5 text-xs dark:bg-slate-800">share.example.com/p/xxx</code>.
-      </p>
     </div>
   );
 }
