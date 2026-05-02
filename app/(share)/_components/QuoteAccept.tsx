@@ -57,7 +57,7 @@ export default function QuoteAccept({ linkId, acceptCtaLabel, brandColor, totalD
 
   if (done) {
     return (
-      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5 dark:border-emerald-500/30 dark:bg-emerald-500/10">
+      <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-5">
         <div className="flex items-center gap-3">
           <div
             className="flex h-9 w-9 items-center justify-center rounded-full text-white"
@@ -68,15 +68,15 @@ export default function QuoteAccept({ linkId, acceptCtaLabel, brandColor, totalD
             </svg>
           </div>
           <div>
-            <div className="text-sm font-semibold text-emerald-900 dark:text-emerald-100">
+            <div className="text-sm font-semibold text-emerald-900">
               Quote accepted
             </div>
-            <div className="text-xs text-emerald-800 dark:text-emerald-200">
+            <div className="text-xs text-emerald-800">
               {name} · {totalDisplay} · {new Date().toLocaleString()}
             </div>
           </div>
         </div>
-        <p className="mt-3 text-sm text-emerald-900 dark:text-emerald-100">
+        <p className="mt-3 text-sm text-emerald-900">
           The sender has been notified. They'll be in touch with next steps shortly.
         </p>
       </div>
@@ -84,48 +84,48 @@ export default function QuoteAccept({ linkId, acceptCtaLabel, brandColor, totalD
   }
 
   return (
-    <form onSubmit={accept} className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-900/40">
+    <form onSubmit={accept} className="space-y-3 rounded-xl border border-slate-200 bg-slate-50 p-5">
       <div className="text-sm font-semibold tracking-tight">Accept this quote</div>
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <label className="block space-y-1">
-          <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+          <span className="text-xs font-medium text-slate-600">
             Your name <span className="text-red-500">*</span>
           </span>
           <input
             value={name}
             onChange={(e) => setName(e.target.value)}
             required
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
           />
         </label>
         <label className="block space-y-1">
-          <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+          <span className="text-xs font-medium text-slate-600">
             Email
           </span>
           <input
             type="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+            className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
           />
         </label>
       </div>
       <label className="block space-y-1">
-        <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+        <span className="text-xs font-medium text-slate-600">
           Company
         </span>
         <input
           value={company}
           onChange={(e) => setCompany(e.target.value)}
-          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+          className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
         />
       </label>
-      <p className="text-xs text-slate-500 dark:text-slate-400">
+      <p className="text-xs text-slate-500">
         By clicking accept you confirm the line items and total of <strong>{totalDisplay}</strong>.
         This is recorded with a timestamp.
       </p>
       {error ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-200">
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </p>
       ) : null}

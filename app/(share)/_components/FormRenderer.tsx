@@ -76,14 +76,14 @@ export default function FormRenderer({ payload, linkId, slug, subdomain }: Props
                 value={String(values[f.id] ?? "")}
                 onChange={(e) => setValues((v) => ({ ...v, [f.id]: e.target.value }))}
                 rows={4}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
               />
             ) : f.type === "select" ? (
               <select
                 required={f.required}
                 value={String(values[f.id] ?? "")}
                 onChange={(e) => setValues((v) => ({ ...v, [f.id]: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
               >
                 <option value="">Choose…</option>
                 {(f.options ?? []).map((opt) => (
@@ -106,7 +106,7 @@ export default function FormRenderer({ payload, linkId, slug, subdomain }: Props
                 required={f.required}
                 value={String(values[f.id] ?? "")}
                 onChange={(e) => setValues((v) => ({ ...v, [f.id]: e.target.value }))}
-                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+                className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
               />
             )}
           </label>
@@ -126,7 +126,7 @@ export default function FormRenderer({ payload, linkId, slug, subdomain }: Props
       />
 
       {error ? (
-        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-200">
+        <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
           {error}
         </p>
       ) : null}

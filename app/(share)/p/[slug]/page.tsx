@@ -101,7 +101,7 @@ export default async function PageViewer({ params, searchParams }: Props) {
                   {block.items.map((s, j) => (
                     <div
                       key={j}
-                      className="rounded-xl border border-slate-200 p-4 dark:border-slate-800"
+                      className="rounded-xl border border-slate-200 p-4"
                     >
                       <div className="text-xs uppercase tracking-wider text-slate-500">{s.label}</div>
                       <div className="mt-1 text-xl font-semibold">{s.value}</div>

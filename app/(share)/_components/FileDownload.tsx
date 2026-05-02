@@ -64,7 +64,7 @@ export default function FileDownload({ linkId, payload, passwordRequired, brandC
   }
 
   return (
-    <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-5 dark:border-slate-800 dark:bg-slate-900/40">
+    <div className="space-y-4 rounded-xl border border-slate-200 bg-slate-50 p-5">
       <div className="flex items-start gap-3">
         <div
           className="flex h-10 w-10 items-center justify-center rounded-lg text-white"
@@ -89,7 +89,7 @@ export default function FileDownload({ linkId, payload, passwordRequired, brandC
       {passwordRequired ? (
         <form onSubmit={download} className="space-y-3">
           <label className="block space-y-1">
-            <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+            <span className="text-xs font-medium text-slate-600">
               Password required
             </span>
             <input
@@ -98,11 +98,11 @@ export default function FileDownload({ linkId, payload, passwordRequired, brandC
               onChange={(e) => setPassword(e.target.value)}
               required
               autoFocus
-              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-900 focus:outline-none dark:border-slate-700 dark:bg-slate-900"
+              className="w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm focus:border-slate-900 focus:outline-none"
             />
           </label>
           {error ? (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-200">
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
               {error}
             </p>
           ) : null}
@@ -118,7 +118,7 @@ export default function FileDownload({ linkId, payload, passwordRequired, brandC
       ) : (
         <>
           {error ? (
-            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700 dark:bg-red-900/30 dark:text-red-200">
+            <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">
               {error}
             </p>
           ) : null}
