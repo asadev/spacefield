@@ -10,44 +10,86 @@ const TOSHARE_DOMAIN = "toshare.net";
 
 /* Host-router for the toshare.net link surface.
  *
- * toshare.net is hosted on the SAME Vercel project as spacefield.io for
- * MVP simplicity. We split traffic by Host header in middleware:
+ * toshare.net is hosted on the SAME Vercel project as spacefield.io. The
+ * share routes live in `app/(share)/...` (a Next.js route group, so the
+ * folder name doesn't affect URLs).
  *
- *   - host = toshare.net           → rewrite to /_share/<type>/<slug>
- *   - host = <ws>.toshare.net      → rewrite to /_share/<ws>/<type>/<slug>
- *   - host = spacefield.io / .co   → existing app (no rewrite)
+ * URL convention on toshare.net:
+ *   /p/<slug>  → share-page viewer
+ *   /f/<slug>  → share-form viewer  (rewritten to /share-form/<slug>
+ *                                    internally to avoid colliding with
+ *                                    the legacy CRM lead-source page at
+ *                                    spacefield.io/f/<slug>)
+ *   /q/<slug>  → share-quote viewer
+ *   /b/<slug>  → share-booking viewer
+ *   /d/<slug>  → share-file viewer
+ *   /r/<slug>  → share-redirect
  *
- * Edge rewrite preserves the original URL in the browser bar; the page
- * route lives at app/_share/... internally.
+ * Host rules:
+ *   - toshare.net root → rewrites to /landing
+ *   - <ws>.toshare.net → adds ?ws=<sub> so viewers honor the subdomain
+ *   - spacefield.io / .co → BLOCK access to share-only paths (so users
+ *                           can't bypass the toshare brand). Legacy
+ *                           /f/<slug> stays on spacefield.io.
  */
-function toshareRewrite(request: NextRequest): NextResponse | null {
+const SHARE_ONLY_PREFIXES = ["/p/", "/q/", "/r/", "/b/", "/d/", "/share-form/"];
+const SHARE_ONLY_EXACT = new Set(["/landing", "/not-found"]);
+
+function isShareOnlyPath(pathname: string): boolean {
+  if (SHARE_ONLY_EXACT.has(pathname)) return true;
+  return SHARE_ONLY_PREFIXES.some((p) => pathname.startsWith(p));
+}
+
+function toshareRouter(request: NextRequest): NextResponse | null {
   const host = (request.headers.get("host") ?? "").toLowerCase().split(":")[0];
-  if (host !== TOSHARE_DOMAIN && !host.endsWith("." + TOSHARE_DOMAIN)) return null;
+  const isToshareHost = host === TOSHARE_DOMAIN || host.endsWith("." + TOSHARE_DOMAIN);
+  const path = request.nextUrl.pathname;
+
+  // Guard: spacefield.io / .co should never expose share-only paths.
+  // (`/f/<slug>` is intentionally NOT blocked — it's the legacy CRM
+  // lead-source viewer on the main brand domain.)
+  if (!isToshareHost && isShareOnlyPath(path)) {
+    return new NextResponse("Not Found", { status: 404 });
+  }
+
+  if (!isToshareHost) return null;
 
   const url = request.nextUrl.clone();
-  const subdomain = host === TOSHARE_DOMAIN ? null : host.slice(0, -1 - TOSHARE_DOMAIN.length);
-  const path = url.pathname;
+  const subdomain =
+    host === TOSHARE_DOMAIN ? null : host.slice(0, -1 - TOSHARE_DOMAIN.length);
 
-  // root → simple landing page
+  // toshare.net root → landing page
   if (path === "/" || path === "") {
-    url.pathname = "/_share/landing";
+    url.pathname = "/landing";
     if (subdomain) url.searchParams.set("ws", subdomain);
     return NextResponse.rewrite(url);
   }
 
-  // submit endpoint (form POSTs) — pass through to api route
+  // API routes pass through (form submit, mint, accept, book, etc.)
   if (path.startsWith("/api/")) return null;
 
-  // typed-slug routes: /<type>/<slug>
-  const m = path.match(/^\/([a-z])\/([a-z0-9-]+)\/?$/i);
-  if (m) {
-    url.pathname = `/_share/${m[1].toLowerCase()}/${m[2].toLowerCase()}`;
+  // /f/<slug> → /share-form/<slug>. The legacy CRM page at app/f/[slug]
+  // would otherwise be served first since both files exist.
+  const formMatch = path.match(/^\/f\/([a-z0-9-]+)\/?$/i);
+  if (formMatch) {
+    url.pathname = `/share-form/${formMatch[1].toLowerCase()}`;
     if (subdomain) url.searchParams.set("ws", subdomain);
     return NextResponse.rewrite(url);
   }
 
-  // anything else on toshare.net → 404 page
-  url.pathname = "/_share/not-found";
+  // /<type>/<slug> for the other types — paths exist directly via the
+  // (share) route group, just attach the subdomain hint when present.
+  const m = path.match(/^\/([pqrbd])\/([a-z0-9-]+)\/?$/i);
+  if (m) {
+    if (subdomain) {
+      url.searchParams.set("ws", subdomain);
+      return NextResponse.rewrite(url);
+    }
+    return null;
+  }
+
+  // Anything else on toshare.net → not-found viewer
+  url.pathname = "/not-found";
   return NextResponse.rewrite(url);
 }
 
@@ -119,7 +161,7 @@ function shellRedirectForStandaloneTool(request: NextRequest): NextResponse | nu
  */
 export async function middleware(request: NextRequest) {
   // toshare.net host routing — runs FIRST so /tools redirects don't fire
-  const toshareResp = toshareRewrite(request);
+  const toshareResp = toshareRouter(request);
   if (toshareResp) return toshareResp;
 
   const toolRedirect = shellRedirectForStandaloneTool(request);

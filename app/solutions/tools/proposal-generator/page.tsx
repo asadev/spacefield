@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import ToolShell from "../../_components/ToolShell";
 import ToolCard, { Field, Stat, inputCls } from "../../_components/ToolCard";
-import MintShareButton from "@/app/_share/_components/MintShareButton";
+import MintShareButton from "@/app/(share)/_components/MintShareButton";
 import type { PageBlock } from "@/lib/toshare/types";
 
 type Template = "consulting" | "saas" | "services";

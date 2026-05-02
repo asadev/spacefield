@@ -9,7 +9,7 @@ import {
   useWorkspace,
 } from "@/lib/workspaces/client";
 import { saveWorkspaceData } from "@/lib/workspaces/server";
-import MintShareButton from "@/app/_share/_components/MintShareButton";
+import MintShareButton from "@/app/(share)/_components/MintShareButton";
 import type { PageBlock } from "@/lib/toshare/types";
 
 const LS_KEY = "solutions:pricing-calculator:v1";

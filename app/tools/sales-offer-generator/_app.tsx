@@ -15,7 +15,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUserPreferences } from "@/lib/useUserPreferences";
 import { awardXP } from "@/lib/xp-actions";
-import MintShareButton from "@/app/_share/_components/MintShareButton";
+import MintShareButton from "@/app/(share)/_components/MintShareButton";
 import type { NativeAppProps } from "../_data/tools-list";
 
 const ease: [number, number, number, number] = [0.25, 0.46, 0.45, 0.94];

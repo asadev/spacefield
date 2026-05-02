@@ -18,7 +18,7 @@ import {
   useWorkspace,
 } from "@/lib/workspaces/client";
 import { saveWorkspaceData } from "@/lib/workspaces/server";
-import MintShareButton from "@/app/_share/_components/MintShareButton";
+import MintShareButton from "@/app/(share)/_components/MintShareButton";
 import {
   FORM_PRESETS,
   type PresetField,
