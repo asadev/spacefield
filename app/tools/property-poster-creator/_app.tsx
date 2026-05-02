@@ -17,7 +17,7 @@ import { useState, useRef, useCallback, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useUserPreferences } from "@/lib/useUserPreferences";
 import { useWorkspace } from "@/lib/workspaces/client";
-import MintShareButton from "@/app/_share/_components/MintShareButton";
+import MintShareButton from "@/app/(share)/_components/MintShareButton";
 import type { PageBlock, PagePayload } from "@/lib/share/types";
 import type { NativeAppProps } from "../_data/tools-list";
 

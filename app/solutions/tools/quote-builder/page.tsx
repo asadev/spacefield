@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import ToolShell from "../../_components/ToolShell";
 import ToolCard, { Field, inputCls } from "../../_components/ToolCard";
-import MintShareButton from "@/app/_share/_components/MintShareButton";
+import MintShareButton from "@/app/(share)/_components/MintShareButton";
 
 type Line = {
   id: string;
