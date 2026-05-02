@@ -13,6 +13,18 @@ import type { ShareLinkRow, ShareType } from "@/lib/share/types";
 import { buildShareUrl, SHARE_TYPE_PREFIX } from "@/lib/share/types";
 import NewShareLinkDialog from "./NewShareLinkDialog";
 
+interface WebhookDelivery {
+  id: number;
+  event: string;
+  webhook_url: string;
+  status: "success" | "timeout" | "network_error" | "non_2xx" | "signing_skipped" | "unknown";
+  http_status: number | null;
+  response_excerpt: string | null;
+  signed: boolean;
+  attempted_at: string;
+  duration_ms: number | null;
+}
+
 interface Props {
   workspaceId: string;
   workspaceLabel: string;
@@ -60,6 +72,33 @@ export default function SharedLinksSection({ workspaceId, workspaceLabel }: Prop
   const [secretRevealed, setSecretRevealed] = useState(false);
   const [secretBusy, setSecretBusy] = useState(false);
   const [secretCopied, setSecretCopied] = useState(false);
+
+  // Per-link expanded state for the webhook deliveries panel
+  const [openDeliveriesFor, setOpenDeliveriesFor] = useState<string | null>(null);
+  const [deliveries, setDeliveries] = useState<Record<string, WebhookDelivery[]>>({});
+  const [deliveriesLoading, setDeliveriesLoading] = useState<string | null>(null);
+
+  async function toggleDeliveries(linkId: string) {
+    if (openDeliveriesFor === linkId) {
+      setOpenDeliveriesFor(null);
+      return;
+    }
+    setOpenDeliveriesFor(linkId);
+    if (!deliveries[linkId]) {
+      setDeliveriesLoading(linkId);
+      try {
+        const res = await fetch(`/api/share/links/${linkId}/deliveries`, {
+          cache: "no-store",
+        });
+        const j = await res.json();
+        setDeliveries((d) => ({ ...d, [linkId]: Array.isArray(j.deliveries) ? j.deliveries : [] }));
+      } catch {
+        setDeliveries((d) => ({ ...d, [linkId]: [] }));
+      } finally {
+        setDeliveriesLoading(null);
+      }
+    }
+  }
 
   useEffect(() => {
     fetch(`/api/share/subdomain?workspaceId=${encodeURIComponent(workspaceId)}`, {
@@ -560,6 +599,14 @@ function verify(req, secret) {
                     </button>
                     <button
                       type="button"
+                      onClick={() => toggleDeliveries(link.id)}
+                      className="h-7 rounded-md border border-app bg-app-elevated px-2 text-xs text-app hover:border-tool-accent"
+                      title="Recent webhook deliveries"
+                    >
+                      Webhooks
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => destroy(link)}
                       disabled={busy === link.id}
                       className="h-7 rounded-md border border-red-300 bg-red-50 px-2 text-xs text-red-700 hover:bg-red-100 disabled:opacity-50 dark:border-red-500/40 dark:bg-red-500/10 dark:text-red-300"
@@ -568,6 +615,80 @@ function verify(req, secret) {
                     </button>
                   </div>
                 </div>
+
+                {openDeliveriesFor === link.id ? (
+                  <div className="mt-3 border-t border-app pt-3">
+                    <div className="text-[0.65rem] font-medium uppercase tracking-[0.14em] text-faint mb-2">
+                      Recent webhook deliveries
+                    </div>
+                    {deliveriesLoading === link.id ? (
+                      <div className="text-xs text-faint">Loading…</div>
+                    ) : (deliveries[link.id]?.length ?? 0) === 0 ? (
+                      <div className="text-xs text-faint">
+                        No webhook attempts recorded for this link yet.
+                      </div>
+                    ) : (
+                      <ul className="space-y-1">
+                        {deliveries[link.id]!.map((d) => (
+                          <li
+                            key={d.id}
+                            className="flex flex-wrap items-center gap-2 rounded border border-app bg-app px-2 py-1.5 text-xs"
+                          >
+                            <span
+                              className={`inline-flex h-5 items-center rounded-full px-1.5 text-[0.65rem] font-medium ${
+                                d.status === "success"
+                                  ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/20 dark:text-emerald-300"
+                                  : d.status === "non_2xx"
+                                    ? "bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300"
+                                    : "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-300"
+                              }`}
+                            >
+                              {d.status === "success"
+                                ? `${d.http_status ?? 200}`
+                                : d.status === "non_2xx"
+                                  ? `${d.http_status ?? "?"}`
+                                  : d.status}
+                            </span>
+                            <span className="font-mono text-[0.65rem] text-faint">
+                              {d.event}
+                            </span>
+                            <span className="min-w-0 flex-1 truncate font-mono text-[0.65rem] text-app">
+                              {d.webhook_url}
+                            </span>
+                            {d.signed ? (
+                              <span title="HMAC signed">🔒</span>
+                            ) : (
+                              <span title="Unsigned (no workspace secret)" className="opacity-40">·</span>
+                            )}
+                            {typeof d.duration_ms === "number" ? (
+                              <span className="text-[0.65rem] text-faint tabular-nums">
+                                {d.duration_ms}ms
+                              </span>
+                            ) : null}
+                            <span className="text-[0.65rem] text-faint" title={new Date(d.attempted_at).toISOString()}>
+                              {new Date(d.attempted_at).toLocaleString(undefined, {
+                                month: "short",
+                                day: "numeric",
+                                hour: "numeric",
+                                minute: "2-digit",
+                              })}
+                            </span>
+                            {d.response_excerpt ? (
+                              <details className="basis-full">
+                                <summary className="cursor-pointer text-[0.6rem] text-faint">
+                                  Response
+                                </summary>
+                                <pre className="mt-1 overflow-x-auto rounded bg-app-elevated p-1.5 text-[0.65rem] text-app">
+{d.response_excerpt}
+                                </pre>
+                              </details>
+                            ) : null}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
+                ) : null}
               </li>
             );
           })}

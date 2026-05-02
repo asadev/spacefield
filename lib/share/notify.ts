@@ -30,6 +30,7 @@ export async function notifyOnSubmit(input: SubmitNotifyInput): Promise<void> {
   await Promise.allSettled([
     payload.webhookUrl
       ? deliverSignedWebhook({
+          linkId: link.id,
           workspaceId: link.workspace_id,
           webhookUrl: payload.webhookUrl,
           event: "form.submitted",
