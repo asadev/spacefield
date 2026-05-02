@@ -8,9 +8,10 @@
 export const dynamic = "force-static";
 
 export const metadata = {
-  title: "Share",
+  title: { absolute: "Share" },
   description: "",
   robots: { index: true, follow: true },
+  openGraph: { title: "Share", description: "", siteName: "Share" },
 };
 
 export default function ShareLanding() {
