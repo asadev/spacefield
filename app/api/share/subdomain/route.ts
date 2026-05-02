@@ -1,7 +1,9 @@
-/* Workspace custom-subdomain claim endpoint.
+/* Workspace custom-subdomain + brand-color endpoint.
  *
- * GET  ?workspaceId=X           → returns the current subdomain (or null)
- * POST { workspaceId, subdomain }  → claim. Pass subdomain: null to release.
+ * GET  ?workspaceId=X           → { subdomain, brandColor }
+ * POST { workspaceId, subdomain }                → claim subdomain
+ * POST { workspaceId, brandColor }               → set brand color
+ *      (pass nulls to clear the respective field)
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -17,13 +19,16 @@ export async function GET(req: NextRequest) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("workspaces")
-    .select("share_subdomain")
+    .select("share_subdomain, share_brand_color")
     .eq("id", workspaceId)
     .maybeSingle();
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 400 });
   }
-  return NextResponse.json({ subdomain: data?.share_subdomain ?? null });
+  return NextResponse.json({
+    subdomain: data?.share_subdomain ?? null,
+    brandColor: data?.share_brand_color ?? null,
+  });
 }
 
 export async function POST(req: NextRequest) {
@@ -31,8 +36,46 @@ export async function POST(req: NextRequest) {
   if (!body || typeof body.workspaceId !== "string") {
     return NextResponse.json({ error: "workspaceId required" }, { status: 400 });
   }
-  const subdomain = typeof body.subdomain === "string" ? body.subdomain : null;
   const supabase = await createClient();
+
+  // Brand-color update path
+  if ("brandColor" in body) {
+    const raw = body.brandColor;
+    const brandColor =
+      raw === null || raw === ""
+        ? null
+        : typeof raw === "string" && /^#[0-9a-fA-F]{6}$/.test(raw)
+          ? raw.toLowerCase()
+          : undefined;
+    if (brandColor === undefined) {
+      return NextResponse.json({ error: "brandColor must be #RRGGBB or null" }, { status: 400 });
+    }
+    // Updates flow through normal RLS — workspace_members policy ensures
+    // only members can update; we additionally require admin/owner via
+    // a small inline check.
+    const { data: userData } = await supabase.auth.getUser();
+    if (!userData.user) return NextResponse.json({ error: "not signed in" }, { status: 401 });
+    const { data: mem } = await supabase
+      .from("workspace_members")
+      .select("role")
+      .eq("workspace_id", body.workspaceId)
+      .eq("user_id", userData.user.id)
+      .maybeSingle();
+    if (!mem || (mem.role !== "owner" && mem.role !== "admin")) {
+      return NextResponse.json({ error: "only owners or admins can change branding" }, { status: 403 });
+    }
+    const { error: upErr } = await supabase
+      .from("workspaces")
+      .update({ share_brand_color: brandColor })
+      .eq("id", body.workspaceId);
+    if (upErr) {
+      return NextResponse.json({ error: upErr.message }, { status: 400 });
+    }
+    return NextResponse.json({ brandColor });
+  }
+
+  // Subdomain update path
+  const subdomain = typeof body.subdomain === "string" ? body.subdomain : null;
   const { data, error } = await supabase.rpc("share_claim_subdomain", {
     p_workspace_id: body.workspaceId,
     p_subdomain: subdomain,

@@ -46,12 +46,15 @@ export default function SharedLinksSection({ workspaceId, workspaceLabel }: Prop
   const [newOpen, setNewOpen] = useState(false);
   const [refreshTick, setRefreshTick] = useState(0);
 
-  // Custom subdomain state
+  // Custom subdomain + brand color state
   const [subdomain, setSubdomain] = useState<string | null>(null);
   const [subdomainDraft, setSubdomainDraft] = useState("");
   const [subEditing, setSubEditing] = useState(false);
   const [subBusy, setSubBusy] = useState(false);
   const [subError, setSubError] = useState<string | null>(null);
+
+  const [brandColor, setBrandColor] = useState<string | null>(null);
+  const [brandBusy, setBrandBusy] = useState(false);
 
   useEffect(() => {
     fetch(`/api/share/subdomain?workspaceId=${encodeURIComponent(workspaceId)}`, {
@@ -61,9 +64,27 @@ export default function SharedLinksSection({ workspaceId, workspaceLabel }: Prop
       .then((j) => {
         setSubdomain(typeof j.subdomain === "string" ? j.subdomain : null);
         setSubdomainDraft(typeof j.subdomain === "string" ? j.subdomain : "");
+        setBrandColor(typeof j.brandColor === "string" ? j.brandColor : null);
       })
       .catch(() => {});
   }, [workspaceId]);
+
+  async function saveBrandColor(value: string | null) {
+    setBrandBusy(true);
+    try {
+      const res = await fetch("/api/share/subdomain", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workspaceId, brandColor: value }),
+      });
+      const j = await res.json();
+      if (res.ok) {
+        setBrandColor(j.brandColor ?? null);
+      }
+    } finally {
+      setBrandBusy(false);
+    }
+  }
 
   async function saveSubdomain(value: string | null) {
     setSubError(null);
@@ -196,6 +217,51 @@ export default function SharedLinksSection({ workspaceId, workspaceLabel }: Prop
           onCreated={() => setRefreshTick((n) => n + 1)}
         />
       ) : null}
+
+      {/* Brand defaults panel — accent color applied to every link */}
+      <div className="rounded-lg border border-app bg-app-elevated p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="min-w-0">
+            <div className="text-sm font-semibold">Brand defaults</div>
+            <div className="mt-0.5 text-xs text-faint">
+              Accent color + workspace logo are applied to every link minted from this workspace
+              (unless the link's own settings override them).
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-2 text-xs text-app">
+              <span>Accent</span>
+              <input
+                type="color"
+                value={brandColor ?? "#0f172a"}
+                onChange={(e) => setBrandColor(e.target.value)}
+                onBlur={() => brandColor && saveBrandColor(brandColor)}
+                disabled={brandBusy}
+                className="h-7 w-10 cursor-pointer rounded border border-app bg-app"
+                aria-label="Brand color"
+              />
+            </label>
+            <span
+              className="inline-block h-7 w-7 rounded border border-app"
+              style={{ backgroundColor: brandColor ?? "transparent" }}
+              title={brandColor ?? "no color set"}
+            />
+            {brandColor ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setBrandColor(null);
+                  saveBrandColor(null);
+                }}
+                disabled={brandBusy}
+                className="h-7 rounded-md border border-app bg-app px-2 text-xs text-app hover:border-tool-accent disabled:opacity-50"
+              >
+                Clear
+              </button>
+            ) : null}
+          </div>
+        </div>
+      </div>
 
       {/* Custom subdomain panel */}
       <div className="rounded-lg border border-app bg-app-elevated p-4">
