@@ -11,6 +11,7 @@
 import { useEffect, useMemo, useState } from "react";
 import type { ShareLinkRow, ShareType } from "@/lib/share/types";
 import { buildShareUrl, SHARE_TYPE_PREFIX } from "@/lib/share/types";
+import NewShareLinkDialog from "./NewShareLinkDialog";
 
 interface Props {
   workspaceId: string;
@@ -42,6 +43,8 @@ export default function SharedLinksSection({ workspaceId, workspaceLabel }: Prop
   const [search, setSearch] = useState("");
   const [busy, setBusy] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [newOpen, setNewOpen] = useState(false);
+  const [refreshTick, setRefreshTick] = useState(0);
 
   useEffect(() => {
     let mounted = true;
@@ -59,7 +62,7 @@ export default function SharedLinksSection({ workspaceId, workspaceLabel }: Prop
     return () => {
       mounted = false;
     };
-  }, [workspaceId]);
+  }, [workspaceId, refreshTick]);
 
   const filtered = useMemo(() => {
     return links.filter((l) => {
@@ -124,13 +127,34 @@ export default function SharedLinksSection({ workspaceId, workspaceLabel }: Prop
 
   return (
     <div className="space-y-5">
-      <header className="space-y-1">
-        <h2 className="text-lg font-semibold tracking-tight">Shared links</h2>
-        <p className="text-sm text-faint">
-          Public URLs you've created from {workspaceLabel} tools. Each link points to a
-          form, page, quote, booking, redirect, or file hosted at share.example.com.
-        </p>
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1">
+          <h2 className="text-lg font-semibold tracking-tight">Shared links</h2>
+          <p className="text-sm text-faint">
+            Public URLs you've created from {workspaceLabel} tools. Each link points to a
+            form, page, quote, booking, redirect, or file hosted at share.example.com.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setNewOpen(true)}
+          className="inline-flex h-9 shrink-0 items-center gap-1.5 rounded-md bg-tool-accent px-3 text-sm font-medium text-white hover:opacity-90"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
+          New share link
+        </button>
       </header>
+
+      {newOpen ? (
+        <NewShareLinkDialog
+          workspaceId={workspaceId}
+          onClose={() => setNewOpen(false)}
+          onCreated={() => setRefreshTick((n) => n + 1)}
+        />
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-2">
         <select
