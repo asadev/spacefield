@@ -1,10 +1,12 @@
-/* Booking viewer — placeholder; full calendar UI ships in next iteration. */
+/* Booking viewer — date + slot picker, invitee details, confirmation. */
 
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { resolveLink, recordView } from "@/lib/toshare/server";
 import type { BookingPayload } from "@/lib/toshare/types";
 import { hashClientFingerprint } from "@/lib/toshare/fingerprint";
+import { createClient } from "@/lib/supabase/server";
+import BookingPicker from "../../_components/BookingPicker";
 
 interface Props {
   params: Promise<{ slug: string }>;
@@ -13,35 +15,50 @@ interface Props {
 
 export const dynamic = "force-dynamic";
 
+async function fetchBookedSlots(linkId: string): Promise<string[]> {
+  try {
+    const supabase = await createClient();
+    const { data } = await supabase.rpc("toshare_booked_slots", { p_link_id: linkId });
+    return Array.isArray(data) ? (data as string[]) : [];
+  } catch {
+    return [];
+  }
+}
+
 export default async function BookingViewer({ params, searchParams }: Props) {
   const { slug } = await params;
   const { ws } = await searchParams;
   const subdomain = ws ?? null;
+
   const link = await resolveLink(slug, subdomain);
   if (!link || link.type !== "booking") notFound();
   const payload = link.payload as unknown as BookingPayload;
+
   const h = await headers();
-  const ip = h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? "";
-  const ua = h.get("user-agent") ?? "";
   recordView({
     slug,
     subdomain,
-    ipHash: await hashClientFingerprint(ip),
-    uaHash: await hashClientFingerprint(ua),
+    ipHash: await hashClientFingerprint(h.get("x-forwarded-for")?.split(",")[0]?.trim() ?? ""),
+    uaHash: await hashClientFingerprint(h.get("user-agent") ?? ""),
     referrer: h.get("referer") ?? "",
   }).catch(() => {});
 
+  const bookedSlots = await fetchBookedSlots(link.id);
+
   return (
-    <div className="space-y-4">
-      <h1 className="text-3xl font-semibold tracking-tight">{payload.title}</h1>
-      {payload.description ? <p className="text-slate-500">{payload.description}</p> : null}
-      <div className="rounded-xl border border-slate-200 p-6 text-sm text-slate-500 dark:border-slate-800">
-        <p className="font-medium">Booking flow coming soon.</p>
-        <p className="mt-1">
-          {payload.durationMinutes}-minute slots in {payload.timezone}.
-          {payload.notifyEmail ? ` Contact ${payload.notifyEmail} to book directly.` : ""}
-        </p>
-      </div>
-    </div>
+    <article className="space-y-6">
+      {payload.brandLogo ? (
+        <img src={payload.brandLogo} alt="" className="h-10 w-10 rounded-lg object-cover" />
+      ) : null}
+
+      <header className="space-y-2">
+        <h1 className="text-2xl font-semibold tracking-tight sm:text-3xl">{payload.title}</h1>
+        {payload.description ? (
+          <p className="text-sm text-slate-500">{payload.description}</p>
+        ) : null}
+      </header>
+
+      <BookingPicker linkId={link.id} payload={payload} bookedSlots={bookedSlots} />
+    </article>
   );
 }

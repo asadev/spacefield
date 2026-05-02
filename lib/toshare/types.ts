@@ -93,6 +93,13 @@ export interface BookingPayload {
   buffer?: number;
   notifyEmail?: string;
   brandColor?: string;
+  brandLogo?: string;
+  /** How far ahead bookings can be made, in days. Default 30. */
+  bookableHorizonDays?: number;
+  /** Webhook fired when a booking is created. Optional. */
+  webhookUrl?: string;
+  /** Location/meeting info shown on confirmation. Free-form. */
+  locationInfo?: string;
 }
 
 export interface RedirectPayload {
