@@ -45,6 +45,10 @@ import SavedViewsManager from "./SavedViewsManager";
 import TemplatePicker from "./TemplatePicker";
 import LeadSourcesAdmin from "./LeadSourcesAdmin";
 import BoardsListView from "./BoardsListView";
+import TemplatesView from "./TemplatesView";
+import RemindersView from "./RemindersView";
+import TerritoriesView from "./TerritoriesView";
+import FormBuilderView from "./FormBuilderView";
 import AgentChatScope from "../../_components/agent/AgentChatScope";
 import { useCrmTemplate } from "./useCrmTemplate";
 import { CRM_TEMPLATES } from "../_templates/registry";
@@ -58,6 +62,10 @@ const NAV_ITEMS: CrmSectionMeta[] = [
   { key: "inventory", label: "Inventory", icon: "layers" },
   { key: "boards", label: "Boards", icon: "kanban" },
   { key: "activities", label: "Activities", icon: "clock" },
+  { key: "templates", label: "Templates", icon: "mail" },
+  { key: "reminders", label: "Reminders", icon: "bell" },
+  { key: "territories", label: "Territories", icon: "map" },
+  { key: "forms", label: "Forms", icon: "form" },
   { key: "reports", label: "Reports", icon: "chart" },
   { key: "settings", label: "Settings", icon: "lock" },
 ];
@@ -109,6 +117,10 @@ const ICONS: Record<string, string> = {
   close:
     "M6.4 4.95L4.95 6.4 10.6 12l-5.65 5.6 1.45 1.45L12 13.4l5.6 5.65 1.45-1.45L13.4 12l5.65-5.6L17.6 4.95 12 10.6 6.4 4.95z",
   user: "M12 12a5 5 0 100-10 5 5 0 000 10zm0 2c-4.42 0-8 2.24-8 5v3h16v-3c0-2.76-3.58-5-8-5z",
+  mail: "M3 5h18a1 1 0 011 1v12a1 1 0 01-1 1H3a1 1 0 01-1-1V6a1 1 0 011-1zm1 2.4V18h16V7.4l-8 5.6-8-5.6zM4.7 6L12 11l7.3-5H4.7z",
+  bell: "M12 2a6 6 0 016 6v3.7l1.7 3.4A1 1 0 0118.8 17H5.2a1 1 0 01-.9-1.4L6 11.7V8a6 6 0 016-6zm0 2a4 4 0 00-4 4v4l-1.4 3h10.8L16 12V8a4 4 0 00-4-4zm-2 15h4a2 2 0 11-4 0z",
+  map: "M3 6l6-3 6 3 6-3v15l-6 3-6-3-6 3V6zm2 1.6V19l4-2V5.6l-4 2zm6-2v11.4l4 2V7.6l-4-2zm6 2V19l4-2V5.6l-4 2z",
+  form: "M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm0 2v14h14V5H5zm2 2h10v2H7V7zm0 4h10v2H7v-2zm0 4h6v2H7v-2z",
 };
 
 function Icon({ name, size = 16 }: { name: string; size?: number }) {
@@ -565,7 +577,10 @@ export default function Shell({ width, initialParams, openApp }: NativeAppProps)
               section === "companies" ||
               section === "inventory" ||
               section === "boards" ||
-              section === "activities";
+              section === "activities" ||
+              section === "templates" ||
+              section === "reminders" ||
+              section === "forms";
             if (needsWorkspace && (!signedIn || !workspaceId)) {
               return <WorkspaceRequired section={section} signedIn={signedIn} />;
             }
@@ -636,6 +651,36 @@ export default function Shell({ width, initialParams, openApp }: NativeAppProps)
               );
             }
             if (section === "activities") return <ActivitiesView />;
+            if (section === "templates") {
+              return (
+                <TemplatesView
+                  workspaceId={workspaceId}
+                  workspaceLabel={workspaceLabel}
+                  width={width}
+                />
+              );
+            }
+            if (section === "reminders") {
+              return (
+                <RemindersView
+                  workspaceId={workspaceId}
+                  workspaceLabel={workspaceLabel}
+                  width={width}
+                />
+              );
+            }
+            if (section === "territories") {
+              return <TerritoriesView width={width} />;
+            }
+            if (section === "forms") {
+              return (
+                <FormBuilderView
+                  workspaceId={workspaceId}
+                  workspaceLabel={workspaceLabel}
+                  width={width}
+                />
+              );
+            }
             if (section === "reports") {
               return <ReportsView onJump={(s) => setSection(s)} />;
             }

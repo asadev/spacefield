@@ -38,6 +38,47 @@ interface Props {
   openApp?: (slug: string, params?: Record<string, unknown>) => void;
 }
 
+// RFC 4180-ish CSV parser used by the import flow. Handles quoted fields
+// with embedded commas / newlines / escaped double-quotes.
+function parseCsv(text: string): string[][] {
+  const out: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          inQuotes = false;
+        }
+      } else {
+        field += ch;
+      }
+    } else {
+      if (ch === '"') inQuotes = true;
+      else if (ch === ",") {
+        row.push(field);
+        field = "";
+      } else if (ch === "\n" || ch === "\r") {
+        if (ch === "\r" && text[i + 1] === "\n") i++;
+        row.push(field);
+        field = "";
+        out.push(row);
+        row = [];
+      } else field += ch;
+    }
+  }
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    out.push(row);
+  }
+  return out.filter((r) => r.some((c) => c.trim() !== ""));
+}
+
 export default function ContactsView({
   workspaceId,
   workspaceLabel,
@@ -50,7 +91,11 @@ export default function ContactsView({
   const [search, setSearch] = useState("");
   const [debounced, setDebounced] = useState("");
   const [companies, setCompanies] = useState<Map<string, CrmCompany>>(new Map());
-  const [, setTags] = useState<CrmTag[]>([]);
+  const [tags, setTags] = useState<CrmTag[]>([]);
+  const [recordTags, setRecordTags] = useState<Map<string, string[]>>(
+    new Map()
+  );
+  const [tagFilter, setTagFilter] = useState<string>("all");
   const [customFields, setCustomFields] = useState<CrmCustomField[]>([]);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -59,6 +104,8 @@ export default function ContactsView({
   const [qaLast, setQaLast] = useState("");
   const [qaEmail, setQaEmail] = useState("");
   const [qaBusy, setQaBusy] = useState(false);
+  const [importBusy, setImportBusy] = useState(false);
+  const [mergeReport, setMergeReport] = useState<string | null>(null);
 
   // Debounce search 250ms.
   useEffect(() => {
@@ -114,7 +161,7 @@ export default function ContactsView({
     let cancelled = false;
     const run = async () => {
       try {
-        const [c, t, cf] = await Promise.all([
+        const [c, t, cf, rt] = await Promise.all([
           cachedFetch<{ items?: CrmCompany[] }>(
             `/api/crm/companies?workspace_id=${workspaceId}&limit=500`
           ),
@@ -124,6 +171,11 @@ export default function ContactsView({
           cachedFetch<{ items?: CrmCustomField[] }>(
             `/api/crm/custom-fields?workspace_id=${workspaceId}&record_type=contact`
           ),
+          cachedFetch<{
+            items?: { record_id: string; tag_id: string }[];
+          }>(
+            `/api/crm/record-tags?workspace_id=${workspaceId}&record_type=contact`
+          ).catch(() => ({ items: [] })),
         ]);
         if (cancelled) return;
         const map = new Map<string, CrmCompany>();
@@ -131,6 +183,13 @@ export default function ContactsView({
         setCompanies(map);
         setTags(t.items ?? []);
         setCustomFields(cf.items ?? []);
+        const rtMap = new Map<string, string[]>();
+        (rt.items ?? []).forEach((row) => {
+          const arr = rtMap.get(row.record_id) || [];
+          arr.push(row.tag_id);
+          rtMap.set(row.record_id, arr);
+        });
+        setRecordTags(rtMap);
       } catch {
         /* lookup failures are tolerated */
       }
@@ -140,6 +199,15 @@ export default function ContactsView({
       cancelled = true;
     };
   }, [workspaceId]);
+
+  // Apply tag filter on top of server-side rows.
+  const visibleRows = useMemo(() => {
+    if (tagFilter === "all") return rows;
+    return rows.filter((r) => {
+      const ids = recordTags.get(r.id) || [];
+      return ids.includes(tagFilter);
+    });
+  }, [rows, recordTags, tagFilter]);
 
   const columns: RecordColumn<CrmContact>[] = useMemo(() => {
     const base: RecordColumn<CrmContact>[] = [
@@ -287,6 +355,177 @@ export default function ContactsView({
     setQaFirst("New");
   };
 
+  // ── CSV export ────────────────────────────────────────────────────────
+  const exportCsv = () => {
+    const headers = [
+      "first_name",
+      "last_name",
+      "email",
+      "phone",
+      "job_title",
+      "company",
+      "notes",
+    ];
+    const escape = (v: string) =>
+      v.includes(",") || v.includes('"') || v.includes("\n")
+        ? `"${v.replace(/"/g, '""')}"`
+        : v;
+    const lines = [headers.join(",")];
+    rows.forEach((r) => {
+      const co = r.company_id ? companies.get(r.company_id) : null;
+      lines.push(
+        [
+          r.first_name ?? "",
+          r.last_name ?? "",
+          r.email ?? "",
+          r.phone ?? "",
+          r.job_title ?? "",
+          co?.name ?? "",
+          r.notes ?? "",
+        ]
+          .map(escape)
+          .join(",")
+      );
+    });
+    const blob = new Blob([lines.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "contacts.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
+  // ── CSV import (RFC 4180-ish) ─────────────────────────────────────────
+  const importCsv = async (file: File) => {
+    setImportBusy(true);
+    setError(null);
+    try {
+      const text = await file.text();
+      const parsed = parseCsv(text);
+      if (parsed.length < 2) {
+        throw new Error("CSV must have a header and at least one row.");
+      }
+      const headers = parsed[0].map((h) => h.trim().toLowerCase());
+      const idx = (k: string) => headers.indexOf(k);
+      const created: CrmContact[] = [];
+      for (const row of parsed.slice(1)) {
+        const body: Record<string, string | null> = {
+          workspace_id: workspaceId,
+          first_name: idx("first_name") >= 0 ? row[idx("first_name")] || null : null,
+          last_name: idx("last_name") >= 0 ? row[idx("last_name")] || null : null,
+          email: idx("email") >= 0 ? row[idx("email")] || null : null,
+          phone: idx("phone") >= 0 ? row[idx("phone")] || null : null,
+          job_title:
+            idx("job_title") >= 0
+              ? row[idx("job_title")] || null
+              : idx("title") >= 0
+              ? row[idx("title")] || null
+              : null,
+          notes: idx("notes") >= 0 ? row[idx("notes")] || null : null,
+        };
+        // skip blank rows
+        if (
+          !body.first_name &&
+          !body.last_name &&
+          !body.email &&
+          !body.phone
+        ) {
+          continue;
+        }
+        try {
+          const res = await fetch("/api/crm/contacts", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const j = (await res.json()) as { item?: CrmContact };
+          if (res.ok && j.item) created.push(j.item);
+        } catch {
+          /* skip row, continue */
+        }
+      }
+      setRows((prev) => [...created, ...prev]);
+      invalidate({ prefix: `/api/crm/contacts?workspace_id=${workspaceId}` });
+      if (typeof window !== "undefined") {
+        window.alert(`Imported ${created.length} contact(s).`);
+      }
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setImportBusy(false);
+    }
+  };
+
+  // ── Merge exact duplicates (same email) ──────────────────────────────
+  const mergeDuplicates = async () => {
+    const byEmail = new Map<string, CrmContact[]>();
+    rows.forEach((r) => {
+      const key = (r.email || "").trim().toLowerCase();
+      if (!key) return;
+      const arr = byEmail.get(key) || [];
+      arr.push(r);
+      byEmail.set(key, arr);
+    });
+    const groups = Array.from(byEmail.values()).filter((g) => g.length > 1);
+    if (groups.length === 0) {
+      setMergeReport("No exact-email duplicates found.");
+      return;
+    }
+    const total = groups.reduce((sum, g) => sum + g.length - 1, 0);
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm(
+        `Found ${groups.length} duplicate group(s) (${total} extra records). Merge into the oldest contact in each group?`
+      )
+    ) {
+      return;
+    }
+    let mergedCount = 0;
+    for (const group of groups) {
+      // Keep the oldest (lowest created_at) as the canonical record; absorb
+      // notes/job_title/phone from extras when blank, then delete extras.
+      const sorted = [...group].sort((a, b) =>
+        a.created_at.localeCompare(b.created_at)
+      );
+      const keeper = sorted[0];
+      const extras = sorted.slice(1);
+      const patch: Record<string, string | null> = {};
+      for (const ex of extras) {
+        if (!keeper.first_name && ex.first_name)
+          patch.first_name = ex.first_name;
+        if (!keeper.last_name && ex.last_name) patch.last_name = ex.last_name;
+        if (!keeper.phone && ex.phone) patch.phone = ex.phone;
+        if (!keeper.job_title && ex.job_title) patch.job_title = ex.job_title;
+        if (ex.notes) {
+          patch.notes = [keeper.notes, ex.notes]
+            .filter(Boolean)
+            .join("\n---\n");
+        }
+      }
+      try {
+        if (Object.keys(patch).length > 0) {
+          await fetch(`/api/crm/contacts/${keeper.id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(patch),
+          });
+        }
+        for (const ex of extras) {
+          await fetch(`/api/crm/contacts/${ex.id}`, { method: "DELETE" });
+          mergedCount++;
+        }
+      } catch {
+        /* skip on error */
+      }
+    }
+    invalidate({ prefix: `/api/crm/contacts?workspace_id=${workspaceId}` });
+    void load();
+    setMergeReport(
+      `Merged ${mergedCount} duplicate(s) across ${groups.length} group(s).`
+    );
+  };
+
   const handleBulk = async (key: string, ids: string[]) => {
     if (key === "delete") {
       if (!confirm(`Delete ${ids.length} contact(s)?`)) return;
@@ -310,12 +549,12 @@ export default function ContactsView({
   return (
     <>
       <RecordTable<CrmContact>
-        rows={rows}
+        rows={visibleRows}
         columns={columns}
         loading={loading}
         workspaceLabel={workspaceLabel}
         title="Contacts"
-        subtitle={`${rows.length} ${rows.length === 1 ? "contact" : "contacts"}`}
+        subtitle={`${visibleRows.length} of ${rows.length} ${rows.length === 1 ? "contact" : "contacts"}`}
         newLabel="New contact"
         onNew={handleNew}
         search={search}
@@ -363,36 +602,100 @@ export default function ContactsView({
         }
         width={width}
         quickAdd={
-          <div className="flex flex-wrap items-center gap-2 border-b border-app bg-app px-3 py-2">
-            <input
-              value={qaFirst}
-              onChange={(e) => setQaFirst(e.target.value)}
-              placeholder="First name"
-              className="h-8 flex-1 min-w-[110px] rounded-md border border-app bg-app-elevated px-2 text-xs text-app placeholder:text-faint focus:border-tool-accent focus:outline-none"
-            />
-            <input
-              value={qaLast}
-              onChange={(e) => setQaLast(e.target.value)}
-              placeholder="Last name"
-              className="h-8 flex-1 min-w-[110px] rounded-md border border-app bg-app-elevated px-2 text-xs text-app placeholder:text-faint focus:border-tool-accent focus:outline-none"
-            />
-            <input
-              value={qaEmail}
-              onChange={(e) => setQaEmail(e.target.value)}
-              type="email"
-              placeholder="email@example.com"
-              className="h-8 flex-[2] min-w-[160px] rounded-md border border-app bg-app-elevated px-2 text-xs text-app placeholder:text-faint focus:border-tool-accent focus:outline-none"
-            />
-            <button
-              type="button"
-              onClick={handleQuickAdd}
-              disabled={qaBusy}
-              className="h-8 rounded-md bg-tool-accent px-3 font-mono text-[0.55rem] font-semibold uppercase tracking-[0.16em] disabled:opacity-50"
-              style={{ color: "var(--bg)" }}
-            >
-              {qaBusy ? "Adding…" : "Quick add"}
-            </button>
-          </div>
+          <>
+            <div className="flex flex-wrap items-center gap-1.5 border-b border-app bg-app-elevated px-3 py-1.5">
+              <select
+                value={tagFilter}
+                onChange={(e) => setTagFilter(e.target.value)}
+                className="h-7 rounded-md border border-app bg-app px-2 font-mono text-[0.6rem] uppercase tracking-[0.16em] text-secondary focus:border-tool-accent focus:outline-none"
+              >
+                <option value="all">All tags</option>
+                {tags.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                  </option>
+                ))}
+              </select>
+              <span className="font-mono text-[0.55rem] uppercase tracking-[0.16em] text-faint">
+                {tags.length} tag{tags.length === 1 ? "" : "s"}
+              </span>
+              <div className="ml-auto flex items-center gap-1.5">
+                <label className="cursor-pointer rounded-md border border-app bg-app px-2.5 py-1 font-mono text-[0.55rem] uppercase tracking-[0.16em] text-secondary transition-colors hover:border-tool-accent hover:text-tool-accent">
+                  {importBusy ? "Importing…" : "Import CSV"}
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    className="hidden"
+                    disabled={importBusy}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) void importCsv(f);
+                      e.target.value = "";
+                    }}
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={exportCsv}
+                  className="rounded-md border border-app bg-app px-2.5 py-1 font-mono text-[0.55rem] uppercase tracking-[0.16em] text-secondary transition-colors hover:border-tool-accent hover:text-tool-accent"
+                >
+                  Export CSV
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void mergeDuplicates()}
+                  className="rounded-md border border-app bg-app px-2.5 py-1 font-mono text-[0.55rem] uppercase tracking-[0.16em] text-secondary transition-colors hover:border-tool-accent hover:text-tool-accent"
+                >
+                  Merge dupes
+                </button>
+              </div>
+            </div>
+            {mergeReport && (
+              <div className="flex items-center gap-2 border-b border-app bg-tool-accent-soft px-3 py-1.5">
+                <span className="font-mono text-[0.6rem] text-tool-accent">
+                  {mergeReport}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setMergeReport(null)}
+                  className="ml-auto text-[0.7rem] text-tool-accent hover:opacity-70"
+                  aria-label="Dismiss"
+                >
+                  ×
+                </button>
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-2 border-b border-app bg-app px-3 py-2">
+              <input
+                value={qaFirst}
+                onChange={(e) => setQaFirst(e.target.value)}
+                placeholder="First name"
+                className="h-8 flex-1 min-w-[110px] rounded-md border border-app bg-app-elevated px-2 text-xs text-app placeholder:text-faint focus:border-tool-accent focus:outline-none"
+              />
+              <input
+                value={qaLast}
+                onChange={(e) => setQaLast(e.target.value)}
+                placeholder="Last name"
+                className="h-8 flex-1 min-w-[110px] rounded-md border border-app bg-app-elevated px-2 text-xs text-app placeholder:text-faint focus:border-tool-accent focus:outline-none"
+              />
+              <input
+                value={qaEmail}
+                onChange={(e) => setQaEmail(e.target.value)}
+                type="email"
+                placeholder="email@example.com"
+                className="h-8 flex-[2] min-w-[160px] rounded-md border border-app bg-app-elevated px-2 text-xs text-app placeholder:text-faint focus:border-tool-accent focus:outline-none"
+              />
+              <button
+                type="button"
+                onClick={handleQuickAdd}
+                disabled={qaBusy}
+                className="h-8 rounded-md bg-tool-accent px-3 font-mono text-[0.55rem] font-semibold uppercase tracking-[0.16em] disabled:opacity-50"
+                style={{ color: "var(--bg)" }}
+              >
+                {qaBusy ? "Adding…" : "Quick add"}
+              </button>
+            </div>
+          </>
         }
       />
       {active && (

@@ -608,6 +608,10 @@ export const CRM_SECTIONS = [
   "inventory",
   "boards",
   "activities",
+  "templates",
+  "reminders",
+  "territories",
+  "forms",
   "reports",
   "settings",
 ] as const;

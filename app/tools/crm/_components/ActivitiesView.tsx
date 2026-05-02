@@ -31,7 +31,7 @@ import { ACTIVITY_KIND_VALUES } from "../types";
 import { RecIcon } from "./_records/Icon";
 import ActivityComposer from "./ActivityComposer";
 
-type Mode = "list" | "calendar";
+type Mode = "list" | "calendar" | "thread";
 type CalScope = "month" | "week";
 type Quick = "today" | "overdue" | "week" | null;
 
@@ -226,6 +226,17 @@ export default function ActivitiesView() {
             </button>
             <button
               type="button"
+              onClick={() => setMode("thread")}
+              className={`border-l border-app px-2.5 py-1 font-mono text-[0.6rem] uppercase tracking-[0.16em] ${
+                mode === "thread"
+                  ? "bg-tool-accent-soft text-tool-accent"
+                  : "text-secondary hover:text-app"
+              }`}
+            >
+              By contact
+            </button>
+            <button
+              type="button"
               onClick={() => setMode("calendar")}
               className={`border-l border-app px-2.5 py-1 font-mono text-[0.6rem] uppercase tracking-[0.16em] ${
                 mode === "calendar"
@@ -236,6 +247,14 @@ export default function ActivitiesView() {
               Calendar
             </button>
           </div>
+          <button
+            type="button"
+            onClick={() => downloadIcs(filtered)}
+            disabled={filtered.length === 0}
+            className="rounded-md border border-app bg-app-elevated px-2.5 py-1 font-mono text-[0.6rem] uppercase tracking-[0.16em] text-secondary hover:border-tool-accent hover:text-tool-accent disabled:opacity-50"
+          >
+            Export .ics
+          </button>
           <button
             type="button"
             onClick={() => setComposerOpen(true)}
@@ -311,12 +330,44 @@ export default function ActivitiesView() {
             {error}
           </div>
         )}
+        {/* Per-channel breakdown bar */}
+        {!loading && filtered.length > 0 && (
+          <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 md:grid-cols-6">
+            {ACTIVITY_KIND_VALUES.map((k) => {
+              const total = filtered.length || 1;
+              const n = filtered.filter((a) => a.kind === k).length;
+              const pct = (n / total) * 100;
+              return (
+                <div
+                  key={k}
+                  className="rounded-md border border-app bg-app-elevated p-2"
+                >
+                  <div className="flex items-center justify-between font-mono text-[0.55rem] uppercase tracking-[0.15em] text-faint">
+                    <span>{k}</span>
+                    <span className="text-tool-accent">{n}</span>
+                  </div>
+                  <div className="mt-1 h-1 overflow-hidden rounded-full bg-app">
+                    <div
+                      className="h-full bg-tool-accent transition-all"
+                      style={{ width: `${pct}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
         {loading ? (
           <div className="font-mono text-[0.6rem] uppercase tracking-[0.16em] text-faint">
             Loading…
           </div>
         ) : mode === "list" ? (
           <ActivityList
+            items={filtered}
+            onToggleCompleted={onToggleCompleted}
+          />
+        ) : mode === "thread" ? (
+          <ActivityThread
             items={filtered}
             onToggleCompleted={onToggleCompleted}
           />
@@ -431,6 +482,70 @@ const KIND_GLYPH: Record<CrmActivityKind, string> = {
   sms: "S",
 };
 
+// ── ICS export ─────────────────────────────────────────────────────────
+function formatIcsDate(iso: string): string {
+  const d = new Date(iso);
+  const z = (n: number, w = 2) => n.toString().padStart(w, "0");
+  return (
+    z(d.getUTCFullYear(), 4) +
+    z(d.getUTCMonth() + 1) +
+    z(d.getUTCDate()) +
+    "T" +
+    z(d.getUTCHours()) +
+    z(d.getUTCMinutes()) +
+    "00Z"
+  );
+}
+
+function escapeIcs(s: string): string {
+  return s
+    .replace(/\\/g, "\\\\")
+    .replace(/\n/g, "\\n")
+    .replace(/,/g, "\\,")
+    .replace(/;/g, "\\;");
+}
+
+function activitiesToIcs(items: CrmActivity[]): string {
+  const lines: string[] = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//spacefield//crm-activities//EN",
+    "CALSCALE:GREGORIAN",
+  ];
+  for (const a of items) {
+    const startIso = a.starts_at ?? a.due_at;
+    if (!startIso) continue;
+    const startD = new Date(startIso);
+    if (Number.isNaN(startD.getTime())) continue;
+    const endIso =
+      a.ends_at ??
+      new Date(startD.getTime() + 30 * 60 * 1000).toISOString();
+    lines.push(
+      "BEGIN:VEVENT",
+      `UID:${a.id}@spacefield-crm`,
+      `DTSTAMP:${formatIcsDate(new Date().toISOString())}`,
+      `DTSTART:${formatIcsDate(startIso)}`,
+      `DTEND:${formatIcsDate(endIso)}`,
+      `SUMMARY:${escapeIcs(`[${a.kind}] ${a.subject ?? ""}`)}`,
+      `DESCRIPTION:${escapeIcs(a.body ?? "")}`,
+      "END:VEVENT"
+    );
+  }
+  lines.push("END:VCALENDAR");
+  return lines.join("\r\n");
+}
+
+function downloadIcs(items: CrmActivity[]) {
+  const data = activitiesToIcs(items);
+  const blob = new Blob([data], { type: "text/calendar" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = "crm-activities.ics";
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function KindBadge({ kind }: { kind: CrmActivityKind }) {
   return (
     <span
@@ -439,6 +554,126 @@ function KindBadge({ kind }: { kind: CrmActivityKind }) {
     >
       {KIND_GLYPH[kind]}
     </span>
+  );
+}
+
+// ── Thread mode ────────────────────────────────────────────────────────
+// Group activities by their primary related record (contact > company >
+// deal > lead > "(unattached)") so a sales rep can see one thread per
+// counterparty.
+function ActivityThread({
+  items,
+  onToggleCompleted,
+}: {
+  items: CrmActivity[];
+  onToggleCompleted: (a: CrmActivity) => void;
+}) {
+  const groups = useMemo(() => {
+    const map = new Map<string, { label: string; activities: CrmActivity[] }>();
+    for (const a of items) {
+      let key = "(unattached)";
+      let label = "(no related record)";
+      if (a.contact_id) {
+        key = `contact:${a.contact_id}`;
+        label = `Contact · ${a.contact_id.slice(0, 8)}`;
+      } else if (a.company_id) {
+        key = `company:${a.company_id}`;
+        label = `Company · ${a.company_id.slice(0, 8)}`;
+      } else if (a.deal_id) {
+        key = `deal:${a.deal_id}`;
+        label = `Deal · ${a.deal_id.slice(0, 8)}`;
+      } else if (a.lead_id) {
+        key = `lead:${a.lead_id}`;
+        label = `Lead · ${a.lead_id.slice(0, 8)}`;
+      }
+      const cur = map.get(key) ?? { label, activities: [] };
+      cur.activities.push(a);
+      map.set(key, cur);
+    }
+    const entries = Array.from(map.entries()).map(([k, v]) => ({
+      key: k,
+      label: v.label,
+      activities: v.activities.sort((a, b) => {
+        const ia = a.starts_at ?? a.due_at ?? a.created_at;
+        const ib = b.starts_at ?? b.due_at ?? b.created_at;
+        return ib.localeCompare(ia);
+      }),
+    }));
+    entries.sort((a, b) => {
+      const ia = a.activities[0]?.created_at ?? "";
+      const ib = b.activities[0]?.created_at ?? "";
+      return ib.localeCompare(ia);
+    });
+    return entries;
+  }, [items]);
+
+  if (groups.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed border-app bg-app-elevated p-6 text-center text-sm text-muted">
+        No activities match the current filters.
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      {groups.map((g) => (
+        <div
+          key={g.key}
+          className="rounded-md border border-app bg-app-elevated p-3"
+        >
+          <div className="mb-2 flex items-baseline justify-between">
+            <div className="text-sm font-semibold text-app">{g.label}</div>
+            <div className="font-mono text-[0.55rem] uppercase tracking-[0.15em] text-tool-accent">
+              {g.activities.length}{" "}
+              {g.activities.length === 1 ? "activity" : "activities"}
+            </div>
+          </div>
+          <ol className="relative space-y-2 pl-5">
+            <span
+              aria-hidden
+              className="absolute left-[0.45rem] top-1 bottom-1 w-px"
+              style={{ background: "var(--border)" }}
+            />
+            {g.activities.map((a) => (
+              <li key={a.id} className="relative">
+                <span
+                  aria-hidden
+                  className={`absolute -left-[1.05rem] top-1.5 flex h-3 w-3 items-center justify-center rounded-full ${
+                    a.kind === "meeting" || a.kind === "call"
+                      ? "bg-tool-accent"
+                      : "border border-app bg-app-elevated"
+                  }`}
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  {a.kind === "task" && (
+                    <input
+                      type="checkbox"
+                      checked={Boolean(a.completed_at)}
+                      onChange={() => onToggleCompleted(a)}
+                      className="h-3.5 w-3.5 accent-[var(--tool-accent)]"
+                      aria-label="Toggle completed"
+                    />
+                  )}
+                  <KindBadge kind={a.kind} />
+                  <span className="font-mono text-[0.6rem] text-faint">
+                    {timeLabel(a)}
+                  </span>
+                  <span className="text-sm text-app">
+                    {a.subject ?? "(no subject)"}
+                  </span>
+                </div>
+                {a.body && (
+                  <p className="mt-1 text-xs text-secondary">
+                    {a.body.slice(0, 200)}
+                  </p>
+                )}
+              </li>
+            ))}
+          </ol>
+        </div>
+      ))}
+    </div>
   );
 }
 
