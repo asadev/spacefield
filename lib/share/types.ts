@@ -52,6 +52,13 @@ export interface PagePayload {
   ctaHref?: string;
   brandColor?: string;
   brandLogo?: string;
+  /**
+   * Rasterized poster image. When present, the viewer renders this image
+   * as the entire content of the page (no title, no blocks, no chrome) —
+   * preserving the EXACT pixels the user designed in the poster tool.
+   * Other PagePayload fields are ignored (used only as metadata).
+   */
+  posterImage?: string;
 }
 
 export type PageBlock =
