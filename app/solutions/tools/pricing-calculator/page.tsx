@@ -758,6 +758,7 @@ function PricingInner() {
             variant="ghost"
             workspaceId={current.kind === "team" ? current.id : undefined}
             disabled={state.tiers.length === 0}
+            resetKey={`${state.tiers.length}|${state.tiers.map((t) => t.name).join("|")}`}
             payload={() => buildPricingSharePayload(state)}
           />
         </div>

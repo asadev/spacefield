@@ -618,6 +618,7 @@ export default function SalesOfferGeneratorApp(props: NativeAppProps) {
             type="quote"
             sourceTool="sales-offer-generator"
             label="Share as link"
+            resetKey={`${form.propertyName}|${form.unitType}|${form.price}|${form.clientName}`}
             disabled={
               !form.propertyName.trim() ||
               !form.price ||

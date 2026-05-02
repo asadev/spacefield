@@ -969,6 +969,7 @@ function PosterMobileFlow({
                 disabled={!canShare}
                 label="Share link"
                 variant="ghost"
+                resetKey={`${data.propertyTitle ?? ""}|${data.location ?? ""}|${data.price ?? ""}|${data.propertyImage?.src ?? ""}`}
               />
             </div>
           </div>
@@ -1592,6 +1593,7 @@ export default function PropertyPosterCreatorApp({
                 disabled={!canShare}
                 label="Share link"
                 variant="ghost"
+                resetKey={`${data.propertyTitle ?? ""}|${data.location ?? ""}|${data.price ?? ""}|${data.propertyImage?.src ?? ""}`}
               />
             </div>
           </div>

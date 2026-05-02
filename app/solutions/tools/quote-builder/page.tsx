@@ -783,6 +783,7 @@ export default function QuoteBuilderPage() {
                   type="quote"
                   sourceTool="quote-builder"
                   label="Share as link"
+                  resetKey={`${quote.number}|${quote.name}|${quote.lines.length}`}
                   disabled={quote.lines.length === 0 || !quote.name.trim()}
                   payload={() => ({
                     title: quote.name || "Quote",
