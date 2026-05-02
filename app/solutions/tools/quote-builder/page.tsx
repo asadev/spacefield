@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import ToolShell from "../../_components/ToolShell";
 import ToolCard, { Field, inputCls } from "../../_components/ToolCard";
+import MintShareButton from "@/app/_share/_components/MintShareButton";
 
 type Line = {
   id: string;
@@ -766,6 +767,46 @@ export default function QuoteBuilderPage() {
                 >
                   Copy summary
                 </button>
+              </div>
+              <div className="mt-5 rounded-xl border border-app bg-app p-4">
+                <div className="mb-2 font-mono text-[0.55rem] uppercase tracking-[0.2em] text-tool-accent">
+                  Share as public link
+                </div>
+                <p className="mb-3 text-xs text-secondary">
+                  Publish this quote at share.example.com/q/… — recipient sees a clean itemized quote with totals, validity, and terms.
+                </p>
+                <MintShareButton
+                  type="quote"
+                  sourceTool="quote-builder"
+                  label="Share as link"
+                  disabled={quote.lines.length === 0 || !quote.name.trim()}
+                  payload={() => ({
+                    title: quote.name || "Quote",
+                    recipientName: toCompany || undefined,
+                    recipientCompany: toCompany || undefined,
+                    issuedDate:
+                      quote.issueDate || new Date().toISOString().split("T")[0],
+                    validUntil: quote.expirationDate || undefined,
+                    lineItems: quote.lines.map((l) => {
+                      const qty = parseFloat(l.qty) || 0;
+                      const lp = parseFloat(l.listPrice) || 0;
+                      const disc = (parseFloat(l.discount) || 0) / 100;
+                      const netUnit = lp * (1 - disc);
+                      const discLabel =
+                        disc > 0 ? ` (−${(disc * 100).toFixed(0)}%)` : "";
+                      return {
+                        description: `${l.description || "—"}${l.unit ? ` / ${l.unit}` : ""}${discLabel}`,
+                        quantity: qty,
+                        unitPrice: netUnit,
+                      };
+                    }),
+                    currency: quote.currency || "USD",
+                    notes: quote.notes || undefined,
+                    termsHtml: quote.terms
+                      ? `<p>${quote.terms.replace(/\n/g, "</p><p>")}</p>`
+                      : undefined,
+                  })}
+                />
               </div>
               <div className="mt-5 rounded-xl border border-app bg-app p-4">
                 <div className="font-mono text-[0.55rem] uppercase tracking-[0.2em] text-tool-accent">
