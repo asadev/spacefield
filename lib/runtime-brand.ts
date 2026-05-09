@@ -1,10 +1,33 @@
 import "server-only";
 
-import { createAdminClient } from "@/lib/supabase/admin";
+import { headers } from "next/headers";
+
 import type { BrandConfigRow } from "@/app/admin/_types";
 
-/* Brand config — workspace overrides global. Cached for 60s; brand changes
- * are infrequent and the layout reads this on every render. */
+/* Active brand config — workspace overrides global.
+ *
+ * Renders on every page via app/layout.tsx. Same constraint as
+ * runtime-banner: admin updates to brand_configs must reach the
+ * public surface without redeploying.
+ *
+ * Render-mode contract — IMPORTANT:
+ *   - The root layout reads brand vars on every render. If a route
+ *     is statically prerendered, the brand vars are frozen at build
+ *     time. Verified empirically against spacefield.co: a `#ff0000`
+ *     primary_color update never reached `/`'s injected <style>.
+ *   - Fix: `await headers()` opts the calling tree out of static
+ *     prerendering. See the file-header comment in
+ *     lib/runtime-banner.ts for the full rationale; both libs
+ *     share the same constraint and resolution.
+ *
+ * Why direct `fetch()` + `cache: "no-store"`:
+ *   `fetch()` is the standard server-side PostgREST call; supabase-js
+ *   isn't needed here. `cache: "no-store"` means each fetch reflects
+ *   current DB state — Next's revalidate-based caching would yield
+ *   stale-while-revalidate which served stale brand vars after
+ *   admin updates. The per-worker Map cache (TTL_MS) below provides
+ *   the throttling, so RPC pressure stays at one fetch per ~60s per
+ *   Node worker. */
 
 const TTL_MS = 60_000;
 
@@ -22,6 +45,11 @@ function cacheKey(workspaceId?: string | null): string {
 export async function getActiveBrand(
   workspaceId?: string | null,
 ): Promise<BrandConfigRow | null> {
+  // Touch a request-scoped API to opt the caller out of static
+  // prerendering. See dynamic-render contract in
+  // lib/runtime-banner.ts.
+  try { await headers(); } catch { /* outside request scope */ }
+
   const key = cacheKey(workspaceId);
   const hit = cache.get(key);
   const now = Date.now();
@@ -29,30 +57,38 @@ export async function getActiveBrand(
     return hit.row;
   }
 
-  let admin;
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !serviceKey) return null;
+
+  let row: BrandConfigRow | null = null;
   try {
-    admin = createAdminClient();
+    const res = await fetch(`${url}/rest/v1/rpc/active_brand`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: serviceKey,
+        Authorization: `Bearer ${serviceKey}`,
+      },
+      body: JSON.stringify({ ws_id: workspaceId ?? null }),
+      cache: "no-store",
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    // active_brand returns a single brand_configs row (or null when
+    // neither workspace override nor global default exists). PostgREST
+    // can return either an object or an array depending on the
+    // function shape; defensive about both.
+    if (Array.isArray(data)) {
+      row = (data[0] as BrandConfigRow | undefined) ?? null;
+    } else if (data && typeof data === "object") {
+      row = data as BrandConfigRow;
+    }
   } catch {
     return null;
-  }
-
-  const { data, error } = await admin.rpc("active_brand", {
-    ws_id: workspaceId ?? null,
-  });
-
-  if (error) {
-    return null;
-  }
-
-  // active_brand returns a single row (or null when neither workspace
-  // override nor global default exists). Supabase RPC returning a SETOF
-  // table can yield either an object or array depending on driver — be
-  // defensive.
-  let row: BrandConfigRow | null = null;
-  if (Array.isArray(data)) {
-    row = (data[0] as BrandConfigRow | undefined) ?? null;
-  } else if (data && typeof data === "object") {
-    row = data as BrandConfigRow;
   }
 
   cache.set(key, { row, fetchedAt: now });
