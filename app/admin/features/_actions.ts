@@ -226,4 +226,7 @@ export async function deleteFlag(formData: FormData): Promise<void> {
   redirect("/admin/features");
 }
 
-export type { FeatureFlagRow };
+// FeatureFlagRow is intentionally NOT re-exported here — `"use server"`
+// modules can only export async functions. Importers should pull the
+// type from `@/app/admin/_types` directly.
+
