@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createAdminClient } from "@/lib/supabase/admin";
+import { createClient } from "@/lib/supabase/server";
 import { renderMarkdown } from "@/app/admin/help/_markdown";
 
 /**
@@ -13,11 +13,20 @@ import { renderMarkdown } from "@/app/admin/help/_markdown";
  * — no DDL, no DML, only `select` or `with`. We trust the markdown body
  * to be admin-authored.
  *
- * Execution path: we call `supabase.rpc('exec_admin_sql', { sql })` if it
- * exists; otherwise we fall back to `admin_exec_select(query)` (the
- * existing read-only RPC used by /admin/database). If neither responds,
+ * Execution path: we call `supabase.rpc('exec_admin_sql', { query })`
+ * (migration 20260509f). The RPC is `security definer`, gated on
+ * `admin_caller_is_admin()`, and rejects anything that isn't a single
+ * SELECT/WITH (text-level). If that RPC isn't yet registered we fall
+ * back to `admin_exec_select(query)` (the alias). If neither responds,
  * we return a placeholder shape that the renderer will display as a
  * "set up admin SQL exec" hint instead of throwing.
+ *
+ * IMPORTANT: we use the user-scoped Supabase client (`createClient` from
+ * lib/supabase/server) rather than the service-role client. The RPC is
+ * gated on `admin_caller_is_admin()` which reads `auth.uid()`. With the
+ * service-role key auth.uid() is null and the function would throw
+ * 'forbidden'. The /admin/* layout already gates non-admins so any user
+ * reaching a block executor is already an admin.
  */
 
 /* ───────────────────── SQL safety + dispatch ───────────────────── */
@@ -73,11 +82,42 @@ export type SqlDispatchResult =
   | { ok: false; error: string; placeholder?: boolean; durationMs: number };
 
 /**
- * Run a validated SELECT via service-role Supabase. Tries `exec_admin_sql`
- * first (the new, named RPC the spec mentions); falls back to
- * `admin_exec_select` (existing). If neither RPC is registered we return
- * a placeholder result so the renderer can show a helpful hint instead
- * of breaking the whole page.
+ * Each row of `setof jsonb` arrives from PostgREST as a flat object — i.e.
+ * `[{a:1,b:2}, {a:3,b:4}]`. But supabase-js or future RPC shapes might
+ * wrap each row under the function name (`{exec_admin_sql: {...}}`) when
+ * coming through other paths. This helper accepts either shape.
+ */
+function unwrapJsonbRow(row: unknown): RawRow {
+  if (row && typeof row === "object" && !Array.isArray(row)) {
+    const obj = row as Record<string, unknown>;
+    const keys = Object.keys(obj);
+    // setof-jsonb single-column wrap: {to_jsonb: {...}} or {<fn_name>: {...}}
+    if (keys.length === 1) {
+      const inner = obj[keys[0]];
+      if (
+        inner &&
+        typeof inner === "object" &&
+        !Array.isArray(inner) &&
+        (keys[0] === "to_jsonb" ||
+          keys[0] === "exec_admin_sql" ||
+          keys[0] === "admin_exec_select")
+      ) {
+        return inner as RawRow;
+      }
+    }
+    return obj as RawRow;
+  }
+  return {};
+}
+
+/**
+ * Run a validated SELECT via the user-scoped Supabase client. Tries
+ * `exec_admin_sql` first (canonical RPC from migration 20260509f); falls
+ * back to `admin_exec_select` (alias). The RPC is `security definer`, the
+ * admin check is enforced inside the function via `admin_caller_is_admin()`.
+ *
+ * If neither RPC is registered we return a placeholder result so the
+ * renderer can show a helpful hint instead of breaking the whole page.
  */
 export async function runAdminSelect(sql: string): Promise<SqlDispatchResult> {
   const v = validateSelectSql(sql);
@@ -85,14 +125,17 @@ export async function runAdminSelect(sql: string): Promise<SqlDispatchResult> {
     return { ok: false, error: v.error, durationMs: 0 };
   }
 
-  const sb = createAdminClient();
+  const sb = await createClient();
   const start = Date.now();
 
-  // Try the canonical RPC first.
+  // Try the canonical RPC first. Param is named `query` per migration
+  // 20260509f_exec_admin_sql.sql.
   try {
-    const r1 = await sb.rpc("exec_admin_sql", { sql: v.cleaned });
+    const r1 = await sb.rpc("exec_admin_sql", { query: v.cleaned });
     if (!r1.error) {
-      const rows = Array.isArray(r1.data) ? (r1.data as RawRow[]) : [];
+      const rows = Array.isArray(r1.data)
+        ? (r1.data as unknown[]).map(unwrapJsonbRow)
+        : [];
       return { ok: true, rows, durationMs: Date.now() - start };
     }
     // If the function isn't registered we get a 404-ish PGRST error —
@@ -112,7 +155,9 @@ export async function runAdminSelect(sql: string): Promise<SqlDispatchResult> {
   try {
     const r2 = await sb.rpc("admin_exec_select", { query: v.cleaned });
     if (!r2.error) {
-      const rows = Array.isArray(r2.data) ? (r2.data as RawRow[]) : [];
+      const rows = Array.isArray(r2.data)
+        ? (r2.data as unknown[]).map(unwrapJsonbRow)
+        : [];
       return { ok: true, rows, durationMs: Date.now() - start };
     }
     const msg2 = (r2.error.message ?? "").toLowerCase();
@@ -131,7 +176,7 @@ export async function runAdminSelect(sql: string): Promise<SqlDispatchResult> {
     ok: false,
     placeholder: true,
     error:
-      "No admin SQL executor RPC registered. Create `exec_admin_sql(sql text)` (or `admin_exec_select(query text)`) returning JSON.",
+      "No admin SQL executor RPC registered. Create `exec_admin_sql(query text)` (or `admin_exec_select(query text)`) returning setof jsonb.",
     durationMs: Date.now() - start,
   };
 }
