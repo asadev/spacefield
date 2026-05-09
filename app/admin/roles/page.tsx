@@ -6,6 +6,8 @@ import { buttonClass, formatDateTime } from "../_lib";
 
 import type { AdminRoleRow } from "../_types";
 
+import MyPermissions from "./_MyPermissions";
+
 export const dynamic = "force-dynamic";
 
 type RoleListEntry = AdminRoleRow & {
@@ -89,6 +91,9 @@ export default async function AdminRolesIndexPage() {
 
   return (
     <div className="space-y-5">
+      {/* v7: self-audit panel — shows the signed-in admin their effective access. */}
+      <MyPermissions />
+
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="text-[0.6rem] uppercase tracking-[0.2em] text-faint">
