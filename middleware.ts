@@ -8,6 +8,80 @@ const LEGACY_TOOL_SLUGS: Record<string, string> = {
 
 const TOSHARE_DOMAIN = "toshare.net";
 
+/* Maintenance-mode bypass list — paths where we MUST NOT redirect even
+ * when maintenance is active. Admins still need to flip the toggle
+ * back off, the maintenance page itself can't redirect to itself, and
+ * Next infra / auth flows have to keep working. */
+const MAINTENANCE_BYPASS_PREFIXES = [
+  "/maintenance",
+  "/admin",
+  "/_next",
+  "/api/admin",
+  "/api/auth",
+  "/signin",
+];
+
+interface MaintenanceCheckResult {
+  active: boolean;
+}
+
+let maintenanceCache:
+  | { fetchedAt: number; result: MaintenanceCheckResult }
+  | null = null;
+const MAINTENANCE_TTL_MS = 30_000;
+
+/* Direct fetch to the maintenance_active() RPC. We don't use the
+ * @supabase/ssr client here because middleware runs on every request
+ * and we want zero allocations for the cached-hit path. The 30s TTL
+ * matches lib/runtime-maintenance.ts so admin toggles take effect
+ * within ~30s site-wide. Failures (missing env, RPC error, network)
+ * degrade to "site is up" — failing closed would lock everyone out. */
+async function checkMaintenance(): Promise<MaintenanceCheckResult> {
+  const now = Date.now();
+  if (maintenanceCache && now - maintenanceCache.fetchedAt < MAINTENANCE_TTL_MS) {
+    return maintenanceCache.result;
+  }
+
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const anon = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+  if (!url || !anon) {
+    const result = { active: false };
+    maintenanceCache = { fetchedAt: now, result };
+    return result;
+  }
+
+  try {
+    const res = await fetch(`${url}/rest/v1/rpc/maintenance_active`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: anon,
+        Authorization: `Bearer ${anon}`,
+      },
+      body: JSON.stringify({ uid: null }),
+      // Edge runtime: avoid keep-alive issues from long-lived caches
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      const result = { active: false };
+      maintenanceCache = { fetchedAt: now, result };
+      return result;
+    }
+    const data = (await res.json()) as boolean | null;
+    const result = { active: data === true };
+    maintenanceCache = { fetchedAt: now, result };
+    return result;
+  } catch {
+    const result = { active: false };
+    maintenanceCache = { fetchedAt: now, result };
+    return result;
+  }
+}
+
+function isMaintenanceBypassPath(pathname: string): boolean {
+  return MAINTENANCE_BYPASS_PREFIXES.some((p) => pathname.startsWith(p));
+}
+
 /* Host-router for the toshare.net link surface.
  *
  * toshare.net is hosted on the SAME Vercel project as spacefield.io. The
@@ -160,6 +234,21 @@ function shellRedirectForStandaloneTool(request: NextRequest): NextResponse | nu
  * sign-in) and returns 401 even though the browser thinks it's signed in.
  */
 export async function middleware(request: NextRequest) {
+  // Maintenance gate — runs before any host/path routing so admins can
+  // take the public surface offline while keeping /admin, /signin, and
+  // Next infra reachable. Bypass-path check is cheap; the RPC call is
+  // TTL-cached so most requests don't hit the network.
+  const path = request.nextUrl.pathname;
+  if (!isMaintenanceBypassPath(path)) {
+    const maint = await checkMaintenance();
+    if (maint.active) {
+      const url = request.nextUrl.clone();
+      url.pathname = "/maintenance";
+      url.search = "";
+      return NextResponse.redirect(url);
+    }
+  }
+
   // toshare.net host routing — runs FIRST so /tools redirects don't fire
   const toshareResp = toshareRouter(request);
   if (toshareResp) return toshareResp;
