@@ -2,15 +2,29 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { readCodeSkillTools, readSkillSource } from "@/lib/agent/skills/_inspector";
 
 import { formatDateTime } from "../../_lib";
-import type { AiSkillRow } from "../../_types";
+import type {
+  AgentToolOverrideRow,
+  AiAgentRow,
+  AiAgentRunRow,
+  AiSkillRow,
+} from "../../_types";
 import { deleteSkill, setSkillStatus, updateSkill } from "../_actions";
+import AgentsUsingPanel from "../_components/AgentsUsingPanel";
 import KindChip from "../_components/KindChip";
+import RecentRunsPanel from "../_components/RecentRunsPanel";
 import SkillForm from "../_components/SkillForm";
+import SourceCodePanel from "../_components/SourceCodePanel";
 import StatusChip from "../_components/StatusChip";
+import TestRunnerPanel from "../_components/TestRunnerPanel";
+import ToolOverridesPanel from "../_components/ToolOverridesPanel";
 
 export const dynamic = "force-dynamic";
+
+const RUNS_LIMIT = 50;
+const GLOBAL_AGENT_ID = "__global__";
 
 export default async function AdminSkillDetailPage({
   params,
@@ -21,24 +35,108 @@ export default async function AdminSkillDetailPage({
   const id = decodeURIComponent(rawId);
 
   const admin = createAdminClient();
-  const { data, error } = await admin
+
+  // Skill row
+  const { data: skillData, error: skillErr } = await admin
     .from("ai_skills")
     .select("*")
     .eq("id", id)
     .maybeSingle();
-
-  if (error) {
+  if (skillErr) {
     return (
       <div className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm text-rose-500">
-        Failed to load skill: {error.message}
+        Failed to load skill: {skillErr.message}
       </div>
     );
   }
-
-  const skill = data as AiSkillRow | null;
+  const skill = skillData as AiSkillRow | null;
   if (!skill) notFound();
 
   const isCode = skill.kind === "code";
+
+  // Source code (for code skills)
+  const sourceInfo = isCode
+    ? await readSkillSource(skill.id, skill.handler_module ?? null)
+    : null;
+  const codeRegistry = isCode ? await readCodeSkillTools(skill.id) : null;
+
+  // Recent runs — best-effort tag match, then substring fallback.
+  const sanitized = id.replace(/[%_\\]/g, "\\$&");
+  const [{ data: taggedRuns }, { data: substringRuns }, { data: agentsData }, { data: overridesData }] =
+    await Promise.all([
+      admin
+        .from("ai_agent_runs")
+        .select(
+          "id, agent_id, channel, status, input_excerpt, output_excerpt, duration_ms, model, created_at"
+        )
+        .filter("metadata->>skill_id", "eq", id)
+        .order("created_at", { ascending: false })
+        .limit(RUNS_LIMIT),
+      admin
+        .from("ai_agent_runs")
+        .select(
+          "id, agent_id, channel, status, input_excerpt, output_excerpt, duration_ms, model, created_at"
+        )
+        .ilike("input_excerpt", `%${sanitized}%`)
+        .order("created_at", { ascending: false })
+        .limit(RUNS_LIMIT),
+      admin
+        .from("ai_agents")
+        .select(
+          "id, display_name, kind, model, status, allowed_skills, sort_order, updated_at"
+        )
+        .filter("allowed_skills", "cs", JSON.stringify([id]))
+        .order("status", { ascending: true })
+        .order("display_name", { ascending: true }),
+      admin
+        .from("agent_tool_overrides")
+        .select("*")
+        .eq("agent_id", GLOBAL_AGENT_ID)
+        .eq("skill_id", id),
+    ]);
+
+  // Merge runs (preferring tagged ones first, deduping on id).
+  type RunRow = Pick<
+    AiAgentRunRow,
+    | "id"
+    | "agent_id"
+    | "channel"
+    | "status"
+    | "input_excerpt"
+    | "output_excerpt"
+    | "duration_ms"
+    | "model"
+    | "created_at"
+  >;
+  const tagged = (taggedRuns ?? []) as RunRow[];
+  const substring = (substringRuns ?? []) as RunRow[];
+  const seenRuns = new Set(tagged.map((r) => r.id));
+  const mergedRuns = [...tagged];
+  for (const r of substring) {
+    if (seenRuns.has(r.id)) continue;
+    mergedRuns.push(r);
+    seenRuns.add(r.id);
+    if (mergedRuns.length >= RUNS_LIMIT) break;
+  }
+  mergedRuns.sort((a, b) => (a.created_at < b.created_at ? 1 : -1));
+
+  const agents = (agentsData ?? []) as Pick<
+    AiAgentRow,
+    | "id"
+    | "display_name"
+    | "kind"
+    | "model"
+    | "status"
+    | "allowed_skills"
+    | "sort_order"
+    | "updated_at"
+  >[];
+  const overrides = (overridesData ?? []) as AgentToolOverrideRow[];
+
+  // Tool names for the test runner picker.
+  const toolNames = isCode
+    ? (codeRegistry?.tools.map((t) => t.name) ?? [])
+    : skill.tools_json.map((t) => t.name);
 
   // Quick status flip — same UX as the agents page.
   const nextStatus = (
@@ -109,13 +207,45 @@ export default async function AdminSkillDetailPage({
               The handler lives at{" "}
               <code className="font-mono">{skill.handler_module}</code>. You
               can edit metadata (display name, description, system fragment,
-              category, status, role gates, sort order, icon), but the tool
-              list itself is locked to the source module. To deprecate this
-              skill, set status to <em>disabled</em>.
+              category, status, role gates, sort order, icon) and add
+              global tool overrides below — but the tool implementations
+              themselves are locked to source. To deprecate this skill,
+              set status to <em>disabled</em>.
             </div>
           )}
 
           <SkillForm mode="edit" action={updateSkill} skill={skill} />
+
+          {/* Source-code panel — only meaningful for code skills, but always rendered for kind hint. */}
+          <SourceCodePanel
+            kind={skill.kind}
+            handlerModule={skill.handler_module}
+            path={sourceInfo?.relPath ?? null}
+            source={sourceInfo?.source ?? null}
+          />
+
+          {/* Tool override panel — code skills only */}
+          {isCode && codeRegistry && (
+            <ToolOverridesPanel
+              skillId={skill.id}
+              sourceTools={codeRegistry.tools.map((t) => ({
+                name: t.name,
+                description: t.description,
+                read_only: t.read_only,
+                required_role: t.required_role,
+              }))}
+              overrides={overrides}
+            />
+          )}
+
+          {/* Test runner — works for both kinds */}
+          <TestRunnerPanel skill={skill} toolNames={toolNames} />
+
+          {/* Agents using this skill */}
+          <AgentsUsingPanel skillId={skill.id} agents={agents} />
+
+          {/* Recent runs */}
+          <RecentRunsPanel skillId={skill.id} runs={mergedRuns} />
 
           {/* Danger zone — only meaningful for custom skills. */}
           {!isCode && (
@@ -168,7 +298,9 @@ export default async function AdminSkillDetailPage({
               </Detail>
               <Detail label="Tools">
                 {skill.kind === "code" ? (
-                  <span className="text-faint">in source</span>
+                  <span className="font-mono text-app">
+                    {codeRegistry?.tools.length ?? 0} (source)
+                  </span>
                 ) : (
                   <span className="font-mono text-app">
                     {Array.isArray(skill.tools_json)
@@ -176,6 +308,9 @@ export default async function AdminSkillDetailPage({
                       : 0}
                   </span>
                 )}
+              </Detail>
+              <Detail label="Overrides">
+                <span className="font-mono text-app">{overrides.length}</span>
               </Detail>
               <Detail label="Confirms">
                 <span
@@ -205,6 +340,14 @@ export default async function AdminSkillDetailPage({
                   </code>
                 </Detail>
               )}
+              <Detail label="Agents using">
+                <span className="font-mono text-app">
+                  {agents.filter((a) => a.id !== GLOBAL_AGENT_ID).length}
+                </span>
+              </Detail>
+              <Detail label="Recent runs">
+                <span className="font-mono text-app">{mergedRuns.length}</span>
+              </Detail>
             </dl>
           </section>
 
@@ -225,6 +368,32 @@ export default async function AdminSkillDetailPage({
               </p>
             </section>
           )}
+
+          <section className="rounded-xl border border-app bg-app-elevated p-5">
+            <header className="mb-2">
+              <h2 className="text-sm font-semibold text-app">
+                API endpoints
+              </h2>
+            </header>
+            <ul className="space-y-1.5 text-[11px] text-secondary">
+              <li>
+                <code className="font-mono text-app">GET</code>{" "}
+                <code className="font-mono">/api/admin/skills/{skill.id}/source</code>
+              </li>
+              <li>
+                <code className="font-mono text-app">GET</code>{" "}
+                <code className="font-mono">/api/admin/skills/{skill.id}/runs</code>
+              </li>
+              <li>
+                <code className="font-mono text-app">GET</code>{" "}
+                <code className="font-mono">/api/admin/skills/{skill.id}/agents</code>
+              </li>
+            </ul>
+            <p className="mt-2 text-[10px] leading-relaxed text-faint">
+              Read-only mirrors of the panels above for ops scripts. All
+              admin-gated.
+            </p>
+          </section>
         </aside>
       </div>
     </div>
