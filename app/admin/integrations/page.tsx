@@ -274,7 +274,7 @@ function IntegrationRowEl({ row }: { row: IntegrationRow }) {
   );
 }
 
-export function Logo({
+function Logo({
   url,
   name,
   size = 32,
