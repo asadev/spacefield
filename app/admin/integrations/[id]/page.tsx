@@ -11,7 +11,7 @@ import {
   readRequiredEnv,
   verifyEnvVars,
 } from "../_helpers";
-import { Logo } from "../page";
+import Logo from "../_Logo";
 import DeleteIntegrationButton from "./_DeleteButton";
 
 import type { IntegrationRow } from "../../_types";
