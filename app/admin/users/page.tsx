@@ -3,12 +3,46 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import Avatar from "../_components/Avatar";
+import BulkActionBar, { type BulkAction } from "../_components/BulkActionBar";
+import { BulkActionProvider } from "../_components/BulkActionContext";
+import BulkRowCheckbox, {
+  BulkSelectAllCheckbox,
+} from "../_components/BulkRowCheckbox";
 import {
   formatDate,
   inputClass,
   listAuthUsers,
   tierBadgeClass,
 } from "../_lib";
+
+const USER_BULK_ACTIONS: BulkAction[] = [
+  {
+    id: "set_tier_pro",
+    label: "Set tier: Pro",
+    confirmText: "Move {n} users to Pro?",
+  },
+  {
+    id: "set_tier_team",
+    label: "Set tier: Team",
+    confirmText: "Move {n} users to Team?",
+  },
+  {
+    id: "set_tier_free",
+    label: "Set tier: Free",
+    confirmText: "Downgrade {n} users to Free?",
+    kind: "destructive",
+  },
+  {
+    id: "send_password_reset",
+    label: "Send password reset",
+    confirmText: "Send password reset to {n} users?",
+  },
+  {
+    id: "export_csv",
+    label: "Export selected as CSV",
+    kind: "export",
+  },
+];
 
 export const dynamic = "force-dynamic";
 
@@ -83,9 +117,11 @@ export default async function AdminUsersPage({
   }
 
   const totalPages = Math.max(1, Math.ceil(total / PER_PAGE));
+  const pageIds = displayRows.map((u) => u.id);
 
   return (
-    <div className="space-y-4">
+    <BulkActionProvider scope="users">
+    <div className="space-y-4 pb-24">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="text-[0.6rem] uppercase tracking-[0.2em] text-faint">
@@ -117,6 +153,12 @@ export default async function AdminUsersPage({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-app text-[0.6rem] uppercase tracking-[0.2em] text-muted">
+              <th className="w-8 px-3 py-2 text-left font-normal">
+                <BulkSelectAllCheckbox
+                  ids={pageIds}
+                  label="Select all users on page"
+                />
+              </th>
               <th className="px-3 py-2 text-left font-normal">User</th>
               <th className="px-3 py-2 text-left font-normal">Email</th>
               <th className="px-3 py-2 text-left font-normal">Tier</th>
@@ -127,7 +169,7 @@ export default async function AdminUsersPage({
           <tbody>
             {displayRows.length === 0 ? (
               <tr>
-                <td colSpan={5} className="px-3 py-8 text-center text-faint">
+                <td colSpan={6} className="px-3 py-8 text-center text-faint">
                   {q ? "No matches." : "No users yet."}
                 </td>
               </tr>
@@ -141,6 +183,12 @@ export default async function AdminUsersPage({
                     key={u.id}
                     className="border-b border-app last:border-b-0 hover:bg-app/40"
                   >
+                    <td className="px-3 py-2 align-middle">
+                      <BulkRowCheckbox
+                        id={u.id}
+                        label={`Select ${u.email ?? u.id}`}
+                      />
+                    </td>
                     <td className="px-3 py-2">
                       <Link
                         href={`/admin/users/${u.id}`}
@@ -207,7 +255,10 @@ export default async function AdminUsersPage({
           Next →
         </PageLink>
       </div>
+
+      <BulkActionBar scope="users" actions={USER_BULK_ACTIONS} />
     </div>
+    </BulkActionProvider>
   );
 }
 
