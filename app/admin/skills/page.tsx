@@ -2,6 +2,11 @@ import Link from "next/link";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import BulkActionBar, { type BulkAction } from "../_components/BulkActionBar";
+import { BulkActionProvider } from "../_components/BulkActionContext";
+import BulkRowCheckbox, {
+  BulkSelectAllCheckbox,
+} from "../_components/BulkRowCheckbox";
 import { formatDateTime } from "../_lib";
 import type { AiSkillRow, SkillKind, SkillStatus } from "../_types";
 import BulkImportPanel from "./_components/BulkImportPanel";
@@ -9,6 +14,31 @@ import KindChip from "./_components/KindChip";
 import StatusChip from "./_components/StatusChip";
 
 export const dynamic = "force-dynamic";
+
+const SKILL_BULK_ACTIONS: BulkAction[] = [
+  {
+    id: "set_status_disabled",
+    label: "Set status: Disabled",
+    confirmText: "Disable {n} skills?",
+  },
+  {
+    id: "set_status_live",
+    label: "Set status: Live",
+    confirmText: "Mark {n} skills live?",
+  },
+  {
+    id: "delete",
+    label: "Delete skills",
+    kind: "destructive",
+    confirmText:
+      "Delete {n} skills? Only custom skills can be removed; code skills will fail.",
+  },
+  {
+    id: "export_csv",
+    label: "Export selected as CSV",
+    kind: "export",
+  },
+];
 
 /**
  * Index of every row in `public.ai_skills`. Asad's ask: "Skills clickable +
@@ -100,8 +130,11 @@ export default async function AdminSkillsPage({
     new Set(allRows.map((r) => r.category).filter(Boolean))
   ).sort();
 
+  const pageIds = filtered.map((r) => r.id);
+
   return (
-    <div className="space-y-4">
+    <BulkActionProvider scope="skills">
+    <div className="space-y-4 pb-24">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="text-[0.6rem] uppercase tracking-[0.2em] text-faint">
@@ -195,6 +228,12 @@ export default async function AdminSkillsPage({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-app text-[0.6rem] uppercase tracking-[0.2em] text-muted">
+              <th className="w-8 px-3 py-2 text-left font-normal">
+                <BulkSelectAllCheckbox
+                  ids={pageIds}
+                  label="Select all skills on page"
+                />
+              </th>
               <th className="px-3 py-2 text-left font-normal">Skill</th>
               <th className="px-3 py-2 text-left font-normal">ID</th>
               <th className="px-3 py-2 text-left font-normal">Kind</th>
@@ -209,7 +248,7 @@ export default async function AdminSkillsPage({
             {filtered.length === 0 ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="px-3 py-8 text-center text-faint"
                 >
                   {allRows.length === 0
@@ -227,6 +266,12 @@ export default async function AdminSkillsPage({
                     key={r.id}
                     className="border-b border-app last:border-b-0 hover:bg-app/40"
                   >
+                    <td className="px-3 py-2 align-middle">
+                      <BulkRowCheckbox
+                        id={r.id}
+                        label={`Select skill ${r.display_name}`}
+                      />
+                    </td>
                     <td className="px-3 py-2">
                       <Link
                         href={`/admin/skills/${encodeURIComponent(r.id)}`}
@@ -277,7 +322,10 @@ export default async function AdminSkillsPage({
           </tbody>
         </table>
       </div>
+
+      <BulkActionBar scope="skills" actions={SKILL_BULK_ACTIONS} />
     </div>
+    </BulkActionProvider>
   );
 }
 
