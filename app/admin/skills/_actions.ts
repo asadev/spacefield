@@ -4,11 +4,13 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { readCodeSkillTools } from "@/lib/agent/skills/_inspector";
 
 import { recordAdminAction } from "../_audit";
 import { assertAdmin } from "../_lib";
 import {
   WORKSPACE_ROLES,
+  type AgentToolOverrideRow,
   type AiSkillRow,
   type SkillKind,
   type SkillStatus,
@@ -564,4 +566,542 @@ export async function removeSkillTool(formData: FormData): Promise<void> {
   });
 
   revalidatePath(`/admin/skills/${id}`);
+}
+
+/* ──────────────────── tool-overlay editor ────────────────────
+ * For code-defined skills the source-defined tool list is locked to TS
+ * code, but admins still need a way to tweak the description, mark a
+ * tool read-only at runtime, or force user confirmation. We store these
+ * tweaks in `agent_tool_overrides` keyed by the wildcard agent id —
+ * the runtime applies them as a global default underneath any
+ * per-agent override.
+ *
+ * The agent_tool_overrides table FKs `agent_id → ai_agents.id`. To
+ * satisfy the FK with a sentinel "global" id we ensure a placeholder
+ * row exists in ai_agents (status=disabled, kind=system, sort_order
+ * far below zero so it never appears in admin lists). The placeholder
+ * is invisible in /admin/agents because the page filters by status
+ * and we keep its sort_order at -9999. */
+
+const GLOBAL_AGENT_ID = "__global__";
+
+async function ensureGlobalAgentExists(): Promise<void> {
+  const admin = createAdminClient();
+  const { data, error } = await admin
+    .from("ai_agents")
+    .select("id")
+    .eq("id", GLOBAL_AGENT_ID)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (data) return;
+  const { error: insErr } = await admin.from("ai_agents").insert({
+    id: GLOBAL_AGENT_ID,
+    display_name: "(internal) Global tool overrides",
+    description:
+      "Sentinel agent row used by the admin panel to store global tool overrides. Not addressable by the runtime.",
+    kind: "system",
+    model: "claude-haiku-4-5-20251001",
+    fast_model: "claude-haiku-4-5-20251001",
+    system_prompt: "",
+    greeting: "",
+    allowed_skills: [],
+    allowed_tools: [],
+    temperature: 0,
+    max_tokens: 1,
+    status: "disabled",
+    access_mode: "admin_only",
+    access_tiers: [],
+    access_roles: [],
+    allowlist_user_ids: [],
+    icon: null,
+    sort_order: -9999,
+    metadata: { internal: true, role: "global_tool_override_anchor" },
+  });
+  if (insErr) throw new Error(insErr.message);
+}
+
+const TOOL_LOOSE_NAME_RE = /^[a-z][a-z0-9_]*$/;
+
+function pickNullableBool(raw: FormDataEntryValue | null): boolean | null {
+  if (raw == null) return null;
+  const v = String(raw).trim().toLowerCase();
+  if (v === "true" || v === "1" || v === "on" || v === "yes") return true;
+  if (v === "false" || v === "0" || v === "off" || v === "no") return false;
+  return null;
+}
+
+export async function setToolOverride(formData: FormData): Promise<void> {
+  const auth = await assertAdmin();
+  const skillId = String(formData.get("skill_id") ?? "").trim();
+  const toolName = String(formData.get("tool_name") ?? "").trim();
+  if (!skillId) throw new Error("missing skill_id");
+  if (!TOOL_LOOSE_NAME_RE.test(toolName)) {
+    throw new Error("tool_name must be snake_case");
+  }
+
+  await ensureGlobalAgentExists();
+
+  // Empty string -> null (clear that field's override).
+  const rawDesc = formData.get("override_description");
+  const override_description =
+    rawDesc == null || String(rawDesc).trim() === ""
+      ? null
+      : String(rawDesc);
+
+  const read_only_override = pickNullableBool(
+    formData.get("read_only_override")
+  );
+  const requires_confirmation_override = pickNullableBool(
+    formData.get("requires_confirmation_override")
+  );
+  const enabledRaw = formData.get("enabled");
+  const enabled = enabledRaw == null ? true : pickNullableBool(enabledRaw) !== false;
+
+  const admin = createAdminClient();
+
+  const { data: before } = await admin
+    .from("agent_tool_overrides")
+    .select("*")
+    .eq("agent_id", GLOBAL_AGENT_ID)
+    .eq("skill_id", skillId)
+    .eq("tool_name", toolName)
+    .maybeSingle();
+
+  const upsertRow = {
+    agent_id: GLOBAL_AGENT_ID,
+    skill_id: skillId,
+    tool_name: toolName,
+    override_description,
+    override_input_schema: null,
+    read_only_override,
+    requires_confirmation_override,
+    enabled,
+    metadata: {},
+    updated_at: new Date().toISOString(),
+    updated_by: auth.userId,
+  };
+
+  const { error } = await admin
+    .from("agent_tool_overrides")
+    .upsert(upsertRow, { onConflict: "agent_id,skill_id,tool_name" });
+  if (error) throw new Error(error.message);
+
+  await recordAdminAction({
+    action: "skill.tool_override_set",
+    targetType: "ai_skill",
+    targetId: skillId,
+    before: (before as AgentToolOverrideRow | null) ?? null,
+    after: upsertRow,
+    metadata: {
+      skill_id: skillId,
+      tool_name: toolName,
+      scope: "global",
+    },
+  });
+
+  revalidatePath(`/admin/skills/${skillId}`);
+}
+
+export async function clearToolOverride(formData: FormData): Promise<void> {
+  await assertAdmin();
+  const skillId = String(formData.get("skill_id") ?? "").trim();
+  const toolName = String(formData.get("tool_name") ?? "").trim();
+  if (!skillId) throw new Error("missing skill_id");
+  if (!toolName) throw new Error("missing tool_name");
+
+  const admin = createAdminClient();
+
+  const { data: before } = await admin
+    .from("agent_tool_overrides")
+    .select("*")
+    .eq("agent_id", GLOBAL_AGENT_ID)
+    .eq("skill_id", skillId)
+    .eq("tool_name", toolName)
+    .maybeSingle();
+
+  if (!before) {
+    // Nothing to clear — silently succeed so the UI is idempotent.
+    return;
+  }
+
+  const { error } = await admin
+    .from("agent_tool_overrides")
+    .delete()
+    .eq("agent_id", GLOBAL_AGENT_ID)
+    .eq("skill_id", skillId)
+    .eq("tool_name", toolName);
+  if (error) throw new Error(error.message);
+
+  await recordAdminAction({
+    action: "skill.tool_override_clear",
+    targetType: "ai_skill",
+    targetId: skillId,
+    before: before as AgentToolOverrideRow,
+    metadata: {
+      skill_id: skillId,
+      tool_name: toolName,
+      scope: "global",
+    },
+  });
+
+  revalidatePath(`/admin/skills/${skillId}`);
+}
+
+/* ──────────────────── test runner ────────────────────
+ * Asad's ask: a way to invoke a skill with sample input from the panel
+ * and see what the runtime would return. Wiring all the way through to
+ * `executeToolGuarded` is too coupled — the tool needs a UserContext
+ * with a real Supabase client + auth user, and the admin panel's
+ * service-role context can't impersonate. Instead we simulate: we
+ * resolve the tool definition (code or custom), validate the JSON
+ * input (best-effort), and render the prompt fragment + dispatch
+ * payload that WOULD have been sent. Admins get to see exactly what
+ * the runtime is wired to do without having to deploy and test live.
+ */
+
+type SkillTestSummary = {
+  skill_id: string;
+  tool_name: string;
+  resolved: boolean;
+  source: "code" | "custom" | null;
+  description: string | null;
+  read_only: boolean | null;
+  requires_confirmation: boolean | null;
+  input_schema: Record<string, unknown> | null;
+  parsed_input: Record<string, unknown> | null;
+  parse_error: string | null;
+  dispatch:
+    | { kind: "rpc"; rpc_name: string; rpc_arg: Record<string, unknown> | null }
+    | { kind: "http"; url: string; body: Record<string, unknown> | null }
+    | { kind: "code"; module: string }
+    | null;
+};
+
+export async function runSkillTest(formData: FormData): Promise<void> {
+  const auth = await assertAdmin();
+  const skillId = String(formData.get("skill_id") ?? "").trim();
+  const toolName = String(formData.get("tool_name") ?? "").trim();
+  const inputRaw = String(formData.get("input_json") ?? "").trim();
+
+  if (!skillId) throw new Error("missing skill_id");
+  if (!toolName) throw new Error("missing tool_name");
+
+  let parsedInput: Record<string, unknown> | null = null;
+  let parseError: string | null = null;
+  if (inputRaw) {
+    try {
+      const v = JSON.parse(inputRaw);
+      if (!v || typeof v !== "object" || Array.isArray(v)) {
+        parseError = "input_json must be a JSON object";
+      } else {
+        parsedInput = v as Record<string, unknown>;
+      }
+    } catch (e) {
+      parseError = `input_json is not valid JSON: ${(e as Error).message}`;
+    }
+  }
+
+  const admin = createAdminClient();
+  const { data: row, error } = await admin
+    .from("ai_skills")
+    .select("*")
+    .eq("id", skillId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!row) throw new Error(`skill "${skillId}" not found`);
+
+  const skill = row as AiSkillRow;
+
+  let summary: SkillTestSummary;
+  if (skill.kind === "code") {
+    const reg = await readCodeSkillTools(skillId);
+    const tool = reg?.tools.find((t) => t.name === toolName);
+    summary = {
+      skill_id: skillId,
+      tool_name: toolName,
+      resolved: !!tool,
+      source: "code",
+      description: tool?.description ?? null,
+      read_only: tool?.read_only ?? null,
+      requires_confirmation: null,
+      input_schema: tool?.input_schema ?? null,
+      parsed_input: parsedInput,
+      parse_error: parseError,
+      dispatch: tool
+        ? { kind: "code", module: skill.handler_module ?? "(unknown)" }
+        : null,
+    };
+  } else {
+    const tool = skill.tools_json.find((t) => t.name === toolName);
+    summary = {
+      skill_id: skillId,
+      tool_name: toolName,
+      resolved: !!tool,
+      source: "custom",
+      description: tool?.description ?? null,
+      read_only: tool?.read_only ?? null,
+      requires_confirmation: tool?.requires_confirmation ?? null,
+      input_schema: tool?.input_schema ?? null,
+      parsed_input: parsedInput,
+      parse_error: parseError,
+      dispatch: tool
+        ? tool.handler_kind === "rpc"
+          ? { kind: "rpc", rpc_name: tool.handler_target, rpc_arg: parsedInput }
+          : { kind: "http", url: tool.handler_target, body: parsedInput }
+        : null,
+    };
+  }
+
+  await recordAdminAction({
+    action: "skill.test_run",
+    targetType: "ai_skill",
+    targetId: skillId,
+    after: summary,
+    metadata: {
+      skill_id: skillId,
+      tool_name: toolName,
+      simulated: true,
+      actor: auth.userId,
+    },
+  });
+
+  // Stash the result in metadata on the skill row so the page can render it
+  // on the next load. Lightweight — only the most-recent test is kept.
+  const nextMeta: Record<string, unknown> = {
+    ...(skill.metadata ?? {}),
+    last_test: {
+      at: new Date().toISOString(),
+      by: auth.userId,
+      ...summary,
+    },
+  };
+  await admin
+    .from("ai_skills")
+    .update({
+      metadata: nextMeta,
+      updated_by: auth.userId,
+      updated_at: new Date().toISOString(),
+    })
+    .eq("id", skillId);
+
+  revalidatePath(`/admin/skills/${skillId}`);
+}
+
+/* ──────────────────── bulk import ────────────────────
+ * Paste a JSON array of skill rows; we upsert each one. Code-skill rows
+ * are protected — bulk import won't change kind=code rows' tools_json
+ * or handler_module (those are owned by source). Returns a summary in
+ * the audit log so admins can see exactly what landed.
+ */
+
+type BulkImportPayload = {
+  display_name?: unknown;
+  description?: unknown;
+  system_fragment?: unknown;
+  status?: unknown;
+  category?: unknown;
+  icon?: unknown;
+  sort_order?: unknown;
+  allowed_workspace_roles?: unknown;
+  requires_confirmation_default?: unknown;
+  metadata?: unknown;
+  tools_json?: unknown;
+  handler_module?: unknown;
+  kind?: unknown;
+};
+
+function pickStringArray(raw: unknown): string[] | null {
+  if (!Array.isArray(raw)) return null;
+  return raw
+    .filter((v): v is string => typeof v === "string")
+    .map((v) => v.trim())
+    .filter(Boolean);
+}
+
+export async function importSkillsJson(formData: FormData): Promise<void> {
+  const auth = await assertAdmin();
+  const text = String(formData.get("payload") ?? "").trim();
+  if (!text) throw new Error("missing payload");
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(text);
+  } catch (e) {
+    throw new Error(`payload is not valid JSON: ${(e as Error).message}`);
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error("payload must be a JSON array of skill rows");
+  }
+
+  const admin = createAdminClient();
+  const inserted: string[] = [];
+  const updated: string[] = [];
+  const skipped: { id: string; reason: string }[] = [];
+
+  for (const item of parsed) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      skipped.push({ id: "(unknown)", reason: "row is not an object" });
+      continue;
+    }
+    const r = item as { id?: unknown } & BulkImportPayload;
+    const id = String(r.id ?? "").trim().toLowerCase();
+    if (!id) {
+      skipped.push({ id: "(unknown)", reason: "missing id" });
+      continue;
+    }
+    if (!SKILL_ID_RE.test(id)) {
+      skipped.push({ id, reason: "id must be lowercase alphanum/dot/underscore/hyphen" });
+      continue;
+    }
+
+    const display_name = typeof r.display_name === "string" ? r.display_name.trim() : "";
+    if (!display_name) {
+      skipped.push({ id, reason: "missing display_name" });
+      continue;
+    }
+
+    const description =
+      typeof r.description === "string" ? r.description : "";
+    const system_fragment =
+      typeof r.system_fragment === "string" ? r.system_fragment : "";
+    const status = pickStatus(r.status);
+    const category =
+      typeof r.category === "string" && r.category.trim()
+        ? r.category.trim()
+        : "general";
+    const icon =
+      typeof r.icon === "string" && r.icon.trim() ? r.icon.trim() : null;
+    const sort_order = pickInt(r.sort_order, 0, -10000, 10000);
+    const requires_confirmation_default =
+      r.requires_confirmation_default === true;
+    const rolesArr = pickStringArray(r.allowed_workspace_roles) ?? [];
+    const allowed_workspace_roles = rolesArr.filter(
+      (x): x is WorkspaceRole => ROLE_SET.has(x)
+    ) as WorkspaceRole[];
+
+    const metadata =
+      r.metadata && typeof r.metadata === "object" && !Array.isArray(r.metadata)
+        ? (r.metadata as Record<string, unknown>)
+        : {};
+
+    let tools_json: SkillToolDef[] = [];
+    if (Array.isArray(r.tools_json)) {
+      try {
+        tools_json = r.tools_json.map((t, i) => normalizeTool(t, i));
+        const seen = new Set<string>();
+        for (const t of tools_json) {
+          if (seen.has(t.name)) {
+            throw new Error(`duplicate tool name "${t.name}"`);
+          }
+          seen.add(t.name);
+        }
+      } catch (e) {
+        skipped.push({ id, reason: (e as Error).message });
+        continue;
+      }
+    }
+
+    const { data: existing, error: readErr } = await admin
+      .from("ai_skills")
+      .select("id, kind, tools_json, handler_module")
+      .eq("id", id)
+      .maybeSingle();
+    if (readErr) {
+      skipped.push({ id, reason: readErr.message });
+      continue;
+    }
+
+    if (existing) {
+      const kind = (existing as { kind: SkillKind }).kind;
+      const finalTools =
+        kind === "code"
+          ? (existing as { tools_json: SkillToolDef[] }).tools_json
+          : tools_json;
+      const finalModule =
+        kind === "code"
+          ? (existing as { handler_module: string | null }).handler_module
+          : typeof r.handler_module === "string"
+            ? r.handler_module
+            : null;
+      const { error: upErr } = await admin
+        .from("ai_skills")
+        .update({
+          display_name,
+          description,
+          system_fragment,
+          status,
+          handler_module: finalModule,
+          tools_json: finalTools,
+          allowed_workspace_roles,
+          requires_confirmation_default,
+          category,
+          icon,
+          sort_order,
+          metadata,
+          updated_by: auth.userId,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", id);
+      if (upErr) {
+        skipped.push({ id, reason: upErr.message });
+        continue;
+      }
+      updated.push(id);
+    } else {
+      const kind = pickKind(r.kind);
+      if (kind === "code") {
+        skipped.push({
+          id,
+          reason: "cannot insert kind='code' rows via import (must be wired in source)",
+        });
+        continue;
+      }
+      const handler_module =
+        typeof r.handler_module === "string" ? r.handler_module : null;
+      const { error: insErr } = await admin.from("ai_skills").insert({
+        id,
+        kind,
+        display_name,
+        description,
+        system_fragment,
+        status,
+        handler_module,
+        tools_json,
+        allowed_workspace_roles,
+        requires_confirmation_default,
+        category,
+        icon,
+        sort_order,
+        metadata,
+        updated_by: auth.userId,
+        updated_at: new Date().toISOString(),
+      });
+      if (insErr) {
+        skipped.push({ id, reason: insErr.message });
+        continue;
+      }
+      inserted.push(id);
+    }
+  }
+
+  await recordAdminAction({
+    action: "skill.bulk_import",
+    targetType: "ai_skill",
+    after: {
+      inserted_count: inserted.length,
+      updated_count: updated.length,
+      skipped_count: skipped.length,
+      inserted,
+      updated,
+      skipped,
+    },
+    metadata: {
+      total: parsed.length,
+      inserted_count: inserted.length,
+      updated_count: updated.length,
+      skipped_count: skipped.length,
+    },
+  });
+
+  revalidatePath("/admin/skills");
 }
