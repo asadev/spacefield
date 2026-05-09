@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import { formatDateTime } from "../_lib";
 import type { AiSkillRow, SkillKind, SkillStatus } from "../_types";
+import BulkImportPanel from "./_components/BulkImportPanel";
 import KindChip from "./_components/KindChip";
 import StatusChip from "./_components/StatusChip";
 
@@ -114,12 +115,15 @@ export default async function AdminSkillsPage({
             runtime can call.
           </p>
         </div>
-        <Link
-          href="/admin/skills/new"
-          className="inline-flex items-center gap-1.5 rounded-lg bg-tool-accent px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90"
-        >
-          + New custom skill
-        </Link>
+        <div className="flex flex-wrap items-center gap-2">
+          <BulkImportPanel />
+          <Link
+            href="/admin/skills/new"
+            className="inline-flex items-center gap-1.5 rounded-lg bg-tool-accent px-3 py-1.5 text-xs font-medium text-white transition-opacity hover:opacity-90"
+          >
+            + New custom skill
+          </Link>
+        </div>
       </div>
 
       {/* Filters — plain GET form so the page stays an RSC. */}
