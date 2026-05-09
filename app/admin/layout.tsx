@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 
+import Header from "./_components/Header";
 import Sidebar from "./_components/Sidebar";
 import { checkIsAdmin } from "./_lib";
 
@@ -45,44 +46,29 @@ export default async function AdminLayout({
 
   return (
     <div className="min-h-screen bg-app text-app">
-      <header className="sticky top-0 z-20 border-b border-app bg-app/80 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-7xl items-center justify-between px-6">
-          <div className="flex items-center gap-3">
-            <Link
-              href="/admin"
-              className="text-sm font-semibold tracking-tight text-app"
-            >
-              Admin
-            </Link>
-            <span className="text-faint">·</span>
-            <span className="text-xs text-muted">Space Field</span>
-          </div>
-          <div className="flex items-center gap-3 text-xs text-muted">
-            <span className="font-mono tabular-nums">{auth.email ?? "—"}</span>
-            <Link
-              href="/"
-              className="text-secondary hover:text-tool-accent"
-            >
-              Exit
-            </Link>
-          </div>
-        </div>
-      </header>
+      <Header email={auth.email} />
 
       <div className="mx-auto flex max-w-7xl gap-6 px-6 py-6">
-        <aside className="sticky top-20 hidden h-fit w-52 shrink-0 lg:block">
+        {/* Section-scoped sidebar — desktop only. Sticks below the
+            header (header is ~5.25rem total: 3rem row 1 + 2.25rem row 2). */}
+        <aside className="sticky top-[5.5rem] hidden h-[calc(100vh-6rem)] w-56 shrink-0 overflow-y-auto pr-2 lg:block">
           <Sidebar />
         </aside>
+
+        {/* Mobile section drawer — collapsed details element. The Header
+            tab bar already lets users switch sections; this is the
+            drilldown to specific routes when on a small screen. */}
         <div className="block w-full lg:hidden">
           <details className="mb-4 rounded-lg border border-app bg-app-elevated">
             <summary className="cursor-pointer px-3 py-2 text-sm text-app">
-              Menu
+              Section menu
             </summary>
             <div className="border-t border-app p-2">
               <Sidebar />
             </div>
           </details>
         </div>
+
         <main className="min-w-0 flex-1">{children}</main>
       </div>
     </div>
