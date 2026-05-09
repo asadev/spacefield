@@ -1,42 +1,15 @@
-/* Telegram sendMessage helper.
+/* Telegram sendMessage POST endpoint.
  *
- * Internal — server-side callers (the webhook handler, the test-message
- * button on the Settings page). Keeps a thin POST handler so the
- * Settings UI can hit it via fetch.
+ * Auth via Supabase cookie + workspace_member check. The actual
+ * Telegram API call lives in `_send.ts` so this file exports only HTTP
+ * method handlers (Next 16's webpack route-validator rejects helper
+ * exports here).
  */
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-export interface SendResult {
-  ok: boolean;
-  status: number;
-  body: unknown;
-}
-
-export async function sendTelegramText(
-  chatId: number,
-  text: string
-): Promise<SendResult> {
-  const token = process.env.TELEGRAM_BOT_TOKEN;
-  if (!token) {
-    return { ok: false, status: 0, body: "missing TELEGRAM_BOT_TOKEN" };
-  }
-  // Telegram caps single messages at 4096 chars.
-  const safe = text.length > 4096 ? text.slice(0, 4093) + "..." : text;
-  const url = `https://api.telegram.org/bot${token}/sendMessage`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      chat_id: chatId,
-      text: safe,
-      disable_web_page_preview: true,
-    }),
-  });
-  const body = await res.json().catch(() => ({}));
-  return { ok: res.ok, status: res.status, body };
-}
+import { sendTelegramText } from "./_send";
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
