@@ -2,6 +2,11 @@ import Link from "next/link";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import BulkActionBar, { type BulkAction } from "../_components/BulkActionBar";
+import { BulkActionProvider } from "../_components/BulkActionContext";
+import BulkRowCheckbox, {
+  BulkSelectAllCheckbox,
+} from "../_components/BulkRowCheckbox";
 import {
   fetchAuthUsersByIds,
   formatBytes,
@@ -11,6 +16,31 @@ import {
 export const dynamic = "force-dynamic";
 
 const PER_PAGE = 50;
+
+const WORKSPACE_BULK_ACTIONS: BulkAction[] = [
+  {
+    id: "change_tier_pro",
+    label: "Change tier to Pro",
+    confirmText: "Change {n} workspace owners to Pro?",
+  },
+  {
+    id: "change_tier_free",
+    label: "Change tier to Free",
+    confirmText: "Downgrade {n} workspace owners to Free?",
+  },
+  {
+    id: "export_csv",
+    label: "Export selected as CSV",
+    kind: "export",
+  },
+  {
+    id: "delete",
+    label: "Delete workspaces",
+    kind: "destructive",
+    confirmText:
+      "Delete {n} workspaces? This cannot be undone.",
+  },
+];
 
 type Workspace = {
   id: string;
@@ -87,8 +117,11 @@ export default async function AdminWorkspacesPage() {
     ((profilesRes.data ?? []) as ProfileRow[]).map((p) => [p.user_id, p])
   );
 
+  const pageIds = workspaces.map((w) => w.id);
+
   return (
-    <div className="space-y-4">
+    <BulkActionProvider scope="workspaces">
+    <div className="space-y-4 pb-24">
       <div>
         <div className="text-[0.6rem] uppercase tracking-[0.2em] text-faint">
           Workspaces
@@ -103,6 +136,12 @@ export default async function AdminWorkspacesPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-app text-[0.6rem] uppercase tracking-[0.2em] text-muted">
+              <th className="w-8 px-3 py-2 text-left font-normal">
+                <BulkSelectAllCheckbox
+                  ids={pageIds}
+                  label="Select all workspaces on page"
+                />
+              </th>
               <th className="px-3 py-2 text-left font-normal">Name</th>
               <th className="px-3 py-2 text-left font-normal">Owner</th>
               <th className="px-3 py-2 text-left font-normal">Email</th>
@@ -114,7 +153,7 @@ export default async function AdminWorkspacesPage() {
           <tbody>
             {workspaces.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-faint">
+                <td colSpan={7} className="px-3 py-8 text-center text-faint">
                   No workspaces yet.
                 </td>
               </tr>
@@ -129,6 +168,12 @@ export default async function AdminWorkspacesPage() {
                     key={w.id}
                     className="border-b border-app last:border-b-0 hover:bg-app/40"
                   >
+                    <td className="px-3 py-2 align-middle">
+                      <BulkRowCheckbox
+                        id={w.id}
+                        label={`Select workspace ${w.name}`}
+                      />
+                    </td>
                     <td className="px-3 py-2">
                       <Link
                         href={`/admin/workspaces/${w.id}`}
@@ -164,6 +209,9 @@ export default async function AdminWorkspacesPage() {
           </tbody>
         </table>
       </div>
+
+      <BulkActionBar scope="workspaces" actions={WORKSPACE_BULK_ACTIONS} />
     </div>
+    </BulkActionProvider>
   );
 }
