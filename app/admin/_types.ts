@@ -875,3 +875,231 @@ export interface WebhookSubscriptionRow {
   created_at: string;
   updated_at: string;
 }
+
+/* ─────────────────────────── v4 types ─────────────────────────── */
+
+export interface HelpCategoryRow {
+  id: string;
+  display_name: string;
+  description: string;
+  icon: string | null;
+  sort_order: number;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export type HelpArticleStatus = "draft" | "published" | "archived";
+export type HelpArticleVisibility = "public" | "authenticated" | "admin_only";
+
+export interface HelpArticleRow {
+  id: string;
+  category_id: string | null;
+  title: string;
+  slug: string;
+  body: string;
+  excerpt: string | null;
+  status: HelpArticleStatus;
+  visibility: HelpArticleVisibility;
+  tags: string[];
+  view_count: number;
+  helpful_count: number;
+  not_helpful_count: number;
+  sort_order: number;
+  metadata: Record<string, unknown>;
+  published_at: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface OnboardingFlowRow {
+  id: string;
+  display_name: string;
+  description: string;
+  trigger_event: string;
+  audience: string;
+  status: "live" | "draft" | "archived";
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export type OnboardingStepKind =
+  | "welcome" | "tour" | "form" | "video" | "checklist" | "call-to-action";
+
+export interface OnboardingStepRow {
+  id: string;
+  flow_id: string;
+  step_index: number;
+  kind: OnboardingStepKind;
+  title: string;
+  body: string | null;
+  cta_label: string | null;
+  cta_href: string | null;
+  config: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface ProductTourRow {
+  id: string;
+  display_name: string;
+  description: string;
+  trigger_route: string | null;
+  trigger_kind: "manual" | "first_visit" | "feature_flag" | "dom_query";
+  steps: unknown[];
+  status: "live" | "draft" | "archived";
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export type SupportTicketStatus =
+  | "open" | "in_progress" | "waiting_user" | "resolved" | "closed";
+export type SupportTicketPriority = "low" | "normal" | "high" | "urgent";
+
+export interface SupportTicketRow {
+  id: string;
+  user_id: string | null;
+  workspace_id: string | null;
+  subject: string;
+  body: string;
+  status: SupportTicketStatus;
+  priority: SupportTicketPriority;
+  assigned_to: string | null;
+  category: string | null;
+  tags: string[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  resolved_at: string | null;
+  last_response_at: string | null;
+}
+
+export interface SupportMessageRow {
+  id: string;
+  ticket_id: string;
+  author_id: string | null;
+  is_admin: boolean;
+  body: string;
+  internal_note: boolean;
+  attachments: unknown[];
+  created_at: string;
+}
+
+export interface ImpersonationSessionRow {
+  id: string;
+  admin_id: string;
+  target_user_id: string;
+  reason: string;
+  started_at: string;
+  ended_at: string | null;
+  ip: string | null;
+  user_agent: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export type RefundStatus =
+  | "pending" | "approved" | "processed" | "rejected" | "failed";
+
+export interface RefundRow {
+  id: string;
+  user_id: string | null;
+  workspace_id: string | null;
+  amount_cents: number;
+  currency: string;
+  reason: string | null;
+  status: RefundStatus;
+  external_payment_id: string | null;
+  external_refund_id: string | null;
+  processed_at: string | null;
+  approved_by: string | null;
+  notes: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export type InvoiceStatus =
+  | "draft" | "sent" | "paid" | "overdue" | "void" | "refunded";
+
+export interface InvoiceRow {
+  id: string;
+  number: string;
+  user_id: string | null;
+  workspace_id: string | null;
+  amount_cents: number;
+  currency: string;
+  status: InvoiceStatus;
+  due_date: string | null;
+  paid_at: string | null;
+  line_items: unknown[];
+  subtotal_cents: number | null;
+  tax_cents: number | null;
+  total_cents: number | null;
+  external_invoice_id: string | null;
+  pdf_url: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export type SurveyStatus = "live" | "draft" | "archived";
+
+export interface SurveyRow {
+  id: string;
+  display_name: string;
+  description: string;
+  questions: unknown[];
+  trigger_kind: "manual" | "signup" | "milestone" | "recurring";
+  trigger_config: Record<string, unknown>;
+  audience: string;
+  audience_config: Record<string, unknown>;
+  status: SurveyStatus;
+  response_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SurveyResponseRow {
+  id: string;
+  survey_id: string | null;
+  user_id: string | null;
+  workspace_id: string | null;
+  answers: Record<string, unknown>;
+  nps_score: number | null;
+  rating: number | null;
+  comments: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export type BulkOperationStatus =
+  | "pending" | "running" | "completed" | "failed" | "cancelled";
+
+export interface BulkOperationRow {
+  id: string;
+  actor_id: string | null;
+  operation: string;
+  target_kind: string;
+  target_ids: string[];
+  total: number;
+  succeeded: number;
+  failed: number;
+  status: BulkOperationStatus;
+  results: unknown[];
+  metadata: Record<string, unknown>;
+  started_at: string;
+  finished_at: string | null;
+}
+
+export interface ActivityFeedRow {
+  id: string;
+  kind: string;
+  actor_id: string | null;
+  workspace_id: string | null;
+  subject: string;
+  body: string | null;
+  url: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
