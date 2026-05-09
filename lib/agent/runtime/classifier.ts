@@ -11,6 +11,7 @@
  */
 
 import OpenAI from "openai";
+import { getRuntimeModel } from "./_models";
 import type { ClassifierResult } from "./types";
 
 const SKILL_SUMMARY = `
@@ -68,7 +69,13 @@ export async function classify(
   userText: string,
   recentHistory: { role: "user" | "assistant"; content: string }[]
 ): Promise<ClassifierCallResult> {
-  const model = "gpt-4o-mini";
+  // Resolve lazily so admin edits to runtime_model_assignments take
+  // effect without a server restart. The classifier is structurally
+  // bound to the OpenAI chat.completions API; if admin assigns a
+  // non-OpenAI model id we still pass it through (the SDK will surface
+  // any provider mismatch as a clean error).
+  const resolved = await getRuntimeModel("classifier");
+  const model = resolved.id;
   const recent = recentHistory
     .slice(-4)
     .map((m) => `${m.role}: ${m.content.slice(0, 200)}`)
