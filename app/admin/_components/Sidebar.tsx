@@ -5,34 +5,45 @@ import { usePathname } from "next/navigation";
 
 type NavItem = { href: string; label: string; group?: string };
 
-// Nav grouped by purpose. Order is intentional: dashboard first, then
-// "platform" (apps + features + agents), then "people" (users +
-// workspaces + subs + tiers), then "ops" (logs + audit + auth + domains
-// + analytics), then "content" (messages + social + wallpapers + legacy
-// tools).
+// Nav grouped by purpose. v2 layout — every section the platform-control
+// panel needs. Dashboard first, then Platform (apps/features/agents/skills/
+// models), then People (users/workspaces/subs/tiers/api tokens), then Ops
+// (logs/audit/auth/domains/analytics/insights/jobs/alerts/webhooks/storage
+// /db browser), then Content (emails/messages/social/wallpapers/tools).
 const NAV: NavItem[] = [
   { href: "/admin",                label: "Dashboard" },
+  { href: "/admin/search",         label: "Search" },
+  { href: "/admin/activity",       label: "Activity" },
 
   { href: "/admin/apps",           label: "Apps & Features",   group: "Platform" },
   { href: "/admin/features",       label: "Feature flags",     group: "Platform" },
   { href: "/admin/agents",         label: "AI agents",         group: "Platform" },
+  { href: "/admin/skills",         label: "Skills",            group: "Platform" },
+  { href: "/admin/models",         label: "Models",            group: "Platform" },
 
   { href: "/admin/users",          label: "Users",             group: "People" },
   { href: "/admin/workspaces",     label: "Workspaces",        group: "People" },
   { href: "/admin/subscriptions",  label: "Subscriptions",     group: "People" },
   { href: "/admin/tiers",          label: "Tiers",             group: "People" },
+  { href: "/admin/api-tokens",     label: "API tokens",        group: "People" },
 
   { href: "/admin/logs",           label: "Logs",              group: "Ops" },
   { href: "/admin/audit",          label: "Audit log",         group: "Ops" },
   { href: "/admin/auth-events",    label: "Sign-ins",          group: "Ops" },
-  { href: "/admin/domains",        label: "Domains",           group: "Ops" },
+  { href: "/admin/insights",       label: "Cost & insights",   group: "Ops" },
   { href: "/admin/analytics",      label: "Share analytics", group: "Ops" },
+  { href: "/admin/jobs",           label: "Jobs & cron",       group: "Ops" },
+  { href: "/admin/webhooks",       label: "Webhooks",          group: "Ops" },
+  { href: "/admin/alerts",         label: "Alerts",            group: "Ops" },
+  { href: "/admin/storage",        label: "Storage",           group: "Ops" },
+  { href: "/admin/database",       label: "Database",          group: "Ops" },
+  { href: "/admin/domains",        label: "Domains",           group: "Ops" },
 
+  { href: "/admin/emails",         label: "Email templates",   group: "Content" },
   { href: "/admin/messages",       label: "Messages",          group: "Content" },
   { href: "/admin/social",         label: "Social",            group: "Content" },
   { href: "/admin/wallpapers",     label: "Wallpapers",        group: "Content" },
-  // Legacy single-tool toggle UI — kept for backward compat. The new
-  // /admin/apps page subsumes it.
+  // Legacy single-tool toggle UI — kept for backward compat.
   { href: "/admin/tools",          label: "Tools (legacy)",    group: "Content" },
 ];
 
