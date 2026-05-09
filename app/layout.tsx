@@ -5,6 +5,8 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { ThemeProvider, themeInitScript } from "@/components/ThemeProvider";
 import TabVisibility from "./_components/TabVisibility";
+import SiteBanner from "./_components/SiteBanner";
+import { getActiveBrand, brandCssVarsBlock } from "@/lib/runtime-brand";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -56,11 +58,19 @@ export const viewport: Viewport = {
   ],
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  // Brand is workspace-scoped eventually; here we only have global
+  // context (no workspace inferred at the root layout level), so we
+  // fetch the global default. brandCssVarsBlock returns an empty
+  // string when there's no override, so the <style> tag is a no-op.
+  const brand = await getActiveBrand();
+  const brandCss = brandCssVarsBlock(brand);
+  const faviconUrl = brand?.favicon_url ?? null;
+
   return (
     <html
       lang="en"
@@ -69,8 +79,13 @@ export default function RootLayout({
     >
       <head>
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
+        {brandCss && (
+          <style dangerouslySetInnerHTML={{ __html: brandCss }} />
+        )}
+        {faviconUrl && <link rel="icon" href={faviconUrl} />}
       </head>
       <body className="relative">
+        <SiteBanner />
         <TabVisibility />
         <ThemeProvider>{children}</ThemeProvider>
         <Analytics />
