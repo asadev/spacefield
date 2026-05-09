@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import { fetchAuthUsersByIds, formatDateTime } from "../_lib";
 import type {
+  ActivityFeedRow,
   AdminAuditLogRow,
   AiAgentRunRow,
   AuthEventRow,
@@ -14,10 +15,17 @@ export const dynamic = "force-dynamic";
 const TOTAL_ROWS = 200;
 const PER_SOURCE_PULL = 200;
 
-type SourceKey = "all" | "auth" | "admin" | "agent" | "toshare";
+type SourceKey =
+  | "all"
+  | "auth"
+  | "admin"
+  | "agent"
+  | "toshare"
+  | "feed";
 
 const SOURCE_OPTIONS: ReadonlyArray<{ key: SourceKey; label: string }> = [
   { key: "all", label: "All" },
+  { key: "feed", label: "Activity feed" },
   { key: "auth", label: "Auth" },
   { key: "admin", label: "Admin actions" },
   { key: "agent", label: "Agent runs" },
@@ -29,6 +37,7 @@ const SOURCE_CHIPS: Record<Exclude<SourceKey, "all">, string> = {
   admin: "bg-blue-500/15 text-blue-600 dark:text-blue-400",
   agent: "bg-violet-500/15 text-violet-600 dark:text-violet-400",
   toshare: "bg-amber-500/15 text-amber-600 dark:text-amber-400",
+  feed: "bg-rose-500/15 text-rose-500",
 };
 
 type ToshareEventLite = {
@@ -52,7 +61,13 @@ type FeedItem = {
 
 function parseSource(value: string | undefined): SourceKey {
   const v = (value ?? "").toLowerCase();
-  if (v === "auth" || v === "admin" || v === "agent" || v === "toshare") {
+  if (
+    v === "auth" ||
+    v === "admin" ||
+    v === "agent" ||
+    v === "toshare" ||
+    v === "feed"
+  ) {
     return v;
   }
   return "all";
@@ -61,17 +76,29 @@ function parseSource(value: string | undefined): SourceKey {
 export default async function AdminActivityPage({
   searchParams,
 }: {
-  searchParams: Promise<{ source?: string }>;
+  searchParams: Promise<{
+    source?: string;
+    kind?: string;
+    actor?: string;
+    workspace?: string;
+    from?: string;
+    to?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const source = parseSource(sp.source);
+  const kindFilter = (sp.kind ?? "").trim();
+  const actorFilter = (sp.actor ?? "").trim();
+  const workspaceFilter = (sp.workspace ?? "").trim();
+  const fromIso = parseDateBoundary(sp.from, "start");
+  const toIso = parseDateBoundary(sp.to, "end");
 
   const admin = createAdminClient();
 
   // Pull most recent rows from each source. We over-fetch a little so the
   // merged feed has enough density even when one source dominates the
   // last hour. The UI shows TOTAL_ROWS after sorting.
-  const [authRes, auditRes, runsRes, toshareRes] = await Promise.all([
+  const [authRes, auditRes, runsRes, toshareRes, feedRes] = await Promise.all([
     source === "all" || source === "auth"
       ? admin
           .from("auth_events")
@@ -106,18 +133,26 @@ export default async function AdminActivityPage({
           .order("created_at", { ascending: false })
           .limit(PER_SOURCE_PULL)
       : Promise.resolve({ data: [] as ToshareEventLite[], error: null }),
+    source === "all" || source === "feed"
+      ? buildFeedQuery(admin, kindFilter, actorFilter, workspaceFilter, fromIso, toIso)
+      : Promise.resolve({ data: [] as ActivityFeedRow[], error: null }),
   ]);
 
   const authRows = (authRes.data ?? []) as AuthEventRow[];
   const auditRows = (auditRes.data ?? []) as AdminAuditLogRow[];
   const runRows = (runsRes.data ?? []) as AiAgentRunRow[];
   const toshareRows = (toshareRes.data ?? []) as ToshareEventLite[];
+  const feedRows = (feedRes.data ?? []) as ActivityFeedRow[];
 
-  // Resolve user emails for agent runs (auth_events already has email).
-  const runUserIds = Array.from(
-    new Set(runRows.map((r) => r.user_id).filter((x): x is string => !!x))
-  );
-  const userMap = await fetchAuthUsersByIds(runUserIds);
+  // Resolve user emails for agent runs and activity feed.
+  const userIdSet = new Set<string>();
+  for (const r of runRows) {
+    if (r.user_id) userIdSet.add(r.user_id);
+  }
+  for (const r of feedRows) {
+    if (r.actor_id) userIdSet.add(r.actor_id);
+  }
+  const userMap = await fetchAuthUsersByIds(Array.from(userIdSet));
 
   // Resolve toshare slugs for the link_ids we've seen.
   const linkIds = Array.from(new Set(toshareRows.map((r) => r.link_id)));
@@ -195,6 +230,25 @@ export default async function AdminActivityPage({
     });
   }
 
+  for (const r of feedRows) {
+    const u = r.actor_id ? userMap.get(r.actor_id) : null;
+    items.push({
+      source: "feed",
+      id: `feed:${r.id}`,
+      created_at: r.created_at,
+      primary: r.kind,
+      secondary: r.subject,
+      detail:
+        r.body
+          ? r.body.length > 120
+            ? `${r.body.slice(0, 119)}…`
+            : r.body
+          : (u?.email ?? r.actor_id ?? null),
+      href: r.url,
+      ip: null,
+    });
+  }
+
   items.sort((a, b) => {
     const at = Date.parse(a.created_at);
     const bt = Date.parse(b.created_at);
@@ -208,6 +262,7 @@ export default async function AdminActivityPage({
     admin: auditRows.length,
     agent: runRows.length,
     toshare: toshareRows.length,
+    feed: feedRows.length,
   };
 
   return (
@@ -229,7 +284,8 @@ export default async function AdminActivityPage({
           </div>
           <div className="text-right text-[11px] text-faint">
             <div className="font-mono tabular-nums">
-              auth {counts.auth.toLocaleString()} · admin{" "}
+              feed {counts.feed.toLocaleString()} · auth{" "}
+              {counts.auth.toLocaleString()} · admin{" "}
               {counts.admin.toLocaleString()} · agent{" "}
               {counts.agent.toLocaleString()} · toShare{" "}
               {counts.toshare.toLocaleString()}
@@ -238,12 +294,18 @@ export default async function AdminActivityPage({
           </div>
         </div>
 
-        {/* Filter chips */}
+        {/* Filter chips — pick the source channel */}
         <div className="flex flex-wrap items-center gap-2">
           {SOURCE_OPTIONS.map((opt) => {
             const active = source === opt.key;
             const params = new URLSearchParams();
             if (opt.key !== "all") params.set("source", opt.key);
+            // Preserve activity_feed filters across source switches.
+            if (kindFilter) params.set("kind", kindFilter);
+            if (actorFilter) params.set("actor", actorFilter);
+            if (workspaceFilter) params.set("workspace", workspaceFilter);
+            if (sp.from) params.set("from", sp.from);
+            if (sp.to) params.set("to", sp.to);
             const href = `/admin/activity${
               params.toString() ? `?${params.toString()}` : ""
             }`;
@@ -262,6 +324,88 @@ export default async function AdminActivityPage({
             );
           })}
         </div>
+
+        {/* Activity-feed filters (only meaningful when source is all|feed) */}
+        {(source === "all" || source === "feed") && (
+          <form
+            action="/admin/activity"
+            className="grid gap-2 rounded-xl border border-app bg-app-elevated p-3 text-xs sm:grid-cols-5"
+          >
+            <input type="hidden" name="source" value={source === "all" ? "" : source} />
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] uppercase tracking-[0.18em] text-muted">
+                Kind
+              </span>
+              <input
+                type="text"
+                name="kind"
+                defaultValue={kindFilter}
+                placeholder="e.g. workspace.created"
+                className="rounded-md border border-app bg-app px-2 py-1 text-xs text-app outline-none focus:border-tool-accent"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] uppercase tracking-[0.18em] text-muted">
+                Actor (uuid)
+              </span>
+              <input
+                type="text"
+                name="actor"
+                defaultValue={actorFilter}
+                placeholder="user uuid"
+                className="rounded-md border border-app bg-app px-2 py-1 font-mono text-[11px] text-app outline-none focus:border-tool-accent"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] uppercase tracking-[0.18em] text-muted">
+                Workspace (uuid)
+              </span>
+              <input
+                type="text"
+                name="workspace"
+                defaultValue={workspaceFilter}
+                placeholder="workspace uuid"
+                className="rounded-md border border-app bg-app px-2 py-1 font-mono text-[11px] text-app outline-none focus:border-tool-accent"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] uppercase tracking-[0.18em] text-muted">
+                From
+              </span>
+              <input
+                type="date"
+                name="from"
+                defaultValue={sp.from ?? ""}
+                className="rounded-md border border-app bg-app px-2 py-1 text-xs text-app outline-none focus:border-tool-accent"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="text-[10px] uppercase tracking-[0.18em] text-muted">
+                To
+              </span>
+              <input
+                type="date"
+                name="to"
+                defaultValue={sp.to ?? ""}
+                className="rounded-md border border-app bg-app px-2 py-1 text-xs text-app outline-none focus:border-tool-accent"
+              />
+            </label>
+            <div className="flex items-end gap-2 sm:col-span-5">
+              <button
+                type="submit"
+                className="rounded-md border border-app bg-app px-3 py-1 text-[11px] text-app transition-colors hover:border-tool-accent"
+              >
+                Apply filters
+              </button>
+              <Link
+                href={`/admin/activity${source === "all" ? "" : `?source=${source}`}`}
+                className="text-[11px] text-muted hover:text-app"
+              >
+                Clear
+              </Link>
+            </div>
+          </form>
+        )}
 
         {/* Feed */}
         <div className="overflow-x-auto rounded-xl border border-app bg-app-elevated">
@@ -342,4 +486,54 @@ export default async function AdminActivityPage({
       </div>
     </>
   );
+}
+
+/* ─────────────────────────── helpers ─────────────────────────── */
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function parseDateBoundary(
+  value: string | undefined,
+  edge: "start" | "end"
+): string | null {
+  if (!value) return null;
+  // YYYY-MM-DD inputs land on midnight UTC. For "to" we want end-of-day.
+  if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    const iso =
+      edge === "end" ? `${value}T23:59:59.999Z` : `${value}T00:00:00.000Z`;
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? null : d.toISOString();
+  }
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? null : d.toISOString();
+}
+
+type AdminClient = ReturnType<typeof createAdminClient>;
+
+function buildFeedQuery(
+  admin: AdminClient,
+  kindFilter: string,
+  actorFilter: string,
+  workspaceFilter: string,
+  fromIso: string | null,
+  toIso: string | null
+) {
+  let q = admin
+    .from("activity_feed")
+    .select(
+      "id, kind, actor_id, workspace_id, subject, body, url, metadata, created_at"
+    )
+    .order("created_at", { ascending: false })
+    .limit(PER_SOURCE_PULL);
+  if (kindFilter) q = q.eq("kind", kindFilter);
+  if (actorFilter && UUID_REGEX.test(actorFilter)) {
+    q = q.eq("actor_id", actorFilter);
+  }
+  if (workspaceFilter && UUID_REGEX.test(workspaceFilter)) {
+    q = q.eq("workspace_id", workspaceFilter);
+  }
+  if (fromIso) q = q.gte("created_at", fromIso);
+  if (toIso) q = q.lte("created_at", toIso);
+  return q;
 }
