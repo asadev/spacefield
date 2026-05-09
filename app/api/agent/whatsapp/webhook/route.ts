@@ -24,7 +24,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createServiceClient } from "@supabase/supabase-js";
 import { dispatch } from "@/lib/agent/runtime/dispatcher";
 import type { Tier, UserContext } from "@/lib/agent/runtime/types";
-import { sendWhatsAppText } from "../send/route";
+import { sendWhatsAppText } from "../send/_send";
 
 export const runtime = "nodejs";
 // Webhook runs the full hybrid agent (classifier → executor/orchestrator

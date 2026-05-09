@@ -20,7 +20,7 @@ import { dispatch } from "@/lib/agent/runtime/dispatcher";
 import { loadPersona } from "@/lib/agent/runtime/persona";
 import { TIER_DEFAULTS, currentMonthKey } from "@/lib/agent/runtime/budget";
 import type { Tier, UserContext } from "@/lib/agent/runtime/types";
-import { sendTelegramText } from "../send/route";
+import { sendTelegramText } from "../send/_send";
 
 export const runtime = "nodejs";
 // Webhook runs the full hybrid agent (classifier → executor/orchestrator

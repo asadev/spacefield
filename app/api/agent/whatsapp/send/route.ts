@@ -1,55 +1,14 @@
-/* Internal helper: POST a text message to a WhatsApp recipient via the
- * Meta Cloud API. Not exposed externally — every caller is server-side
- * (the webhook handler, the dispatch route, the test-message button on
- * the Settings page).
+/* WhatsApp sendMessage POST endpoint.
  *
- * We export `sendWhatsAppText` for in-process callers and also keep a
- * thin POST handler so the Settings UI can hit it through a normal
- * fetch (auth via Supabase cookie + workspace_member check).
+ * Auth via Supabase cookie + workspace_member check. The actual Meta
+ * Cloud API call lives in `_send.ts` so this file exports only HTTP
+ * method handlers.
  */
 
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-const GRAPH_VERSION = "v22.0";
-
-export interface SendResult {
-  ok: boolean;
-  status: number;
-  body: unknown;
-}
-
-/** Send a plain-text WhatsApp message. */
-export async function sendWhatsAppText(
-  to: string,
-  text: string
-): Promise<SendResult> {
-  const phoneNumberId = process.env.META_WHATSAPP_PHONE_NUMBER_ID;
-  const token = process.env.META_SYSTEM_USER_TOKEN;
-  if (!phoneNumberId || !token) {
-    return {
-      ok: false,
-      status: 0,
-      body: "missing META_WHATSAPP_PHONE_NUMBER_ID or META_SYSTEM_USER_TOKEN",
-    };
-  }
-  const url = `https://graph.facebook.com/${GRAPH_VERSION}/${phoneNumberId}/messages`;
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      messaging_product: "whatsapp",
-      to,
-      type: "text",
-      text: { body: text },
-    }),
-  });
-  const body = await res.json().catch(() => ({}));
-  return { ok: res.ok, status: res.status, body };
-}
+import { sendWhatsAppText } from "./_send";
 
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
