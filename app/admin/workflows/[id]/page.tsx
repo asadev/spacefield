@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { formatDateTime } from "../../_lib";
+import { fetchAuthUsersByIds, formatDateTime } from "../../_lib";
 import type { AgentWorkflowRow } from "../../_types";
 import {
   addStep,
@@ -20,8 +20,25 @@ import StepEditor, {
 import TriggerChip from "../_components/TriggerChip";
 import WorkflowForm from "../_components/WorkflowForm";
 import { loadPromptOptions, loadSkillOptions } from "../_data";
+import RunButton from "./_RunButton";
 
 export const dynamic = "force-dynamic";
+
+interface WorkflowRunRow {
+  id: string;
+  workflow_id: string;
+  triggered_by: string | null;
+  trigger_kind: "manual" | "event" | "cron";
+  status: "running" | "completed" | "failed" | "cancelled";
+  step_results: unknown;
+  input: unknown;
+  output: unknown;
+  error: string | null;
+  duration_ms: number | null;
+  metadata: Record<string, unknown> | null;
+  started_at: string;
+  finished_at: string | null;
+}
 
 export default async function AdminWorkflowDetailPage({
   params,
@@ -32,10 +49,18 @@ export default async function AdminWorkflowDetailPage({
   const id = decodeURIComponent(rawId);
 
   const admin = createAdminClient();
-  const [wfRes, skillOptions, promptOptions] = await Promise.all([
+  const [wfRes, skillOptions, promptOptions, runsRes] = await Promise.all([
     admin.from("agent_workflows").select("*").eq("id", id).maybeSingle(),
     loadSkillOptions(),
     loadPromptOptions(),
+    admin
+      .from("workflow_runs")
+      .select(
+        "id, workflow_id, triggered_by, trigger_kind, status, step_results, input, output, error, duration_ms, metadata, started_at, finished_at"
+      )
+      .eq("workflow_id", id)
+      .order("started_at", { ascending: false })
+      .limit(20),
   ]);
 
   if (wfRes.error) {
@@ -49,6 +74,17 @@ export default async function AdminWorkflowDetailPage({
   if (!workflow) notFound();
 
   const steps = (Array.isArray(workflow.steps) ? workflow.steps : []) as WorkflowStep[];
+
+  const runs: WorkflowRunRow[] = Array.isArray(runsRes?.data)
+    ? (runsRes.data as WorkflowRunRow[])
+    : [];
+
+  // Resolve triggered_by → email for display.
+  const actorIds = Array.from(
+    new Set(runs.map((r) => r.triggered_by).filter((v): v is string => !!v))
+  );
+  const userMap =
+    actorIds.length > 0 ? await fetchAuthUsersByIds(actorIds) : new Map();
 
   // Quick status flip — same UX as agents/skills.
   const nextStatus = (
@@ -101,21 +137,26 @@ export default async function AdminWorkflowDetailPage({
             </div>
           </div>
 
-          {/* Quick status flip */}
-          <form action={setStatus} className="flex items-center gap-2">
-            <input type="hidden" name="id" value={workflow.id} />
-            <input type="hidden" name="status" value={nextStatus} />
-            <button
-              type="submit"
-              className="rounded-md border border-app bg-app-elevated px-3 py-1.5 text-xs text-app transition-colors hover:border-tool-accent"
-            >
-              {workflow.status === "live"
-                ? "Disable"
-                : workflow.status === "draft"
-                  ? "Publish (live)"
-                  : "Move to draft"}
-            </button>
-          </form>
+          <div className="flex flex-col items-end gap-2">
+            <div className="flex items-center gap-2">
+              <RunButton workflowId={workflow.id} />
+              {/* Quick status flip */}
+              <form action={setStatus} className="flex items-center gap-2">
+                <input type="hidden" name="id" value={workflow.id} />
+                <input type="hidden" name="status" value={nextStatus} />
+                <button
+                  type="submit"
+                  className="rounded-md border border-app bg-app-elevated px-3 py-1.5 text-xs text-app transition-colors hover:border-tool-accent"
+                >
+                  {workflow.status === "live"
+                    ? "Disable"
+                    : workflow.status === "draft"
+                      ? "Publish (live)"
+                      : "Move to draft"}
+                </button>
+              </form>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -218,20 +259,115 @@ export default async function AdminWorkflowDetailPage({
           )}
 
           <section className="rounded-xl border border-app bg-app-elevated p-5">
-            <header className="mb-2">
-              <h2 className="text-sm font-semibold text-app">Run history</h2>
+            <header className="mb-3">
+              <h2 className="text-sm font-semibold text-app">Recent runs</h2>
               <p className="mt-0.5 text-xs text-muted">
-                Per-workflow execution metrics will appear here once the
-                runtime emits them.
+                Last 20 executions of this workflow. Click a row to expand
+                step results.
               </p>
             </header>
-            <div className="rounded-md border border-dashed border-app bg-app/40 px-3 py-6 text-center text-[11px] text-faint">
-              No runs yet
-            </div>
+            {runs.length === 0 ? (
+              <div className="rounded-md border border-dashed border-app bg-app/40 px-3 py-6 text-center text-[11px] text-faint">
+                No runs yet — hit &ldquo;Run now&rdquo; above to trigger one.
+              </div>
+            ) : (
+              <ul className="space-y-2">
+                {runs.map((run) => {
+                  const actor = run.triggered_by
+                    ? userMap.get(run.triggered_by)
+                    : null;
+                  return <RunRow key={run.id} run={run} actorEmail={actor?.email ?? null} />;
+                })}
+              </ul>
+            )}
           </section>
         </aside>
       </div>
     </div>
+  );
+}
+
+function RunRow({
+  run,
+  actorEmail,
+}: {
+  run: WorkflowRunRow;
+  actorEmail: string | null;
+}) {
+  const stepsText = (() => {
+    if (!Array.isArray(run.step_results)) return "";
+    try {
+      return JSON.stringify(run.step_results, null, 2);
+    } catch {
+      return "";
+    }
+  })();
+
+  const statusColor =
+    run.status === "completed"
+      ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-500"
+      : run.status === "failed"
+        ? "border-rose-500/30 bg-rose-500/10 text-rose-500"
+        : run.status === "cancelled"
+          ? "border-amber-500/30 bg-amber-500/10 text-amber-500"
+          : "border-sky-500/30 bg-sky-500/10 text-sky-500";
+
+  return (
+    <li className="rounded-md border border-app bg-app/40 text-[11px]">
+      <details className="group">
+        <summary className="flex cursor-pointer items-center justify-between gap-2 px-3 py-2">
+          <div className="flex min-w-0 flex-1 items-center gap-2">
+            <span
+              className={`rounded border px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wider ${statusColor}`}
+            >
+              {run.status}
+            </span>
+            <span className="truncate font-mono text-[10px] text-app">
+              {run.id.slice(0, 8)}
+            </span>
+            <span className="text-faint">·</span>
+            <span className="text-[10px] text-muted">
+              {run.trigger_kind}
+            </span>
+          </div>
+          <span className="shrink-0 text-[10px] text-muted">
+            {run.duration_ms !== null ? `${run.duration_ms}ms` : "—"}
+          </span>
+        </summary>
+        <div className="space-y-2 border-t border-app px-3 py-2 text-[10px]">
+          <div className="grid grid-cols-2 gap-2 text-muted">
+            <div>
+              <div className="text-faint">started</div>
+              <div className="font-mono text-app">
+                {formatDateTime(run.started_at)}
+              </div>
+            </div>
+            <div>
+              <div className="text-faint">finished</div>
+              <div className="font-mono text-app">
+                {run.finished_at ? formatDateTime(run.finished_at) : "—"}
+              </div>
+            </div>
+            <div className="col-span-2">
+              <div className="text-faint">triggered by</div>
+              <div className="truncate font-mono text-app">
+                {actorEmail ?? (run.triggered_by ? "(unknown user)" : "(system)")}
+              </div>
+            </div>
+          </div>
+          {run.error && (
+            <div className="rounded border border-rose-500/30 bg-rose-500/10 px-2 py-1.5 font-mono text-[10px] text-rose-500">
+              {run.error}
+            </div>
+          )}
+          {stepsText && (
+            <pre className="max-h-64 overflow-auto rounded border border-app bg-app p-2 font-mono text-[10px] text-secondary">
+              {stepsText}
+            </pre>
+          )}
+        </div>
+      </details>
+    </li>
   );
 }
 
