@@ -455,3 +455,423 @@ export const CALL_KINDS: CallKind[] = ["classifier", "executor", "orchestrator",
 export const MODEL_PROVIDERS: ModelProvider[] = [
   "anthropic", "openai", "google", "xai", "meta", "mistral", "custom",
 ];
+
+/* ─────────────────────────── v3 types ─────────────────────────── */
+
+export interface AiProviderRow {
+  id: string;
+  display_name: string;
+  base_url: string | null;
+  api_key_env: string;
+  api_key_set: boolean;
+  status: "live" | "paused" | "disabled";
+  cost_quota_usd: number;
+  spent_usd: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface AgentToolOverrideRow {
+  agent_id: string;
+  skill_id: string;
+  tool_name: string;
+  override_description: string | null;
+  override_input_schema: Record<string, unknown> | null;
+  read_only_override: boolean | null;
+  requires_confirmation_override: boolean | null;
+  enabled: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface AgentWorkflowRow {
+  id: string;
+  display_name: string;
+  description: string;
+  steps: unknown[];
+  trigger_kind: "manual" | "event" | "cron";
+  trigger_config: Record<string, unknown>;
+  status: "live" | "draft" | "disabled";
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export type BannerVariant = "info" | "warning" | "success" | "error";
+export type BannerAudience = "all" | "authenticated" | "tier" | "allowlist";
+
+export interface SiteBannerRow {
+  id: string;
+  message: string;
+  cta_label: string | null;
+  cta_href: string | null;
+  variant: BannerVariant;
+  audience: BannerAudience;
+  audience_tiers: string[];
+  audience_user_ids: string[];
+  starts_at: string | null;
+  ends_at: string | null;
+  enabled: boolean;
+  dismissible: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export type PushAudience = "all" | "tier" | "allowlist" | "workspace";
+export type PushStatus = "draft" | "scheduled" | "sending" | "sent" | "failed";
+
+export interface PushCampaignRow {
+  id: string;
+  title: string;
+  body: string;
+  url: string | null;
+  audience: PushAudience;
+  audience_tiers: string[];
+  audience_user_ids: string[];
+  audience_workspace_ids: string[];
+  scheduled_at: string | null;
+  sent_at: string | null;
+  status: PushStatus;
+  total_targets: number;
+  total_sent: number;
+  total_failed: number;
+  created_at: string;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export interface MaintenanceStateRow {
+  id: 1;
+  enabled: boolean;
+  message: string;
+  read_only: boolean;
+  allowlist_user_ids: string[];
+  starts_at: string | null;
+  ends_at: string | null;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export type RateLimitScope = "global" | "tier" | "user" | "workspace" | "route";
+
+export interface RateLimitRuleRow {
+  id: string;
+  scope: RateLimitScope;
+  scope_value: string | null;
+  route_pattern: string | null;
+  limit_count: number;
+  window_sec: number;
+  burst_count: number | null;
+  enabled: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IpRuleRow {
+  id: string;
+  cidr: string;
+  action: "allow" | "block";
+  reason: string | null;
+  expires_at: string | null;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface SecurityPoliciesRow {
+  id: 1;
+  enforce_2fa: boolean;
+  enforce_2fa_for_admins: boolean;
+  session_timeout_minutes: number;
+  password_min_length: number;
+  password_require_uppercase: boolean;
+  password_require_number: boolean;
+  password_require_symbol: boolean;
+  max_login_attempts: number;
+  lockout_duration_minutes: number;
+  allow_sso_only: boolean;
+  metadata: Record<string, unknown>;
+  updated_at: string;
+}
+
+export interface SsoConfigRow {
+  id: string;
+  workspace_id: string | null;
+  protocol: "saml" | "oidc" | "google" | "microsoft";
+  display_name: string;
+  entity_id: string | null;
+  sso_url: string | null;
+  certificate: string | null;
+  client_id: string | null;
+  client_secret_env: string | null;
+  metadata_xml: string | null;
+  status: "pending" | "active" | "disabled" | "failed";
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BrandConfigRow {
+  id: string;
+  workspace_id: string | null;
+  brand_name: string | null;
+  logo_url: string | null;
+  logo_dark_url: string | null;
+  favicon_url: string | null;
+  primary_color: string | null;
+  accent_color: string | null;
+  font_family: string | null;
+  email_footer_html: string | null;
+  custom_css: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface LocaleRow {
+  code: string;
+  display_name: string;
+  enabled: boolean;
+  is_default: boolean;
+  rtl: boolean;
+  created_at: string;
+}
+
+export interface LocaleStringRow {
+  locale_code: string;
+  string_key: string;
+  value: string;
+  context: string | null;
+  updated_at: string;
+}
+
+export type CouponKind = "percent" | "fixed" | "tier_upgrade" | "free_months";
+
+export interface CouponRow {
+  code: string;
+  description: string;
+  kind: CouponKind;
+  value: number;
+  applies_to_tiers: string[];
+  max_redemptions: number | null;
+  redemption_count: number;
+  per_user_limit: number | null;
+  starts_at: string | null;
+  ends_at: string | null;
+  enabled: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export type ModerationApplyTo = "chat" | "crm" | "social" | "toshare" | "any";
+export type ModerationAction = "block" | "flag" | "review";
+
+export interface ModerationRuleRow {
+  id: string;
+  rule_kind: "banned_word" | "regex" | "threshold" | "length";
+  pattern: string;
+  action: ModerationAction;
+  applies_to: ModerationApplyTo;
+  severity: number;
+  enabled: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface ModerationQueueRow {
+  id: string;
+  source: string;
+  source_id: string | null;
+  user_id: string | null;
+  workspace_id: string | null;
+  content: string;
+  rule_id: string | null;
+  severity: number;
+  status: "pending" | "approved" | "rejected" | "escalated";
+  reviewed_by: string | null;
+  reviewed_at: string | null;
+  notes: string | null;
+  created_at: string;
+}
+
+export type EvalTargetKind = "agent" | "skill" | "workflow";
+export type EvalScoringMethod = "exact" | "contains" | "regex" | "llm_judge" | "custom";
+
+export interface EvalSuiteRow {
+  id: string;
+  display_name: string;
+  description: string;
+  cases: unknown[];
+  target_kind: EvalTargetKind;
+  target_id: string | null;
+  scoring_method: EvalScoringMethod;
+  enabled: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EvalRunRow {
+  id: string;
+  suite_id: string | null;
+  triggered_by: string | null;
+  total_cases: number;
+  passed_cases: number;
+  failed_cases: number;
+  errored_cases: number;
+  duration_ms: number | null;
+  status: "running" | "completed" | "failed" | "cancelled";
+  results: unknown[];
+  metadata: Record<string, unknown>;
+  created_at: string;
+  finished_at: string | null;
+}
+
+export interface PromptLibraryRow {
+  id: string;
+  display_name: string;
+  description: string;
+  category: string;
+  tags: string[];
+  current_version: number;
+  status: "live" | "draft" | "archived";
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PromptVersionRow {
+  prompt_id: string;
+  version: number;
+  body: string;
+  variables: string[];
+  notes: string | null;
+  created_by: string | null;
+  created_at: string;
+}
+
+export type ErrorLevel = "debug" | "info" | "warning" | "error" | "fatal";
+
+export interface ErrorEventRow {
+  id: string;
+  occurred_at: string;
+  level: ErrorLevel;
+  source: string | null;
+  message: string;
+  fingerprint: string | null;
+  user_id: string | null;
+  workspace_id: string | null;
+  request_id: string | null;
+  url: string | null;
+  user_agent: string | null;
+  stack: string | null;
+  context: Record<string, unknown>;
+  resolved_at: string | null;
+  resolved_by: string | null;
+}
+
+export interface BackupSnapshotRow {
+  id: string;
+  kind: "manual" | "scheduled" | "pre_migration";
+  scope: "full" | "workspace" | "table";
+  scope_target: string | null;
+  storage_url: string | null;
+  size_bytes: number | null;
+  status: "pending" | "running" | "completed" | "failed" | "restored";
+  started_at: string;
+  finished_at: string | null;
+  triggered_by: string | null;
+  metadata: Record<string, unknown>;
+}
+
+export interface DataExportRequestRow {
+  id: string;
+  user_id: string | null;
+  kind: "gdpr_export" | "deletion" | "workspace_export";
+  status: "pending" | "running" | "ready" | "expired" | "failed";
+  download_url: string | null;
+  expires_at: string | null;
+  notes: string | null;
+  created_at: string;
+  finished_at: string | null;
+}
+
+export interface CohortRow {
+  id: string;
+  display_name: string;
+  description: string;
+  definition: Record<string, unknown>;
+  user_count: number;
+  last_computed_at: string | null;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FunnelRow {
+  id: string;
+  display_name: string;
+  description: string;
+  steps: unknown[];
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AnnouncementRow {
+  id: string;
+  title: string;
+  body: string;
+  category: "product" | "platform" | "security" | "outage" | "marketing";
+  audience: "all" | "admin" | "tier" | "allowlist";
+  audience_tiers: string[];
+  audience_user_ids: string[];
+  pinned: boolean;
+  published_at: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface IntegrationRow {
+  id: string;
+  display_name: string;
+  category: string;
+  description: string;
+  logo_url: string | null;
+  homepage_url: string | null;
+  oauth_config: Record<string, unknown> | null;
+  status: "available" | "beta" | "disabled" | "deprecated";
+  required_env: string[];
+  enabled: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WebhookSubscriptionRow {
+  id: string;
+  workspace_id: string | null;
+  created_by: string | null;
+  url: string;
+  events: string[];
+  secret: string | null;
+  enabled: boolean;
+  description: string | null;
+  last_delivery_at: string | null;
+  last_delivery_status: string | null;
+  failure_count: number;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
