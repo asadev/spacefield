@@ -2,6 +2,11 @@ import Link from "next/link";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import BulkActionBar, { type BulkAction } from "../_components/BulkActionBar";
+import { BulkActionProvider } from "../_components/BulkActionContext";
+import BulkRowCheckbox, {
+  BulkSelectAllCheckbox,
+} from "../_components/BulkRowCheckbox";
 import { formatDateTime } from "../_lib";
 import type { AiAgentRow } from "../_types";
 import StatusChip from "./_components/StatusChip";
@@ -9,6 +14,36 @@ import KindChip from "./_components/KindChip";
 import AccessChip from "./_components/AccessChip";
 
 export const dynamic = "force-dynamic";
+
+const AGENT_BULK_ACTIONS: BulkAction[] = [
+  {
+    id: "set_status_disabled",
+    label: "Set status: Disabled",
+    confirmText: "Disable {n} agents?",
+  },
+  {
+    id: "set_status_live",
+    label: "Set status: Live",
+    confirmText: "Mark {n} agents live?",
+  },
+  {
+    id: "set_status_draft",
+    label: "Set status: Draft",
+    confirmText: "Move {n} agents to draft?",
+  },
+  {
+    id: "delete",
+    label: "Delete agents",
+    kind: "destructive",
+    confirmText:
+      "Delete {n} agents? Only disabled agents with no recent runs are removed.",
+  },
+  {
+    id: "export_csv",
+    label: "Export selected as CSV",
+    kind: "export",
+  },
+];
 
 /**
  * Index of every row in `public.ai_agents`. The order mirrors how the
@@ -54,8 +89,11 @@ export default async function AdminAgentsPage() {
     disabled: rows.filter((r) => r.status === "disabled").length,
   };
 
+  const pageIds = rows.map((r) => r.id);
+
   return (
-    <div className="space-y-4">
+    <BulkActionProvider scope="agents">
+    <div className="space-y-4 pb-24">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <div className="text-[0.6rem] uppercase tracking-[0.2em] text-faint">
@@ -80,6 +118,12 @@ export default async function AdminAgentsPage() {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-app text-[0.6rem] uppercase tracking-[0.2em] text-muted">
+              <th className="w-8 px-3 py-2 text-left font-normal">
+                <BulkSelectAllCheckbox
+                  ids={pageIds}
+                  label="Select all agents on page"
+                />
+              </th>
               <th className="px-3 py-2 text-left font-normal">Agent</th>
               <th className="px-3 py-2 text-left font-normal">ID</th>
               <th className="px-3 py-2 text-left font-normal">Kind</th>
@@ -94,7 +138,7 @@ export default async function AdminAgentsPage() {
             {rows.length === 0 ? (
               <tr>
                 <td
-                  colSpan={8}
+                  colSpan={9}
                   className="px-3 py-8 text-center text-faint"
                 >
                   No agents yet. Click <span className="text-app">+ New agent</span> to seed one.
@@ -106,6 +150,12 @@ export default async function AdminAgentsPage() {
                   key={r.id}
                   className="border-b border-app last:border-b-0 hover:bg-app/40"
                 >
+                  <td className="px-3 py-2 align-middle">
+                    <BulkRowCheckbox
+                      id={r.id}
+                      label={`Select agent ${r.display_name}`}
+                    />
+                  </td>
                   <td className="px-3 py-2">
                     <Link
                       href={`/admin/agents/${r.id}`}
@@ -151,6 +201,9 @@ export default async function AdminAgentsPage() {
           </tbody>
         </table>
       </div>
+
+      <BulkActionBar scope="agents" actions={AGENT_BULK_ACTIONS} />
     </div>
+    </BulkActionProvider>
   );
 }
