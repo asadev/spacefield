@@ -6,17 +6,32 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { formatDateTime } from "../../_lib";
 import type { AiAgentRow, AiAgentRunRow } from "../../_types";
 import {
+  clearAgentToolOverride,
   deleteAgent,
   setAgentStatus,
+  setAgentToolOverride,
   updateAgent,
 } from "../_actions";
 import AccessChip from "../_components/AccessChip";
 import AgentForm from "../_components/AgentForm";
+import EffectiveToolsList from "../_components/EffectiveToolsList";
+import EvalSuitesForAgent from "../_components/EvalSuitesForAgent";
 import KindChip from "../_components/KindChip";
 import RecentRuns from "../_components/RecentRuns";
+import SkillChips from "../_components/SkillChips";
 import StatusChip from "../_components/StatusChip";
+import ToolOverrideEditor from "../_components/ToolOverrideEditor";
 import VisibilityTester from "../_components/VisibilityTester";
-import { loadSkillIds, loadToolOptions } from "../_data";
+import WorkflowsUsingAgent from "../_components/WorkflowsUsingAgent";
+import {
+  buildEffectiveTools,
+  loadAgentToolOverrides,
+  loadEvalSuitesForAgent,
+  loadSkillIds,
+  loadSkillsForAgent,
+  loadToolOptions,
+  loadWorkflowsForAgent,
+} from "../_data";
 
 export const dynamic = "force-dynamic";
 
@@ -30,6 +45,9 @@ export default async function AdminAgentDetailPage({
   const { id } = await params;
   const admin = createAdminClient();
 
+  // First pass: agent + form prereqs. We need the agent's
+  // `allowed_skills` before we can fetch the matching skill rows, so
+  // it's two phases of parallel reads.
   const [agentRes, runsRes, skillIds, toolOptions] = await Promise.all([
     admin.from("ai_agents").select("*").eq("id", id).maybeSingle(),
     admin
@@ -54,8 +72,18 @@ export default async function AdminAgentDetailPage({
   const agent = agentRes.data as AiAgentRow | null;
   if (!agent) notFound();
 
-  const runs = (runsRes.data ?? []) as AiAgentRunRow[];
+  // Second pass: cross-link data. All four queries are independent of
+  // each other so we run them in parallel.
+  const [skills, overrides, workflows, evalSuites] = await Promise.all([
+    loadSkillsForAgent(agent.allowed_skills ?? []),
+    loadAgentToolOverrides(agent.id),
+    loadWorkflowsForAgent(agent.id),
+    loadEvalSuitesForAgent(agent.id),
+  ]);
 
+  const effectiveTools = buildEffectiveTools(skills, overrides);
+
+  const runs = (runsRes.data ?? []) as AiAgentRunRow[];
   const successCount = runs.filter((r) => r.status === "success").length;
   const errorCount = runs.filter((r) => r.status === "error").length;
   const deniedCount = runs.filter((r) => r.status === "denied").length;
@@ -133,6 +161,97 @@ export default async function AdminAgentDetailPage({
             toolOptions={toolOptions}
           />
 
+          {/* ── Skills (deep-linked) ─────────────────────────── */}
+          <section className="space-y-3 rounded-xl border border-app bg-app-elevated p-5">
+            <header>
+              <h2 className="text-sm font-semibold text-app">
+                Attached skills
+              </h2>
+              <p className="mt-0.5 text-xs text-muted">
+                Each chip links to <code className="font-mono">/admin/skills/[id]</code>.
+                Hover for the skill description.
+              </p>
+            </header>
+            <SkillChips skills={skills} />
+          </section>
+
+          {/* ── Tools resolved from skills ─────────────────────────── */}
+          <section className="space-y-3 rounded-xl border border-app bg-app-elevated p-5">
+            <header className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-semibold text-app">
+                  Effective tools ({effectiveTools.length})
+                </h2>
+                <p className="mt-0.5 text-xs text-muted">
+                  Joined from each skill&rsquo;s{" "}
+                  <code className="font-mono">tools_json</code> with overrides
+                  applied. Each tool name links to{" "}
+                  <code className="font-mono">/admin/tools-catalog/skill-custom/[name]</code>.
+                </p>
+              </div>
+              <Link
+                href={`/api/admin/agents/${encodeURIComponent(agent.id)}/tools`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="rounded-md border border-app bg-app-elevated px-2.5 py-1 text-[11px] text-secondary transition-colors hover:border-tool-accent hover:text-app"
+              >
+                View JSON
+              </Link>
+            </header>
+            <EffectiveToolsList tools={effectiveTools} />
+          </section>
+
+          {/* ── Per-agent overrides ─────────────────────────── */}
+          <section className="space-y-3 rounded-xl border border-app bg-app-elevated p-5">
+            <header>
+              <h2 className="text-sm font-semibold text-app">
+                Tool overrides for this agent
+              </h2>
+              <p className="mt-0.5 text-xs text-muted">
+                Per-agent overrides on top of skill defaults. Use these to
+                tighten or relax behaviour for a specific agent without
+                touching the underlying skill. Changes here update{" "}
+                <code className="font-mono">agent_tool_overrides</code> and
+                are audit-logged.
+              </p>
+            </header>
+            <ToolOverrideEditor
+              agentId={agent.id}
+              tools={effectiveTools}
+              setAction={setAgentToolOverride}
+              clearAction={clearAgentToolOverride}
+            />
+          </section>
+
+          {/* ── Workflows using this agent ─────────────────────────── */}
+          <section className="space-y-3 rounded-xl border border-app bg-app-elevated p-5">
+            <header>
+              <h2 className="text-sm font-semibold text-app">
+                Workflows using this agent ({workflows.length})
+              </h2>
+              <p className="mt-0.5 text-xs text-muted">
+                Rows in <code className="font-mono">agent_workflows</code> with
+                a step referencing this agent.
+              </p>
+            </header>
+            <WorkflowsUsingAgent workflows={workflows} />
+          </section>
+
+          {/* ── Eval suites for this agent ─────────────────────────── */}
+          <section className="space-y-3 rounded-xl border border-app bg-app-elevated p-5">
+            <header>
+              <h2 className="text-sm font-semibold text-app">
+                Eval suites ({evalSuites.length})
+              </h2>
+              <p className="mt-0.5 text-xs text-muted">
+                Rows in <code className="font-mono">eval_suites</code> with{" "}
+                <code className="font-mono">target_kind=agent</code> and{" "}
+                <code className="font-mono">target_id={agent.id}</code>.
+              </p>
+            </header>
+            <EvalSuitesForAgent suites={evalSuites} />
+          </section>
+
           {/* Visibility tester */}
           <section className="space-y-3 rounded-xl border border-app bg-app-elevated p-5">
             <header>
@@ -178,6 +297,7 @@ export default async function AdminAgentDetailPage({
               <h2 className="text-sm font-semibold text-app">Recent runs</h2>
               <p className="mt-0.5 text-xs text-muted">
                 Last {RUN_LIMIT} entries from <code>ai_agent_runs</code>.
+                Click a row for the full input/output, model, cost.
               </p>
               <div className="mt-2 flex flex-wrap gap-3 text-[11px]">
                 <span className="text-emerald-500">{successCount} ok</span>

@@ -366,6 +366,147 @@ export async function deleteAgent(formData: FormData): Promise<void> {
   redirect("/admin/agents");
 }
 
+/* ──────────────────── setAgentToolOverride ──────────────────── */
+
+/**
+ * Upsert a single row in `agent_tool_overrides`. The form contributes:
+ *   agent_id, skill_id, tool_name (composite primary key)
+ *   override_description (string; empty means "clear override")
+ *   read_only_override (string "true"|"false"|"" — "" clears override)
+ *   requires_confirmation_override (same shape as read_only_override)
+ *   enabled (checkbox, defaults true)
+ *
+ * For each "override" field the form sends an explicit "" to mean
+ * "no override" (cleared) — null in the DB. This keeps the editor
+ * stateless: the form is the source of truth on every save.
+ */
+function pickTriBool(raw: unknown): boolean | null {
+  const v = String(raw ?? "").trim().toLowerCase();
+  if (v === "true") return true;
+  if (v === "false") return false;
+  return null;
+}
+
+const SKILL_ID_RE = /^[a-z0-9][a-z0-9_-]{0,63}$/;
+const TOOL_NAME_RE = /^[a-zA-Z0-9_][a-zA-Z0-9_.-]{0,127}$/;
+
+export async function setAgentToolOverride(formData: FormData): Promise<void> {
+  const auth = await assertAdmin();
+  const agentId = String(formData.get("agent_id") ?? "").trim();
+  const skillId = String(formData.get("skill_id") ?? "").trim();
+  const toolName = String(formData.get("tool_name") ?? "").trim();
+
+  if (!agentId) throw new Error("missing agent_id");
+  if (!skillId || !SKILL_ID_RE.test(skillId)) {
+    throw new Error("invalid skill_id");
+  }
+  if (!toolName || !TOOL_NAME_RE.test(toolName)) {
+    throw new Error("invalid tool_name");
+  }
+
+  const description = String(formData.get("override_description") ?? "").trim();
+  const readOnly = pickTriBool(formData.get("read_only_override"));
+  const requiresConf = pickTriBool(
+    formData.get("requires_confirmation_override")
+  );
+  // checkbox is "on" when checked; absent when unchecked. Default true.
+  const rawEnabled = formData.get("enabled");
+  const enabled = rawEnabled === null ? true : String(rawEnabled) === "on" || String(rawEnabled) === "true";
+
+  const admin = createAdminClient();
+
+  // Verify the agent exists — fail fast with a clear message instead of
+  // a foreign-key violation from the DB.
+  const { data: agentRow, error: agentErr } = await admin
+    .from("ai_agents")
+    .select("id")
+    .eq("id", agentId)
+    .maybeSingle();
+  if (agentErr) throw new Error(agentErr.message);
+  if (!agentRow) throw new Error(`agent "${agentId}" not found`);
+
+  const { data: existing, error: readErr } = await admin
+    .from("agent_tool_overrides")
+    .select("*")
+    .eq("agent_id", agentId)
+    .eq("skill_id", skillId)
+    .eq("tool_name", toolName)
+    .maybeSingle();
+  if (readErr) throw new Error(readErr.message);
+
+  const row = {
+    agent_id: agentId,
+    skill_id: skillId,
+    tool_name: toolName,
+    override_description: description.length > 0 ? description : null,
+    read_only_override: readOnly,
+    requires_confirmation_override: requiresConf,
+    enabled,
+    updated_by: auth.userId,
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error: upErr } = await admin
+    .from("agent_tool_overrides")
+    .upsert(row, { onConflict: "agent_id,skill_id,tool_name" });
+  if (upErr) throw new Error(upErr.message);
+
+  await recordAdminAction({
+    action: "agent.tool_override_set",
+    targetType: "ai_agent",
+    targetId: agentId,
+    before: existing ?? null,
+    after: row,
+    metadata: { skill_id: skillId, tool_name: toolName },
+  });
+
+  revalidatePath(`/admin/agents/${agentId}`);
+}
+
+/* ──────────────────── clearAgentToolOverride ──────────────────── */
+
+export async function clearAgentToolOverride(
+  formData: FormData
+): Promise<void> {
+  await assertAdmin();
+  const agentId = String(formData.get("agent_id") ?? "").trim();
+  const skillId = String(formData.get("skill_id") ?? "").trim();
+  const toolName = String(formData.get("tool_name") ?? "").trim();
+
+  if (!agentId) throw new Error("missing agent_id");
+  if (!skillId) throw new Error("missing skill_id");
+  if (!toolName) throw new Error("missing tool_name");
+
+  const admin = createAdminClient();
+
+  const { data: existing, error: readErr } = await admin
+    .from("agent_tool_overrides")
+    .select("*")
+    .eq("agent_id", agentId)
+    .eq("skill_id", skillId)
+    .eq("tool_name", toolName)
+    .maybeSingle();
+  if (readErr) throw new Error(readErr.message);
+
+  const { error: delErr } = await admin
+    .from("agent_tool_overrides")
+    .delete()
+    .eq("agent_id", agentId)
+    .eq("skill_id", skillId)
+    .eq("tool_name", toolName);
+  if (delErr) throw new Error(delErr.message);
+
+  await recordAdminAction({
+    action: "agent.tool_override_clear",
+    targetType: "ai_agent",
+    targetId: agentId,
+    before: existing ?? null,
+    metadata: { skill_id: skillId, tool_name: toolName },
+  });
+
+  revalidatePath(`/admin/agents/${agentId}`);
+}
+
 /* ──────────────────── setAgentStatus ──────────────────── */
 
 export async function setAgentStatus(formData: FormData): Promise<void> {
