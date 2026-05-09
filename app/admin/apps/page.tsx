@@ -2,11 +2,39 @@ import Link from "next/link";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
+import BulkActionBar, { type BulkAction } from "../_components/BulkActionBar";
+import { BulkActionProvider } from "../_components/BulkActionContext";
+import BulkRowCheckbox, {
+  BulkSelectAllCheckbox,
+} from "../_components/BulkRowCheckbox";
 import { inputClass } from "../_lib";
 import type { AppDomain, AppRegistryRow } from "../_types";
 import { togglePublished } from "./_actions";
 
 export const dynamic = "force-dynamic";
+
+const APP_BULK_ACTIONS: BulkAction[] = [
+  {
+    id: "toggle_publish",
+    label: "Toggle publish",
+    confirmText: "Flip the publish state for {n} apps?",
+  },
+  {
+    id: "set_access_admin_only",
+    label: "Set access: Admin only",
+    confirmText: "Restrict {n} apps to admin only?",
+  },
+  {
+    id: "set_access_authenticated",
+    label: "Set access: Authenticated",
+    confirmText: "Open {n} apps to all authenticated users?",
+  },
+  {
+    id: "export_csv",
+    label: "Export selected as CSV",
+    kind: "export",
+  },
+];
 
 const PER_PAGE = 50;
 
@@ -154,9 +182,11 @@ export default async function AdminAppsPage({
     if (c.category) categorySet.add(c.category);
   }
   const categories = Array.from(categorySet).sort();
+  const pageIds = rows.map((r) => r.id);
 
   return (
-    <div className="space-y-5">
+    <BulkActionProvider scope="apps">
+    <div className="space-y-5 pb-24">
       <div>
         <div className="text-[0.6rem] uppercase tracking-[0.2em] text-faint">
           Platform
@@ -268,6 +298,12 @@ export default async function AdminAppsPage({
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-app text-[0.6rem] uppercase tracking-[0.2em] text-muted">
+              <th className="w-8 px-3 py-2 text-left font-normal">
+                <BulkSelectAllCheckbox
+                  ids={pageIds}
+                  label="Select all apps on page"
+                />
+              </th>
               <th className="px-3 py-2 text-left font-normal">Title</th>
               <th className="px-3 py-2 text-left font-normal">Slug</th>
               <th className="px-3 py-2 text-left font-normal">Domain</th>
@@ -280,7 +316,7 @@ export default async function AdminAppsPage({
           <tbody>
             {rows.length === 0 ? (
               <tr>
-                <td colSpan={7} className="px-3 py-8 text-center text-faint">
+                <td colSpan={8} className="px-3 py-8 text-center text-faint">
                   No apps match.
                 </td>
               </tr>
@@ -290,6 +326,12 @@ export default async function AdminAppsPage({
                   key={row.id}
                   className="border-b border-app last:border-b-0 hover:bg-app/40"
                 >
+                  <td className="px-3 py-2 align-middle">
+                    <BulkRowCheckbox
+                      id={row.id}
+                      label={`Select app ${row.title}`}
+                    />
+                  </td>
                   <td className="px-3 py-2">
                     <Link
                       href={`/admin/apps/${encodeURIComponent(row.id)}`}
@@ -391,7 +433,10 @@ export default async function AdminAppsPage({
           Next →
         </PageLink>
       </div>
+
+      <BulkActionBar scope="apps" actions={APP_BULK_ACTIONS} />
     </div>
+    </BulkActionProvider>
   );
 }
 
