@@ -2,7 +2,10 @@
 
 import { useState } from "react";
 
-import { inputClass } from "../_lib";
+// Inlined from app/admin/_lib.ts — that module is `server-only` and
+// can't be imported from a client component (Next 16 build hard-error).
+const inputClass =
+  "w-full rounded-lg border border-app bg-app-elevated px-3 py-2 text-sm text-app outline-none transition-colors focus:border-tool-accent focus:ring-2 focus:ring-tool-accent-soft placeholder:text-faint";
 
 /**
  * Live tester for the password rules. Pure client-side — does not call
