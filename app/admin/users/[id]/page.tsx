@@ -5,6 +5,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 
 import Avatar from "../../_components/Avatar";
 import { fetchAuthUsersByIds, formatDateTime, tierBadgeClass } from "../../_lib";
+import RoleAssignment from "./_RoleAssignment";
 import ActivityTab from "./_tabs/ActivityTab";
 import AgentsTab from "./_tabs/AgentsTab";
 import AppsAndFeaturesTab from "./_tabs/AppsAndFeaturesTab";
@@ -229,6 +230,11 @@ export default async function AdminUserDetailPage({
           isSuspended={isSuspended}
         />
       )}
+
+      {/* Role assignment panel — visible on every tab so admins can
+          inspect / mutate roles regardless of which tab is active.
+          Added by AGENT AA (v6 roles + permissions). */}
+      <RoleAssignment userId={id} userEmail={authExtras.email} />
     </div>
   );
 }
