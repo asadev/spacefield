@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -347,3 +348,48 @@ export async function clearUserGrant(formData: FormData): Promise<void> {
   revalidatePath(`/admin/apps/${slug}`);
 }
 
+/* ─────────────────────── custom iframe app creation ─────────────────────── */
+
+/**
+ * Create a brand-new custom iframe app in `app_registry`. Backed by the
+ * `register_custom_app` SQL function which validates the slug shape and
+ * URL scheme server-side. After insert, audits + redirects to the slug
+ * detail page so the admin can finish wiring grants.
+ */
+export async function createCustomApp(formData: FormData): Promise<void> {
+  await assertAdmin();
+
+  const id = String(formData.get("id") ?? "").trim();
+  const title = String(formData.get("title") ?? "").trim();
+  const url = String(formData.get("custom_url") ?? "").trim();
+  const description = String(formData.get("description") ?? "").trim();
+  const iconRaw = String(formData.get("icon") ?? "").trim();
+  const icon = iconRaw.length ? iconRaw : null;
+  const accessRaw = String(formData.get("access_mode") ?? "authenticated");
+  const access_mode = pickAccessMode(accessRaw) ?? "authenticated";
+
+  if (!id || !title || !url) {
+    throw new Error("missing required fields");
+  }
+
+  const admin = createAdminClient();
+  const { data, error } = await admin.rpc("register_custom_app", {
+    p_id: id,
+    p_title: title,
+    p_url: url,
+    p_description: description,
+    p_icon: icon,
+    p_access_mode: access_mode,
+  });
+  if (error) throw new Error(error.message);
+
+  await recordAdminAction({
+    action: "app.create_custom",
+    targetType: "app_registry",
+    targetId: id,
+    after: data,
+  });
+
+  revalidatePath("/admin/apps");
+  redirect(`/admin/apps/${id}`);
+}
