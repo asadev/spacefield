@@ -1103,3 +1103,110 @@ export interface ActivityFeedRow {
   metadata: Record<string, unknown>;
   created_at: string;
 }
+
+/* ─────────────────────────── v6 types ─────────────────────────── */
+
+export interface AdminRoleRow {
+  id: string;
+  display_name: string;
+  description: string;
+  is_system_default: boolean;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface AdminRolePermissionRow {
+  role_id: string;
+  resource: string;
+  action: string;
+  granted_by: string | null;
+  granted_at: string;
+}
+
+export interface UserAdminRoleRow {
+  user_id: string;
+  role_id: string;
+  granted_by: string | null;
+  granted_at: string;
+  expires_at: string | null;
+}
+
+export type RuntimeConfigValueType =
+  | "string" | "number" | "boolean" | "json" | "secret";
+
+export interface RuntimeConfigRow {
+  key: string;
+  value: unknown;
+  value_type: RuntimeConfigValueType;
+  description: string;
+  category: string;
+  is_secret: boolean;
+  metadata: Record<string, unknown>;
+  updated_at: string;
+  updated_by: string | null;
+}
+
+export type AdminPageSection =
+  | "AI" | "Apps" | "People" | "Data & Ops" | "Security"
+  | "Communication" | "Experience" | "Money" | "Content" | "Custom";
+
+export type AdminPageLayout = "single" | "sidebar" | "grid" | "tabbed";
+
+export interface AdminPageRow {
+  id: string;
+  title: string;
+  description: string;
+  icon: string | null;
+  section: AdminPageSection;
+  layout: AdminPageLayout;
+  enabled: boolean;
+  sort_order: number;
+  required_role: string | null;
+  metadata: Record<string, unknown>;
+  created_at: string;
+  updated_at: string;
+}
+
+export type AdminPageBlockKind =
+  | "kpi" | "table" | "chart" | "markdown" | "button" | "iframe" | "form" | "divider";
+
+export interface AdminPageBlockRow {
+  id: string;
+  page_id: string;
+  kind: AdminPageBlockKind;
+  title: string | null;
+  config: Record<string, unknown>;
+  sort_order: number;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Resources a permission can target. Single source of truth for the
+ * permission-matrix grid. Add resources here as new admin sections
+ * land. */
+export const PERMISSION_RESOURCES = [
+  "users", "workspaces", "subscriptions", "tiers", "api_tokens",
+  "agents", "skills", "tools", "models", "providers", "workflows",
+  "prompts", "eval", "playground",
+  "apps", "features", "integrations",
+  "logs", "audit", "auth_events", "errors", "insights", "analytics",
+  "funnels", "jobs", "webhooks", "alerts", "storage", "database",
+  "backups", "domains", "runtime_config",
+  "security_policies", "rate_limits", "ip_rules", "sso", "moderation",
+  "data_exports",
+  "emails", "banners", "announcements", "push", "messages", "support",
+  "branding", "locales", "maintenance", "onboarding", "tours", "help",
+  "surveys",
+  "refunds", "invoices", "coupons", "cohorts",
+  "social", "wallpapers",
+  "roles",
+] as const;
+
+export type PermissionResource = (typeof PERMISSION_RESOURCES)[number];
+
+export const PERMISSION_ACTIONS = [
+  "read", "create", "update", "delete", "approve", "export",
+] as const;
+
+export type PermissionAction = (typeof PERMISSION_ACTIONS)[number];
