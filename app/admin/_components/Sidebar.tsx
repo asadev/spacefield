@@ -63,6 +63,11 @@ const NAV: NavItem[] = [
   { href: "/admin/announcements",  label: "Announcements",     group: "Communication" },
   { href: "/admin/push",           label: "Push campaigns",    group: "Communication" },
   { href: "/admin/messages",       label: "Messages",          group: "Communication" },
+  { href: "/admin/support",        label: "Support inbox",     group: "Communication" },
+  { href: "/admin/help",           label: "Help center",       group: "Communication" },
+  { href: "/admin/onboarding",     label: "Onboarding",        group: "Communication" },
+  { href: "/admin/tours",          label: "Product tours",     group: "Communication" },
+  { href: "/admin/surveys",        label: "Surveys & NPS",     group: "Communication" },
 
   // Branding & Customization
   { href: "/admin/branding",       label: "Branding",          group: "Customization" },
@@ -71,6 +76,11 @@ const NAV: NavItem[] = [
 
   // AI Quality
   { href: "/admin/eval",           label: "Eval suites",       group: "AI Quality" },
+  { href: "/admin/playground",     label: "AI playground",     group: "AI Quality" },
+
+  // Billing & Money
+  { href: "/admin/refunds",        label: "Refunds",           group: "Billing" },
+  { href: "/admin/invoices",       label: "Invoices",          group: "Billing" },
 
   // Content
   { href: "/admin/social",         label: "Social",            group: "Content" },
