@@ -332,5 +332,6 @@ function computeStats(rules: RateLimitRuleRow[]) {
   return { total: rules.length, enabled, byScope };
 }
 
-// Re-export for new/edit pages — consumers get the same labels.
-export { RATE_LIMIT_SCOPES };
+// (RATE_LIMIT_SCOPES re-export removed — Next 16 page files only allow
+// approved exports. Other admin pages should import the constant
+// directly from app/admin/_types.)
