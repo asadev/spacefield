@@ -3,6 +3,8 @@ import Link from "next/link";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { formatDate, inputClass, listAuthUsers } from "../_lib";
+import { loadAllTools } from "../tools-catalog/_data";
+import CmdKListener from "./CmdKListener";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +18,9 @@ type CategoryKey =
   | "skills"
   | "models"
   | "share"
-  | "files";
+  | "files"
+  | "features"
+  | "tools";
 
 type Hit = {
   id: string;
@@ -50,15 +54,16 @@ export default async function AdminSearchPage({
 
   return (
     <div className="space-y-5">
+      <CmdKListener />
       <div>
         <div className="text-[0.6rem] uppercase tracking-[0.2em] text-faint">
-          Global
+          Global · ⌘K
         </div>
         <h1 className="mt-1 text-xl font-semibold text-app">Search</h1>
         <p className="mt-0.5 text-xs text-muted">
           Cross-table substring search across users, workspaces, apps, agents,
-          skills, models, Share links, and files. Up to {PER_CATEGORY}{" "}
-          results per category.
+          skills, models, feature flags, the tool catalog, Share links, and
+          files. Up to {PER_CATEGORY} results per category.
         </p>
       </div>
 
@@ -70,6 +75,7 @@ export default async function AdminSearchPage({
           placeholder="Search anything (email, slug, id, name)…"
           className={`${inputClass} h-10 max-w-xl flex-1`}
           autoFocus
+          data-cmdk-input="1"
         />
         <button
           type="submit"
@@ -176,6 +182,8 @@ function emptyCategories(): Category[] {
     { key: "agents", label: "Agents", hits: [] },
     { key: "skills", label: "Skills", hits: [] },
     { key: "models", label: "Models", hits: [] },
+    { key: "features", label: "Feature flags", hits: [] },
+    { key: "tools", label: "Tool catalog", hits: [] },
     { key: "share", label: "Share links", hits: [] },
     { key: "files", label: "Files", hits: [] },
   ];
@@ -196,6 +204,8 @@ async function runSearch(q: string, lower: string): Promise<Category[]> {
     modelsRes,
     shareRes,
     filesRes,
+    flagsRes,
+    toolsRes,
   ] = await Promise.all([
     listAuthUsers({ page: 1, perPage: PER_CATEGORY, emailLike: q }),
     admin
@@ -248,6 +258,18 @@ async function runSearch(q: string, lower: string): Promise<Category[]> {
       .ilike("name", `%${escapeForLike(q)}%`)
       .order("created_at", { ascending: false })
       .limit(PER_CATEGORY),
+    admin
+      .from("feature_flags")
+      .select("key, title, enabled, rollout, rollout_percent")
+      .or(`key.ilike.%${escapeForOr(q)}%,title.ilike.%${escapeForOr(q)}%`)
+      .order("key", { ascending: true })
+      .limit(PER_CATEGORY),
+    // Tools-catalog: load the merged catalog, then substring-match in
+    // memory. The catalog loader is the single source of truth for what
+    // counts as a "tool" on the platform.
+    loadAllTools()
+      .then((res) => res.rows)
+      .catch(() => []),
   ]);
 
   // Note: lower is used by callers in case-insensitive substring helpers.
@@ -297,6 +319,13 @@ async function runSearch(q: string, lower: string): Promise<Category[]> {
     content_type: string | null;
     deleted_at: string | null;
     created_at: string;
+  };
+  type FlagRow = {
+    key: string;
+    title: string;
+    enabled: boolean;
+    rollout: string;
+    rollout_percent: number;
   };
 
   const userHits: Hit[] = usersRes.rows.slice(0, PER_CATEGORY).map((u) => ({
@@ -369,6 +398,33 @@ async function runSearch(q: string, lower: string): Promise<Category[]> {
     href: `/admin/workspaces/${f.workspace_id}`,
   }));
 
+  const flagHits: Hit[] = ((flagsRes.data ?? []) as FlagRow[]).map((f) => ({
+    id: f.key,
+    title: f.title || f.key,
+    subtitle: f.key,
+    meta: `${f.enabled ? "on" : "off"} · ${f.rollout}${
+      f.rollout === "percent" ? ` ${f.rollout_percent}%` : ""
+    }`,
+    href: `/admin/features/${encodeURIComponent(f.key)}`,
+  }));
+
+  // Tools-catalog: substring-match against name + display_name + description.
+  const toolHits: Hit[] = (toolsRes ?? [])
+    .filter((t) => {
+      const hay = `${t.name} ${t.display_name} ${t.description}`.toLowerCase();
+      return hay.includes(lower);
+    })
+    .slice(0, PER_CATEGORY)
+    .map((t) => ({
+      id: `${t.source}:${t.source_id}:${t.name}`,
+      title: t.display_name || t.name,
+      subtitle: t.name,
+      meta: `${t.source_label} · ${t.category || "uncategorized"}${
+        t.read_only ? " · read-only" : ""
+      }`,
+      href: `/admin/tools-catalog/${encodeURIComponent(t.source)}/${encodeURIComponent(t.source_id)}`,
+    }));
+
   return [
     { key: "users", label: "Users", hits: userHits },
     { key: "workspaces", label: "Workspaces", hits: workspaceHits },
@@ -376,6 +432,8 @@ async function runSearch(q: string, lower: string): Promise<Category[]> {
     { key: "agents", label: "Agents", hits: agentHits },
     { key: "skills", label: "Skills", hits: skillHits },
     { key: "models", label: "Models", hits: modelHits },
+    { key: "features", label: "Feature flags", hits: flagHits },
+    { key: "tools", label: "Tool catalog", hits: toolHits },
     { key: "share", label: "Share links", hits: shareHits },
     { key: "files", label: "Files", hits: fileHits },
   ];
