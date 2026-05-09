@@ -62,10 +62,12 @@ export const NAV: NavItem[] = [
   { href: "/admin/apps",           label: "Apps & Features",          section: "Apps" },
   { href: "/admin/features",       label: "Feature flags",            section: "Apps" },
   { href: "/admin/integrations",   label: "Integrations",             section: "Apps" },
+  { href: "/admin/pages",          label: "Custom pages",             section: "Apps" },
 
   // ── People ──
   { href: "/admin/users",          label: "Users",                    section: "People" },
   { href: "/admin/workspaces",     label: "Workspaces",               section: "People" },
+  { href: "/admin/roles",          label: "Roles & permissions",      section: "People" },
   { href: "/admin/subscriptions",  label: "Subscriptions",            section: "People" },
   { href: "/admin/tiers",          label: "Tiers",                    section: "People" },
   { href: "/admin/api-tokens",     label: "API tokens",               section: "People" },
@@ -84,6 +86,7 @@ export const NAV: NavItem[] = [
   { href: "/admin/alerts",         label: "Alerts",                   section: "Data & Ops" },
   { href: "/admin/storage",        label: "Storage",                  section: "Data & Ops" },
   { href: "/admin/database",       label: "Database",                 section: "Data & Ops" },
+  { href: "/admin/runtime-config", label: "Runtime config",           section: "Data & Ops" },
   { href: "/admin/backups",        label: "Backups",                  section: "Data & Ops" },
   { href: "/admin/domains",        label: "Domains",                  section: "Data & Ops" },
 
