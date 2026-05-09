@@ -2,7 +2,7 @@ import Link from "next/link";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 
-import { inputClass } from "../_lib";
+import { buttonGhostClass, inputClass } from "../_lib";
 import type { AppDomain, AppRegistryRow } from "../_types";
 import { togglePublished } from "./_actions";
 
@@ -157,15 +157,22 @@ export default async function AdminAppsPage({
 
   return (
     <div className="space-y-5">
-      <div>
-        <div className="text-[0.6rem] uppercase tracking-[0.2em] text-faint">
-          Platform
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <div className="text-[0.6rem] uppercase tracking-[0.2em] text-faint">
+            Platform
+          </div>
+          <h1 className="mt-1 text-xl font-semibold text-app">Apps & Features</h1>
+          <p className="mt-0.5 text-xs text-muted">
+            Every app the OS shell exposes. Toggle publish, edit access mode, or
+            override per-workspace and per-user.
+          </p>
         </div>
-        <h1 className="mt-1 text-xl font-semibold text-app">Apps & Features</h1>
-        <p className="mt-0.5 text-xs text-muted">
-          Every app the OS shell exposes. Toggle publish, edit access mode, or
-          override per-workspace and per-user.
-        </p>
+        <div className="flex items-center gap-2">
+          <Link href="/admin/apps/new" className={buttonGhostClass}>
+            + New custom app
+          </Link>
+        </div>
       </div>
 
       {/* Summary cards */}

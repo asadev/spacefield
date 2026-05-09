@@ -578,3 +578,38 @@ export function categoryBySlug(slug: string): ToolCategory | undefined {
   if (!tool) return undefined;
   return TOOL_CATEGORIES.find((c) => c.key === tool.category);
 }
+
+/**
+ * Server-only merged catalogue. Returns the static `TOOLS` array plus
+ * any admin-registered custom iframe apps from `app_registry`. Existing
+ * consumers that import `TOOLS` directly stay back-compat — only callers
+ * that switch to `getMergedToolList()` see custom apps.
+ *
+ * The `_custom-tools` module is gated by `import "server-only"` and
+ * pulls the service-role client, so this function MUST only be invoked
+ * from server components, route handlers, or server actions. We resolve
+ * the loader off `globalThis` at runtime so webpack never wires the
+ * server-only module into client chunks (Desktop.tsx imports this file
+ * statically).
+ */
+type CustomToolLoader = () => Promise<ToolItem[]>;
+
+declare global {
+  // eslint-disable-next-line no-var
+  var __sf_custom_tools_loader: CustomToolLoader | undefined;
+}
+
+export function registerCustomToolsLoader(fn: CustomToolLoader): void {
+  globalThis.__sf_custom_tools_loader = fn;
+}
+
+export async function getMergedToolList(): Promise<ToolItem[]> {
+  const loader = globalThis.__sf_custom_tools_loader;
+  if (!loader) return TOOLS;
+  try {
+    const custom = await loader();
+    return [...TOOLS, ...custom];
+  } catch {
+    return TOOLS;
+  }
+}
