@@ -2,36 +2,42 @@
  * Admin nav source of truth — used by both the top Header (sections)
  * and the left Sidebar (current section's items).
  *
- * Single config keeps Header + Sidebar in sync. Add a new admin route by
- * adding a NavItem with the section it belongs to.
+ * Sections grouped by TOPIC, not by historical commit order:
+ *   - AI:            everything AI (agents/skills/tools/models/
+ *                    providers/workflows/prompts/eval/playground)
+ *   - Apps:          app registry, feature flags, integrations
+ *   - People:        users, workspaces, subscriptions, tiers, tokens,
+ *                    coupons, cohorts
+ *   - Data & Ops:    logs, audit, errors, insights, analytics, funnels,
+ *                    jobs, webhooks, alerts, storage, database, backups,
+ *                    domains
+ *   - Security:      policies, rate-limits, ip-rules, sso, moderation,
+ *                    data-exports, sign-ins
+ *   - Communication: emails, banners, announcements, push, messages,
+ *                    support
+ *   - Experience:    branding, locales, maintenance, onboarding, tours,
+ *                    help center, surveys
+ *   - Money:         refunds, invoices
+ *   - Content:       social, wallpapers, tools (legacy)
  */
 
 export type NavSection =
   | "Dashboard"
-  | "Platform"
+  | "AI"
+  | "Apps"
   | "People"
-  | "Ops"
+  | "Data & Ops"
   | "Security"
   | "Communication"
-  | "Customization"
-  | "AI Quality"
-  | "Billing"
+  | "Experience"
+  | "Money"
   | "Content";
 
 export interface NavItem {
   href: string;
   label: string;
-  /**
-   * Section the item belongs to. Items with the same section show
-   * together in the left Sidebar when that section is active in the
-   * top Header.
-   */
   section: NavSection;
-  /**
-   * Pinned items show in the Header instead of (or in addition to)
-   * being inside a section's sidebar. Useful for Dashboard / Search /
-   * Activity that admins jump to from any section.
-   */
+  /** Pinned items show in the Header instead of in a section's sidebar. */
   pinned?: boolean;
 }
 
@@ -41,19 +47,23 @@ export const NAV: NavItem[] = [
   { href: "/admin/search",         label: "Search",                   section: "Dashboard", pinned: true },
   { href: "/admin/activity",       label: "Activity",                 section: "Dashboard", pinned: true },
 
-  // Platform — apps, AI agents, models, providers, skills, workflows, prompts
-  { href: "/admin/apps",           label: "Apps & Features",          section: "Platform" },
-  { href: "/admin/features",       label: "Feature flags",            section: "Platform" },
-  { href: "/admin/agents",         label: "AI agents",                section: "Platform" },
-  { href: "/admin/skills",         label: "Skills",                   section: "Platform" },
-  { href: "/admin/tools-catalog",  label: "Tool catalog",             section: "Platform" },
-  { href: "/admin/models",         label: "Models",                   section: "Platform" },
-  { href: "/admin/providers",      label: "Providers (API keys)",     section: "Platform" },
-  { href: "/admin/workflows",      label: "Workflows",                section: "Platform" },
-  { href: "/admin/prompts",        label: "Prompt library",           section: "Platform" },
-  { href: "/admin/integrations",   label: "Integrations",             section: "Platform" },
+  // ── AI ── everything that powers the AI runtime
+  { href: "/admin/agents",         label: "AI agents",                section: "AI" },
+  { href: "/admin/skills",         label: "Skills",                   section: "AI" },
+  { href: "/admin/tools-catalog",  label: "Tool catalog",             section: "AI" },
+  { href: "/admin/models",         label: "Models",                   section: "AI" },
+  { href: "/admin/providers",      label: "Providers (API keys)",     section: "AI" },
+  { href: "/admin/workflows",      label: "Workflows",                section: "AI" },
+  { href: "/admin/prompts",        label: "Prompt library",           section: "AI" },
+  { href: "/admin/eval",           label: "Eval suites",              section: "AI" },
+  { href: "/admin/playground",     label: "Playground",               section: "AI" },
 
-  // People
+  // ── Apps ── what the platform exposes to users
+  { href: "/admin/apps",           label: "Apps & Features",          section: "Apps" },
+  { href: "/admin/features",       label: "Feature flags",            section: "Apps" },
+  { href: "/admin/integrations",   label: "Integrations",             section: "Apps" },
+
+  // ── People ──
   { href: "/admin/users",          label: "Users",                    section: "People" },
   { href: "/admin/workspaces",     label: "Workspaces",               section: "People" },
   { href: "/admin/subscriptions",  label: "Subscriptions",            section: "People" },
@@ -62,56 +72,52 @@ export const NAV: NavItem[] = [
   { href: "/admin/coupons",        label: "Coupons & referrals",      section: "People" },
   { href: "/admin/cohorts",        label: "Cohorts",                  section: "People" },
 
-  // Ops — observability, infra, data
-  { href: "/admin/logs",           label: "Logs",                     section: "Ops" },
-  { href: "/admin/audit",          label: "Audit log",                section: "Ops" },
-  { href: "/admin/auth-events",    label: "Sign-ins",                 section: "Ops" },
-  { href: "/admin/errors",         label: "Errors",                   section: "Ops" },
-  { href: "/admin/insights",       label: "Cost & insights",          section: "Ops" },
-  { href: "/admin/analytics",      label: "toShare analytics",        section: "Ops" },
-  { href: "/admin/funnels",        label: "Funnels",                  section: "Ops" },
-  { href: "/admin/jobs",           label: "Jobs & cron",              section: "Ops" },
-  { href: "/admin/webhooks",       label: "Webhooks",                 section: "Ops" },
-  { href: "/admin/alerts",         label: "Alerts",                   section: "Ops" },
-  { href: "/admin/storage",        label: "Storage",                  section: "Ops" },
-  { href: "/admin/database",       label: "Database",                 section: "Ops" },
-  { href: "/admin/backups",        label: "Backups",                  section: "Ops" },
-  { href: "/admin/domains",        label: "Domains",                  section: "Ops" },
+  // ── Data & Ops ── observability + infra
+  { href: "/admin/logs",           label: "Logs",                     section: "Data & Ops" },
+  { href: "/admin/audit",          label: "Audit log",                section: "Data & Ops" },
+  { href: "/admin/errors",         label: "Errors",                   section: "Data & Ops" },
+  { href: "/admin/insights",       label: "Cost & insights",          section: "Data & Ops" },
+  { href: "/admin/analytics",      label: "toShare analytics",        section: "Data & Ops" },
+  { href: "/admin/funnels",        label: "Funnels",                  section: "Data & Ops" },
+  { href: "/admin/jobs",           label: "Jobs & cron",              section: "Data & Ops" },
+  { href: "/admin/webhooks",       label: "Webhooks",                 section: "Data & Ops" },
+  { href: "/admin/alerts",         label: "Alerts",                   section: "Data & Ops" },
+  { href: "/admin/storage",        label: "Storage",                  section: "Data & Ops" },
+  { href: "/admin/database",       label: "Database",                 section: "Data & Ops" },
+  { href: "/admin/backups",        label: "Backups",                  section: "Data & Ops" },
+  { href: "/admin/domains",        label: "Domains",                  section: "Data & Ops" },
 
-  // Security
+  // ── Security ──
   { href: "/admin/security",       label: "Security policies",        section: "Security" },
   { href: "/admin/rate-limits",    label: "Rate limits",              section: "Security" },
   { href: "/admin/ip-rules",       label: "IP rules",                 section: "Security" },
   { href: "/admin/sso",            label: "SSO",                      section: "Security" },
   { href: "/admin/moderation",     label: "Content moderation",       section: "Security" },
   { href: "/admin/data-exports",   label: "Data exports (GDPR)",      section: "Security" },
+  { href: "/admin/auth-events",    label: "Sign-ins",                 section: "Security" },
 
-  // Communication
+  // ── Communication ──
   { href: "/admin/emails",         label: "Email templates",          section: "Communication" },
   { href: "/admin/banners",        label: "Site banners",             section: "Communication" },
   { href: "/admin/announcements",  label: "Announcements",            section: "Communication" },
   { href: "/admin/push",           label: "Push campaigns",           section: "Communication" },
   { href: "/admin/messages",       label: "Messages",                 section: "Communication" },
   { href: "/admin/support",        label: "Support inbox",            section: "Communication" },
-  { href: "/admin/help",           label: "Help center",              section: "Communication" },
-  { href: "/admin/onboarding",     label: "Onboarding",               section: "Communication" },
-  { href: "/admin/tours",          label: "Product tours",            section: "Communication" },
-  { href: "/admin/surveys",        label: "Surveys & NPS",            section: "Communication" },
 
-  // Customization
-  { href: "/admin/branding",       label: "Branding",                 section: "Customization" },
-  { href: "/admin/locales",        label: "Locales",                  section: "Customization" },
-  { href: "/admin/maintenance",    label: "Maintenance mode",         section: "Customization" },
+  // ── Experience ── branding, content, customer journey
+  { href: "/admin/branding",       label: "Branding",                 section: "Experience" },
+  { href: "/admin/locales",        label: "Locales",                  section: "Experience" },
+  { href: "/admin/maintenance",    label: "Maintenance mode",         section: "Experience" },
+  { href: "/admin/onboarding",     label: "Onboarding",               section: "Experience" },
+  { href: "/admin/tours",          label: "Product tours",            section: "Experience" },
+  { href: "/admin/help",           label: "Help center",              section: "Experience" },
+  { href: "/admin/surveys",        label: "Surveys & NPS",            section: "Experience" },
 
-  // AI Quality
-  { href: "/admin/eval",           label: "Eval suites",              section: "AI Quality" },
-  { href: "/admin/playground",     label: "AI playground",            section: "AI Quality" },
+  // ── Money ──
+  { href: "/admin/refunds",        label: "Refunds",                  section: "Money" },
+  { href: "/admin/invoices",       label: "Invoices",                 section: "Money" },
 
-  // Billing
-  { href: "/admin/refunds",        label: "Refunds",                  section: "Billing" },
-  { href: "/admin/invoices",       label: "Invoices",                 section: "Billing" },
-
-  // Content
+  // ── Content ──
   { href: "/admin/social",         label: "Social",                   section: "Content" },
   { href: "/admin/wallpapers",     label: "Wallpapers",               section: "Content" },
   // Legacy single-tool toggle UI — kept for backward compat.
@@ -119,26 +125,23 @@ export const NAV: NavItem[] = [
 ];
 
 /** Top-level sections shown in the Header (in order). Excludes
- * Dashboard which is rendered as pinned items separately. */
+ * Dashboard which renders as pinned items separately. */
 export const SECTIONS: NavSection[] = [
-  "Platform",
+  "AI",
+  "Apps",
   "People",
-  "Ops",
+  "Data & Ops",
   "Security",
   "Communication",
-  "Customization",
-  "AI Quality",
-  "Billing",
+  "Experience",
+  "Money",
   "Content",
 ];
 
 /**
- * Given the current pathname, figure out which top-level section is
- * active. We pick the LONGEST href prefix-match across non-pinned items
- * so that nested routes like `/admin/agents/abc/playground` correctly
- * highlight the "Platform" tab.
- *
- * Falls back to the first section if no match.
+ * Given the current pathname, figure out which section is active.
+ * Longest-prefix match across non-pinned items. Falls back to AI
+ * (the most likely landing place from /admin).
  */
 export function currentSection(pathname: string): NavSection {
   let bestMatch: { len: number; section: NavSection } | null = null;
@@ -151,14 +154,10 @@ export function currentSection(pathname: string): NavSection {
       }
     }
   }
-  return bestMatch?.section ?? "Platform";
+  return bestMatch?.section ?? "AI";
 }
 
-/**
- * True if the given href is the active route (or a parent of it).
- * `/admin` only matches exact since otherwise it'd match every admin
- * route.
- */
+/** True if the given href is the active route (or a parent of it). */
 export function isHrefActive(pathname: string, href: string): boolean {
   if (href === "/admin") return pathname === "/admin";
   return pathname === href || pathname.startsWith(href + "/");
