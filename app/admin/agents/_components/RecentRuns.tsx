@@ -143,6 +143,7 @@ export default function RecentRuns({
                       </button>
                       {isOpen && (
                         <div className="space-y-2 border-t border-app bg-app-elevated px-3 py-2 text-xs">
+                          <RunStats r={r} />
                           <Excerpt label="Input" text={r.input_excerpt} />
                           <Excerpt label="Output" text={r.output_excerpt} />
                           {r.error && (
@@ -166,6 +167,63 @@ export default function RecentRuns({
           </div>
         );
       })}
+    </div>
+  );
+}
+
+function RunStats({ r }: { r: AiAgentRunRow }) {
+  // Derive a rough USD cost if metadata.cost_usd is present. The
+  // runtime stamps it on every run; older rows may be missing it.
+  const cost = (r.metadata as { cost_usd?: unknown } | null | undefined)
+    ?.cost_usd;
+  const costNum =
+    typeof cost === "number" && Number.isFinite(cost) ? cost : null;
+
+  return (
+    <div className="grid grid-cols-2 gap-2 rounded-md border border-app bg-app p-2 sm:grid-cols-4">
+      <Stat label="Model" value={r.model ?? "—"} mono />
+      <Stat
+        label="Tokens"
+        value={
+          r.tokens_in == null && r.tokens_out == null
+            ? "—"
+            : `${(r.tokens_in ?? 0).toLocaleString()} → ${(r.tokens_out ?? 0).toLocaleString()}`
+        }
+        mono
+      />
+      <Stat
+        label="Duration"
+        value={r.duration_ms == null ? "—" : fmtMs(r.duration_ms)}
+        mono
+      />
+      <Stat
+        label="Cost"
+        value={costNum == null ? "—" : `$${costNum.toFixed(4)}`}
+        mono
+      />
+    </div>
+  );
+}
+
+function Stat({
+  label,
+  value,
+  mono,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <div>
+      <div className="text-[10px] uppercase tracking-wide text-faint">
+        {label}
+      </div>
+      <div
+        className={`mt-0.5 truncate text-app ${mono ? "font-mono text-[11px]" : "text-xs"}`}
+      >
+        {value}
+      </div>
     </div>
   );
 }
