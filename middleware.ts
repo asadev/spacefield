@@ -1,12 +1,33 @@
 import { type NextRequest, NextResponse } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 
+import {
+  checkAndIncrementEdge,
+  evaluateIpEdge,
+  getApplicableRulesEdge,
+  getClientIpFromHeaders,
+  logErrorEdge,
+} from "@/lib/middleware-helpers";
+
 const LEGACY_TOOL_SLUGS: Record<string, string> = {
   "what-can-i-afford": "affordability",
   "files-manager": "launchpad",
 };
 
 const TOSHARE_DOMAIN = "toshare.net";
+
+/* Paths that bypass the IP-rule + rate-limit gates. We never want to
+ * 403/429 internal Next infra (image optimiser, RSC payload, dev HMR),
+ * so /_next/* is always skipped. The matcher already excludes static
+ * assets, but middleware still receives /_next/data, /_next/rsc, etc.
+ *
+ * /api/auth is also excluded so a misconfigured rate-limit rule can't
+ * lock users out of sign-in. */
+const SECURITY_BYPASS_PREFIXES = ["/_next", "/api/auth"];
+
+function isSecurityBypassPath(pathname: string): boolean {
+  return SECURITY_BYPASS_PREFIXES.some((p) => pathname.startsWith(p));
+}
 
 /* Maintenance-mode bypass list — paths where we MUST NOT redirect even
  * when maintenance is active. Admins still need to flip the toggle
@@ -234,64 +255,146 @@ function shellRedirectForStandaloneTool(request: NextRequest): NextResponse | nu
  * sign-in) and returns 401 even though the browser thinks it's signed in.
  */
 export async function middleware(request: NextRequest) {
-  // Maintenance gate — runs before any host/path routing so admins can
-  // take the public surface offline while keeping /admin, /signin, and
-  // Next infra reachable. Bypass-path check is cheap; the RPC call is
-  // TTL-cached so most requests don't hit the network.
-  const path = request.nextUrl.pathname;
-  if (!isMaintenanceBypassPath(path)) {
-    const maint = await checkMaintenance();
-    if (maint.active) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/maintenance";
-      url.search = "";
-      return NextResponse.redirect(url);
+  try {
+    // Maintenance gate — runs before any host/path routing so admins can
+    // take the public surface offline while keeping /admin, /signin, and
+    // Next infra reachable. Bypass-path check is cheap; the RPC call is
+    // TTL-cached so most requests don't hit the network.
+    const path = request.nextUrl.pathname;
+    if (!isMaintenanceBypassPath(path)) {
+      const maint = await checkMaintenance();
+      if (maint.active) {
+        const url = request.nextUrl.clone();
+        url.pathname = "/maintenance";
+        url.search = "";
+        return NextResponse.redirect(url);
+      }
     }
-  }
 
-  // toshare.net host routing — runs FIRST so /tools redirects don't fire
-  const toshareResp = toshareRouter(request);
-  if (toshareResp) return toshareResp;
+    // Security gates (IP rules + rate limits). Skip on Next internals
+    // and the auth API to avoid lockout surfaces. Each gate is wrapped
+    // in its own try/catch so a transient Supabase blip (network,
+    // missing table, wrong service-role key) never strands the rest of
+    // the request — fail-open is the policy here.
+    if (!isSecurityBypassPath(path)) {
+      const ip = getClientIpFromHeaders(request.headers);
 
-  const toolRedirect = shellRedirectForStandaloneTool(request);
-  if (toolRedirect) return toolRedirect;
+      // 1. IP allow/block rules. `allow` short-circuits the rate-limit
+      //    check below — operators set allow rules for their own
+      //    office IPs and want them to skip enforcement entirely.
+      let ipVerdict: "allow" | "block" | "pass" = "pass";
+      if (ip) {
+        try {
+          const verdict = await evaluateIpEdge(ip);
+          ipVerdict = verdict.action;
+          if (verdict.action === "block") {
+            return new NextResponse("Forbidden — IP blocked", {
+              status: 403,
+            });
+          }
+        } catch (err) {
+          await logErrorEdge({
+            source: "middleware:ip-rules",
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack ?? null : null,
+            url: request.nextUrl.toString(),
+          });
+        }
+      }
 
-  let response = NextResponse.next({ request });
+      // 2. Per-route rate-limit rules. Allow-listed IPs skip the
+      //    enforcement. We bucket by `${ip}:${rule.id}` so each rule
+      //    has its own counter for the same client.
+      if (ipVerdict !== "allow") {
+        try {
+          const rules = await getApplicableRulesEdge(
+            "route",
+            undefined,
+            path
+          );
+          for (const rule of rules) {
+            const key = `${ip || "unknown"}:${rule.id}`;
+            const decision = await checkAndIncrementEdge(rule, key);
+            if (!decision.allowed) {
+              const retryAfter = Math.max(
+                1,
+                Math.ceil(
+                  (decision.reset_at.getTime() - Date.now()) / 1000
+                )
+              );
+              return new NextResponse("Too many requests", {
+                status: 429,
+                headers: { "Retry-After": String(retryAfter) },
+              });
+            }
+          }
+        } catch (err) {
+          await logErrorEdge({
+            source: "middleware:rate-limit",
+            message: err instanceof Error ? err.message : String(err),
+            stack: err instanceof Error ? err.stack ?? null : null,
+            url: request.nextUrl.toString(),
+          });
+        }
+      }
+    }
 
-  if (
-    !process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
-  ) {
+    // toshare.net host routing — runs FIRST so /tools redirects don't fire
+    const toshareResp = toshareRouter(request);
+    if (toshareResp) return toshareResp;
+
+    const toolRedirect = shellRedirectForStandaloneTool(request);
+    if (toolRedirect) return toolRedirect;
+
+    let response = NextResponse.next({ request });
+
+    if (
+      !process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+    ) {
+      return response;
+    }
+
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll(cookiesToSet) {
+            cookiesToSet.forEach(({ name, value }) => {
+              request.cookies.set(name, value);
+            });
+            response = NextResponse.next({ request });
+            cookiesToSet.forEach(({ name, value, options }) => {
+              response.cookies.set(name, value, options);
+            });
+          },
+        },
+      }
+    );
+
+    // This call mutates the cookie store via setAll() above when the
+    // access_token gets refreshed. We don't actually need the user object
+    // here — the side-effect is the point.
+    await supabase.auth.getUser();
+
     return response;
+  } catch (err) {
+    // Top-level safety net — log and re-throw so Next.js can serve its
+    // normal error response. We never want middleware to swallow an
+    // exception silently because that masks bugs from the error
+    // dashboard.
+    await logErrorEdge({
+      source: "middleware",
+      message: err instanceof Error ? err.message : String(err),
+      stack: err instanceof Error ? err.stack ?? null : null,
+      url: request.nextUrl.toString(),
+    });
+    throw err;
   }
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => {
-            request.cookies.set(name, value);
-          });
-          response = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, options);
-          });
-        },
-      },
-    }
-  );
-
-  // This call mutates the cookie store via setAll() above when the
-  // access_token gets refreshed. We don't actually need the user object
-  // here — the side-effect is the point.
-  await supabase.auth.getUser();
-
-  return response;
 }
 
 export const config = {
