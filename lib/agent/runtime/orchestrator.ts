@@ -22,6 +22,7 @@ import {
   findTool,
   getAllTools,
 } from "@/lib/agent/skills";
+import { getRuntimeModel } from "./_models";
 import { DEFAULT_PERSONA, personaSystemPrefix, type AgentPersona } from "./persona";
 import {
   effectiveMode,
@@ -36,7 +37,6 @@ import type {
   UserContext,
 } from "./types";
 
-const MODEL = "claude-sonnet-4-5-20250929";
 const MAX_TURNS = 10;
 
 let _client: Anthropic | null = null;
@@ -139,6 +139,10 @@ export async function runOrchestrator(
   const usage: CallUsage[] = [];
   const persona = options.persona ?? DEFAULT_PERSONA;
   const channel: IncomingChannel = options.channel ?? ctx.channel;
+  // Resolve the model lazily per dispatch so admin edits to
+  // runtime_model_assignments take effect without a server restart.
+  const resolved = await getRuntimeModel("orchestrator");
+  const MODEL = resolved.id;
   const system = cachedSystem(buildSystemPrompt(skills, ctx, persona, channel));
   const tools = cachedTools(toAnthropicTools(skills));
 

@@ -12,10 +12,9 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 import { totalInputTokens } from "./cache";
+import { getRuntimeModel } from "./_models";
 import { DEFAULT_PERSONA, type AgentPersona } from "./persona";
 import type { CallUsage } from "./types";
-
-const MODEL = "claude-haiku-4-5";
 
 let _client: Anthropic | null = null;
 function client(): Anthropic {
@@ -48,6 +47,11 @@ export async function formatReply(
   if (trimmed.length < 140 && !/[*_#`]/.test(trimmed)) {
     return { text: trimmed, usage: [] };
   }
+
+  // Resolve the model lazily per call so admin edits to
+  // runtime_model_assignments take effect without a server restart.
+  const resolved = await getRuntimeModel("formatter");
+  const MODEL = resolved.id;
 
   const response = await client().messages.create({
     model: MODEL,
