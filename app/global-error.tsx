@@ -1,5 +1,7 @@
 "use client";
 
+import { useEffect } from "react";
+
 /* Global error boundary — fires when an error happens INSIDE the root
  * layout itself (e.g. a provider crashes). Next.js requires this to
  * include its own <html> + <body> because the normal layout never
@@ -12,6 +14,23 @@ interface Props {
 }
 
 export default function GlobalError({ error, reset }: Props) {
+  // Surface the error to the browser console so server-side log capture
+  // (and operator devtools) can pick it up. Best-effort only — never
+  // throw from this hook because we're already in the error boundary.
+  useEffect(() => {
+    try {
+      // eslint-disable-next-line no-console
+      console.error(
+        "[global-error]",
+        error?.message,
+        error?.digest ? `digest=${error.digest}` : "",
+        error?.stack ?? ""
+      );
+    } catch {
+      /* noop */
+    }
+  }, [error]);
+
   return (
     <html lang="en">
       <body
@@ -55,12 +74,26 @@ export default function GlobalError({ error, reset }: Props) {
               fontSize: "0.875rem",
               color: "#a1a1aa",
               lineHeight: 1.6,
-              marginBottom: "2rem",
+              marginBottom: "1rem",
             }}
           >
             {error.message ||
               "Space Field hit an unexpected error before the page could render. Try reloading."}
           </p>
+          {error.digest && (
+            <p
+              style={{
+                fontSize: "0.65rem",
+                fontFamily:
+                  "ui-monospace, SFMono-Regular, Menlo, monospace",
+                color: "#71717a",
+                marginBottom: "2rem",
+                wordBreak: "break-all",
+              }}
+            >
+              ref: {error.digest}
+            </p>
+          )}
           <button
             type="button"
             onClick={reset}
