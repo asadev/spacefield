@@ -48,7 +48,7 @@ export default async function AdminLayout({
     <div className="min-h-screen bg-app text-app">
       <Header email={auth.email} />
 
-      <div className="mx-auto flex max-w-7xl gap-6 px-6 py-6">
+      <div className="flex gap-6 px-6 py-6">
         {/* Section-scoped sidebar — desktop only. Sticks below the
             header (header is ~5.25rem total: 3rem row 1 + 2.25rem row 2). */}
         <aside className="sticky top-[5.5rem] hidden h-[calc(100vh-6rem)] w-56 shrink-0 overflow-y-auto pr-2 lg:block">

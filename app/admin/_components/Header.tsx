@@ -21,7 +21,7 @@ export default function Header({ email }: { email?: string | null }) {
   return (
     <header className="sticky top-0 z-30 border-b border-app bg-app/85 backdrop-blur supports-[backdrop-filter]:bg-app/70">
       {/* Row 1 — brand + section tabs + utility */}
-      <div className="mx-auto flex h-12 max-w-7xl items-center gap-6 px-6">
+      <div className="flex h-12 items-center gap-6 px-6">
         {/* Brand */}
         <Link
           href="/admin"
@@ -68,7 +68,7 @@ export default function Header({ email }: { email?: string | null }) {
       </div>
 
       {/* Row 2 — pinned utility links */}
-      <div className="mx-auto flex h-9 max-w-7xl items-center gap-3 px-6 text-xs">
+      <div className="flex h-9 items-center gap-3 px-6 text-xs">
         {pinned.map((p) => {
           const isActive = isHrefActive(pathname, p.href);
           return (
