@@ -22,16 +22,14 @@ export default function Header({ email }: { email?: string | null }) {
     <header className="sticky top-0 z-30 border-b border-app bg-app/85 backdrop-blur supports-[backdrop-filter]:bg-app/70">
       {/* Row 1 — brand + section tabs + utility */}
       <div className="flex h-12 items-center gap-6 px-6">
-        {/* Brand */}
-        <Link
-          href="/admin"
-          className="flex items-center gap-2 text-sm font-semibold tracking-tight text-app"
-        >
+        {/* Brand — static label only. Use the "Dashboard" pinned link in
+            row 2 to navigate to /admin (avoids redundant click targets). */}
+        <div className="flex items-center gap-2 text-sm font-semibold tracking-tight text-app">
           <span className="rounded-md bg-tool-accent-soft px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-tool-accent">
             Admin
           </span>
           <span className="hidden text-xs text-muted sm:inline">Space Field</span>
-        </Link>
+        </div>
 
         {/* Section tabs */}
         <nav
