@@ -4,7 +4,10 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { assertAdmin } from "@/app/admin/_lib";
 import { logError } from "@/lib/error-log";
+import { withRequestId } from "@/lib/log";
+import { releaseInfo } from "@/lib/release-info";
 import { checkAndIncrement, getClientIp } from "@/lib/rate-limit";
+import { createAdminClient } from "@/lib/supabase/admin";
 import type { RateLimitRuleRow } from "@/app/admin/_types";
 
 /**
@@ -41,6 +44,49 @@ export type ApiHandler<Ctx = unknown> = (
   req: NextRequest,
   ctx: Ctx
 ) => Promise<Response> | Response;
+
+/**
+ * Fire-and-forget INSERT into `api_latency`. Wrapped in try/catch so a
+ * failed insert never propagates into the response path. The service-
+ * role client bypasses RLS, which is what we want — only this code
+ * writes to the table.
+ */
+function recordLatency(input: {
+  source: string;
+  status: number;
+  ms: number;
+  user_id: string | null;
+  workspace_id?: string | null;
+}): void {
+  try {
+    const release = releaseInfo();
+    // intentionally NOT awaited — observability must not block the response
+    const admin = createAdminClient();
+    void admin
+      .from("api_latency")
+      .insert({
+        source: input.source,
+        status: input.status,
+        ms: input.ms,
+        user_id: input.user_id,
+        workspace_id: input.workspace_id ?? null,
+        release_sha: release.commit,
+        region: release.region,
+      })
+      .then(({ error }) => {
+        if (error) {
+          // eslint-disable-next-line no-console
+          console.error("[api-latency] insert failed:", error.message);
+        }
+      });
+  } catch (err) {
+    // eslint-disable-next-line no-console
+    console.error(
+      "[api-latency] unexpected:",
+      err instanceof Error ? err.message : err
+    );
+  }
+}
 
 /**
  * Wrap a route handler. Returns a function with the same signature so
@@ -124,26 +170,55 @@ export function withApiHandler<Ctx = unknown>(
       }
     }
 
-    // 3. Run the handler with full error logging. Anything thrown is
-    //    captured into error_events with the supplied source, then
-    //    surfaced as a 500 JSON body.
-    try {
-      return await handler(req, ctx);
-    } catch (err) {
-      const e = err instanceof Error ? err : new Error(String(err));
-      await logError({
-        source: opts.source,
-        message: e.message,
-        stack: e.stack ?? null,
-        url: req.nextUrl.toString(),
-        user_id: userId,
-        user_agent: req.headers.get("user-agent") ?? null,
-        level: "error",
-      });
-      return NextResponse.json(
-        { error: e.message || "internal_error" },
-        { status: 500 }
-      );
-    }
+    // 3. Run the handler with full error logging + latency sampling.
+    //    Anything thrown is captured into error_events with the supplied
+    //    source, then surfaced as a 500 JSON body.
+    //
+    //    We bind the inbound x-request-id (set by middleware) into an
+    //    AsyncLocalStorage scope so every `log.*` call inside the
+    //    handler — and inside anything it awaits — auto-attaches
+    //    request_id without explicit threading.
+    const requestId =
+      req.headers.get("x-request-id") ??
+      req.headers.get("X-Request-Id") ??
+      undefined;
+
+    const started = Date.now();
+    const runHandler = async (): Promise<Response> => {
+      try {
+        const res = await handler(req, ctx);
+        recordLatency({
+          source: opts.source,
+          status: res.status,
+          ms: Date.now() - started,
+          user_id: userId,
+        });
+        return res;
+      } catch (err) {
+        const e = err instanceof Error ? err : new Error(String(err));
+        await logError({
+          source: opts.source,
+          message: e.message,
+          stack: e.stack ?? null,
+          url: req.nextUrl.toString(),
+          user_id: userId,
+          user_agent: req.headers.get("user-agent") ?? null,
+          request_id: requestId ?? null,
+          level: "error",
+        });
+        recordLatency({
+          source: opts.source,
+          status: 500,
+          ms: Date.now() - started,
+          user_id: userId,
+        });
+        return NextResponse.json(
+          { error: e.message || "internal_error" },
+          { status: 500 }
+        );
+      }
+    };
+
+    return requestId ? withRequestId(requestId, runHandler) : runHandler();
   };
 }
