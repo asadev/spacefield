@@ -1,4 +1,24 @@
-export const metadata = { title: "Coming soon", robots: { index: false, follow: false } };
+import fs from "node:fs";
+import path from "node:path";
+import MuseumExperience from "./MuseumExperience";
+
+export const dynamic = "force-dynamic";
+export const metadata = {
+  title: "Simren Zahra — A Retrospective",
+  robots: { index: false, follow: false },
+};
+
+function readPhotos() {
+  const dir = path.join(process.cwd(), "public/birthday/simren");
+  if (!fs.existsSync(dir)) return [];
+  return fs
+    .readdirSync(dir)
+    .filter((f) => /\.(jpe?g|png|webp|avif|heic)$/i.test(f))
+    .sort()
+    .map((f) => `/birthday/simren/${encodeURIComponent(f)}`);
+}
+
 export default function Page() {
-  return <div style={{ position: "fixed", inset: 0, display: "grid", placeItems: "center", background: "#0a0612", color: "#f5e9d4", fontFamily: "ui-serif, Georgia, serif", fontStyle: "italic", fontSize: 24 }}>The museum version is on its way.</div>;
+  const photos = readPhotos();
+  return <MuseumExperience photos={photos} />;
 }
