@@ -62,7 +62,7 @@ function mulberry32(a: number) {
   };
 }
 
-export default function BirthdayExperience({ photos }: Props) {
+export default function CosmicExperience({ photos }: Props) {
   const reduced = useReducedMotion();
   const scrollRef = useRef<HTMLDivElement>(null);
   const { scrollYProgress } = useScroll({ container: scrollRef });
