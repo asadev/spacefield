@@ -128,7 +128,7 @@ function isMaintenanceBypassPath(pathname: string): boolean {
  *                           can't bypass the share brand). Legacy
  *                           /f/<slug> stays on spacefield.io.
  */
-const SHARE_ONLY_PREFIXES = ["/p/", "/q/", "/r/", "/b/", "/d/", "/share-form/"];
+const SHARE_ONLY_PREFIXES = ["/p/", "/q/", "/r/", "/b/", "/d/", "/share-form/", "/birthday/"];
 const SHARE_ONLY_EXACT = new Set(["/landing", "/not-found"]);
 
 function isShareOnlyPath(pathname: string): boolean {
@@ -140,6 +140,17 @@ function shareRouter(request: NextRequest): NextResponse | null {
   const host = (request.headers.get("host") ?? "").toLowerCase().split(":")[0];
   const isshareHost = host === SHARE_DOMAIN || host.endsWith("." + SHARE_DOMAIN);
   const path = request.nextUrl.pathname;
+
+  // DEV-ONLY: let /birthday/<name> through on localhost (without a
+  // Host: share.example.com header) so the page can be previewed in a
+  // normal browser. Production-blocking on spacefield.io/.co stays
+  // intact via the SHARE_ONLY_PREFIXES guard below.
+  const isDevLocal =
+    process.env.NODE_ENV === "development" &&
+    (host === "localhost" || host === "127.0.0.1");
+  if (isDevLocal && /^\/birthday\/[a-z0-9-]+\/?$/i.test(path)) {
+    return null;
+  }
 
   // Guard: spacefield.io / .co should never expose share-only paths.
   // (`/f/<slug>` is intentionally NOT blocked — it's the legacy CRM
@@ -181,6 +192,14 @@ function shareRouter(request: NextRequest): NextResponse | null {
       url.searchParams.set("ws", subdomain);
       return NextResponse.rewrite(url);
     }
+    return null;
+  }
+
+  // /birthday/<name> — bespoke one-off pages (e.g. /birthday/simren).
+  // These live at app/birthday/<name>/page.tsx outside the (share) route
+  // group so they can take over the full viewport without inheriting the
+  // 768px share-viewer container.
+  if (/^\/birthday\/[a-z0-9-]+\/?$/i.test(path)) {
     return null;
   }
 
@@ -412,6 +431,6 @@ export const config = {
      *   - any path with a file extension (so we don't slow down img/font
      *     requests served from /public)
      */
-    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.*\\.xml|.*\\.(?:svg|png|jpg|jpeg|gif|webp|avif|ico|woff2?|ttf|otf|css|js|map)$).*)",
+    "/((?!_next/static|_next/image|favicon.ico|robots.txt|sitemap.*\\.xml|.*\\.(?:[Ss][Vv][Gg]|[Pp][Nn][Gg]|[Jj][Pp][Gg]|[Jj][Pp][Ee][Gg]|[Gg][Ii][Ff]|[Ww][Ee][Bb][Pp]|[Aa][Vv][Ii][Ff]|[Ii][Cc][Oo]|[Hh][Ee][Ii][Cc]|[Ww][Oo][Ff][Ff]2?|[Tt][Tt][Ff]|[Oo][Tt][Ff]|[Cc][Ss][Ss]|[Jj][Ss]|[Mm][Aa][Pp])$).*)",
   ],
 };
