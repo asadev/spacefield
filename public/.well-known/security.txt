@@ -1,0 +1,10 @@
+# Spacefield security disclosure policy
+# https://securitytxt.org/
+
+Contact: mailto:security@spacefield.co
+Contact: https://spacefield.co/legal/security
+Expires: 2027-05-13T00:00:00.000Z
+Preferred-Languages: en
+Canonical: https://spacefield.co/.well-known/security.txt
+Policy: https://spacefield.co/legal/security
+Acknowledgments: https://spacefield.co/legal/security#hall-of-fame

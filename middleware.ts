@@ -8,6 +8,7 @@ import {
   getClientIpFromHeaders,
   logErrorEdge,
 } from "@/lib/middleware-helpers";
+import { applySecurityHeaders, resolveRequestId } from "@/lib/security-headers";
 
 const LEGACY_TOOL_SLUGS: Record<string, string> = {
   "what-can-i-afford": "affordability",
@@ -255,6 +256,11 @@ function shellRedirectForStandaloneTool(request: NextRequest): NextResponse | nu
  * sign-in) and returns 401 even though the browser thinks it's signed in.
  */
 export async function middleware(request: NextRequest) {
+  // Request-ID: honoured from inbound header if present (proxy chain),
+  // otherwise generated. Attached to every outgoing response so logs +
+  // browser dev-tools can correlate.
+  const requestId = resolveRequestId(request.headers.get("x-request-id"));
+
   try {
     // Maintenance gate — runs before any host/path routing so admins can
     // take the public surface offline while keeping /admin, /signin, and
@@ -352,7 +358,7 @@ export async function middleware(request: NextRequest) {
       !process.env.NEXT_PUBLIC_SUPABASE_URL ||
       !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     ) {
-      return response;
+      return applySecurityHeaders(response, requestId);
     }
 
     const supabase = createServerClient(
@@ -381,7 +387,7 @@ export async function middleware(request: NextRequest) {
     // here — the side-effect is the point.
     await supabase.auth.getUser();
 
-    return response;
+    return applySecurityHeaders(response, requestId);
   } catch (err) {
     // Top-level safety net — log and re-throw so Next.js can serve its
     // normal error response. We never want middleware to swallow an
