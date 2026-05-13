@@ -46,6 +46,7 @@ export const NAV: NavItem[] = [
   { href: "/admin",                label: "Dashboard",                section: "Dashboard", pinned: true },
   { href: "/admin/search",         label: "Search",                   section: "Dashboard", pinned: true },
   { href: "/admin/activity",       label: "Activity",                 section: "Dashboard", pinned: true },
+  { href: "/admin/status",         label: "Status",                   section: "Dashboard", pinned: true },
 
   // ── AI ── everything that powers the AI runtime
   { href: "/admin/agents",         label: "AI agents",                section: "AI" },
