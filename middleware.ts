@@ -195,11 +195,11 @@ function toshareRouter(request: NextRequest): NextResponse | null {
     return null;
   }
 
-  // /birthday/<name> — bespoke one-off pages (e.g. /birthday/simren).
-  // These live at app/birthday/<name>/page.tsx outside the (share) route
-  // group so they can take over the full viewport without inheriting the
-  // 768px share-viewer container.
-  if (/^\/birthday\/[a-z0-9-]+\/?$/i.test(path)) {
+  // /birthday/<name> + /birthday/<name>/<variant> — bespoke one-off
+  // pages. These live at app/birthday/<name>[/<variant>]/page.tsx
+  // outside the (share) route group so they can take over the full
+  // viewport without inheriting the 768px share-viewer container.
+  if (/^\/birthday\/[a-z0-9-]+(\/[a-z0-9-]+)?\/?$/i.test(path)) {
     return null;
   }
 
