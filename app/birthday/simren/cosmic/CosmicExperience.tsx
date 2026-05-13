@@ -7,15 +7,12 @@
  *   1. Hero    — WebGL particle field (cosmic dust + petals) + name title
  *                with mouse parallax
  *   2. Stage   — date + opening line, scroll-fade
- *   3. Cake    — interactive SVG cake; click each candle to blow it out
+ *   3. Cake    — layered HTML/CSS cake; click each candle to blow it out
  *                → reveals "make a wish" line
- *   4. Gallery — 3D photo orbit (three.js): images of Simren rotate as
- *                planes around the camera, gentle drift, hover tilts each.
- *                Auto-skipped if `photos` is empty.
+ *   4. Gallery — floating photo cards (HTML <img> so EXIF orientation
+ *                is honored). Auto-skipped if `photos` is empty.
  *   5. Wishes  — 7 staggered lines (one per candle)
- *   6. Sky     — WebGL canvas; click anywhere to spawn a glowing star
- *                with a soft bloom; previous stars connect with lines
- *   7. Finale  — confetti + signed sign-off
+ *   6. Finale  — confetti + sign-off (no name)
  *
  * Renders as a fixed full-viewport overlay so it ignores any layout
  * container the route group might impose. Internal scroll container.
@@ -33,7 +30,6 @@ import * as THREE from "three";
 
 const NAME = "Simren";
 const FULL_NAME = "Simren Zahra";
-const FROM = "Asad";
 const DATE_STR = "May 14, 2026";
 
 const WISHES = [
@@ -93,9 +89,8 @@ export default function CosmicExperience({ photos }: Props) {
         <Hero reduced={!!reduced} />
         <Stage />
         <CakeSection />
-        {photos.length > 0 && <PhotoOrbit photos={photos} reduced={!!reduced} />}
+        {photos.length > 0 && <PhotoGallery photos={photos} reduced={!!reduced} />}
         <WishesSection />
-        <ConstellationSection reduced={!!reduced} />
         <Finale />
       </div>
 
@@ -109,13 +104,35 @@ export default function CosmicExperience({ photos }: Props) {
           10% { opacity: 1; }
           100% { transform: translateY(-120vh) rotate(360deg); opacity: 0; }
         }
-        @keyframes flame {
-          0%, 100% { transform: translateX(-50%) scaleY(1) scaleX(1); }
-          50% { transform: translateX(-50%) scaleY(1.15) scaleX(0.9); }
+        @keyframes flame-flicker {
+          0%, 100% {
+            transform: translate(-50%, 0) scale(1, 1);
+            filter: brightness(1) blur(0.4px);
+          }
+          25% {
+            transform: translate(-50%, -1px) scale(0.95, 1.08);
+            filter: brightness(1.15) blur(0.5px);
+          }
+          50% {
+            transform: translate(-50%, 0) scale(1.05, 0.95);
+            filter: brightness(0.95) blur(0.3px);
+          }
+          75% {
+            transform: translate(-50%, -0.5px) scale(0.97, 1.04);
+            filter: brightness(1.1) blur(0.4px);
+          }
         }
-        @keyframes pulse-glow {
-          0%, 100% { box-shadow: 0 0 20px rgba(255,196,128,0.4); }
-          50% { box-shadow: 0 0 40px rgba(255,196,128,0.8); }
+        @keyframes cake-glow {
+          0%, 100% { filter: drop-shadow(0 30px 60px rgba(255,158,118,0.25)) drop-shadow(0 0 30px rgba(255,196,128,0.15)); }
+          50% { filter: drop-shadow(0 30px 60px rgba(255,158,118,0.35)) drop-shadow(0 0 50px rgba(255,196,128,0.25)); }
+        }
+        @keyframes smoke-rise {
+          0% { transform: translate(-50%, 0) scale(1); opacity: 0.55; }
+          100% { transform: translate(-50%, -80px) scale(2.4); opacity: 0; }
+        }
+        @keyframes card-bob {
+          0%, 100% { transform: var(--rest-transform); }
+          50% { transform: var(--rest-transform) translateY(-8px); }
         }
         ::selection { background: rgba(255,196,128,0.5); color: #fff; }
         html, body { overflow: hidden; }
@@ -557,8 +574,8 @@ function Stage() {
           lineHeight: 1.7,
         }}
       >
-        Scroll on. There&apos;s a cake. There are wishes. There&apos;s a sky
-        with your name on it.
+        Scroll on. There&apos;s a cake. There are wishes. There&apos;s a
+        whole day made of you.
       </motion.p>
     </section>
   );
@@ -627,10 +644,11 @@ function CakeSection() {
       </motion.p>
 
       <motion.div
-        initial={{ opacity: 0, scale: 0.9 }}
-        whileInView={{ opacity: 1, scale: 1 }}
+        initial={{ opacity: 0, scale: 0.9, y: 20 }}
+        whileInView={{ opacity: 1, scale: 1, y: 0 }}
         viewport={{ once: true, amount: 0.3 }}
         transition={{ duration: 1.2, ease: "easeOut" }}
+        style={{ width: "100%", display: "flex", justifyContent: "center" }}
       >
         <Cake lit={lit} onBlow={blow} />
       </motion.div>
@@ -670,285 +688,424 @@ function CakeSection() {
   );
 }
 
+/* ─────────────────────────────────────────────────────────────────────
+ * Cake — proper layered HTML/CSS cake.
+ * Three tiers stacked on a plate. Candles are absolutely positioned
+ * children of the TOP tier so they sit IN the cake (their base is
+ * inside the frosting). Each candle is a rectangle topped with a
+ * wick + flame; click anywhere on the candle column to blow it out.
+ *
+ * The whole cake has a subtle pulse glow + scrolling drips on tiers.
+ * ─────────────────────────────────────────────────────────────────── */
 function Cake({ lit, onBlow }: { lit: boolean[]; onBlow: (i: number) => void }) {
-  const candleCount = lit.length;
-  const candleSpacing = 36;
-  const cakeWidth = candleCount * candleSpacing + 80;
-  const startX = (cakeWidth - (candleCount - 1) * candleSpacing) / 2;
-
   return (
-    <svg
-      viewBox={`0 0 ${cakeWidth} 280`}
-      width={Math.min(cakeWidth, 380)}
+    <div
       style={{
-        overflow: "visible",
-        filter: "drop-shadow(0 20px 40px rgba(255,158,118,0.2))",
+        position: "relative",
+        width: "min(360px, 88vw)",
+        height: 380,
+        animation: "cake-glow 4s ease-in-out infinite",
       }}
     >
-      {/* plate */}
-      <ellipse cx={cakeWidth / 2} cy={258} rx={cakeWidth / 2 - 10} ry={10} fill="#3a2540" opacity={0.6} />
-      {/* base tier */}
-      <rect x={20} y={170} width={cakeWidth - 40} height={88} rx={6} fill="url(#tier1)" />
-      {/* drip */}
-      <path
-        d={`M 20 178 Q ${cakeWidth / 4} 200 ${cakeWidth / 2} 184 T ${cakeWidth - 20} 180 L ${cakeWidth - 20} 178 L 20 178 Z`}
-        fill="#ffd89b"
-        opacity={0.85}
+      {/* Candles — rendered ABOVE the cake but anchored relative to the cake stack */}
+      <div
+        style={{
+          position: "absolute",
+          left: 0,
+          right: 0,
+          /* this row sits just above the top of the top tier */
+          bottom: 218,
+          display: "flex",
+          justifyContent: "center",
+          alignItems: "flex-end",
+          gap: 14,
+          padding: "0 28px",
+          zIndex: 3,
+        }}
+      >
+        {lit.map((isLit, i) => (
+          <Candle key={i} lit={isLit} idx={i} onBlow={() => onBlow(i)} />
+        ))}
+      </div>
+
+      {/* TOP TIER (smallest) */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 150,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "62%",
+          height: 78,
+          borderRadius: "10px 10px 6px 6px",
+          background:
+            "linear-gradient(180deg, #fff1d6 0%, #ffd89b 35%, #f0b873 100%)",
+          boxShadow:
+            "inset 0 4px 10px rgba(255,255,255,0.45), inset 0 -8px 16px rgba(150,80,40,0.25), 0 6px 14px rgba(0,0,0,0.35)",
+          zIndex: 2,
+        }}
+      >
+        {/* frosting top — slightly lighter ellipse to suggest the icing surface candles sit on */}
+        <div
+          style={{
+            position: "absolute",
+            top: -4,
+            left: 6,
+            right: 6,
+            height: 12,
+            borderRadius: "50%",
+            background: "linear-gradient(180deg, #fff8e7, #ffd89b)",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.15)",
+          }}
+        />
+        {/* drip 1 */}
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            top: 14,
+            left: 0,
+            right: 0,
+            height: 22,
+            background:
+              "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 22' preserveAspectRatio='none'><path d='M0 0 L100 0 L100 6 Q92 16 84 8 Q72 22 64 10 Q54 20 46 9 Q34 22 28 10 Q18 20 10 8 L0 6 Z' fill='%23ff9a76'/></svg>\") center/100% 100% no-repeat",
+            opacity: 0.95,
+          }}
+        />
+        {/* sprinkles on top tier */}
+        <Sprinkles seed={11} count={14} />
+      </div>
+
+      {/* MIDDLE TIER */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 80,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "82%",
+          height: 78,
+          borderRadius: "8px 8px 6px 6px",
+          background:
+            "linear-gradient(180deg, #ffc8a0 0%, #ff9a76 45%, #c97056 100%)",
+          boxShadow:
+            "inset 0 4px 10px rgba(255,255,255,0.35), inset 0 -10px 18px rgba(120,50,30,0.35), 0 8px 18px rgba(0,0,0,0.4)",
+          zIndex: 2,
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: -3,
+            left: 8,
+            right: 8,
+            height: 10,
+            borderRadius: "50%",
+            background: "linear-gradient(180deg, #ffd89b, #ff9a76)",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.15)",
+          }}
+        />
+        {/* drip dripping from middle tier */}
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            top: 12,
+            left: 0,
+            right: 0,
+            height: 26,
+            background:
+              "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 26' preserveAspectRatio='none'><path d='M0 0 L100 0 L100 8 Q94 22 86 10 Q76 26 68 12 Q58 24 50 11 Q40 26 32 12 Q22 24 14 10 L0 8 Z' fill='%23ffd89b'/></svg>\") center/100% 100% no-repeat",
+            opacity: 0.9,
+          }}
+        />
+        <Sprinkles seed={22} count={20} />
+      </div>
+
+      {/* BOTTOM TIER (largest) */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 22,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "100%",
+          height: 86,
+          borderRadius: "10px 10px 8px 8px",
+          background:
+            "linear-gradient(180deg, #d8a7d4 0%, #b07cb4 45%, #6e4a82 100%)",
+          boxShadow:
+            "inset 0 4px 10px rgba(255,255,255,0.3), inset 0 -12px 20px rgba(40,15,55,0.5), 0 12px 22px rgba(0,0,0,0.5)",
+          zIndex: 2,
+        }}
+      >
+        <div
+          style={{
+            position: "absolute",
+            top: -3,
+            left: 10,
+            right: 10,
+            height: 10,
+            borderRadius: "50%",
+            background: "linear-gradient(180deg, #e8c8e8, #b07cb4)",
+            boxShadow: "0 2px 4px rgba(0,0,0,0.15)",
+          }}
+        />
+        {/* drip dripping from bottom tier */}
+        <div
+          aria-hidden
+          style={{
+            position: "absolute",
+            top: 14,
+            left: 0,
+            right: 0,
+            height: 30,
+            background:
+              "url(\"data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 30' preserveAspectRatio='none'><path d='M0 0 L100 0 L100 10 Q94 26 86 12 Q76 30 68 14 Q58 28 50 13 Q40 30 32 14 Q22 28 14 12 L0 10 Z' fill='%23b388ff'/></svg>\") center/100% 100% no-repeat",
+            opacity: 0.85,
+          }}
+        />
+        <Sprinkles seed={33} count={28} />
+      </div>
+
+      {/* PLATE */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 0,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "118%",
+          height: 28,
+          borderRadius: "50%",
+          background:
+            "radial-gradient(ellipse at center top, #6a4a78 0%, #3a2540 60%, #1a1028 100%)",
+          boxShadow: "0 18px 30px rgba(0,0,0,0.55)",
+          zIndex: 1,
+        }}
       />
-      {/* top tier */}
-      <rect x={60} y={120} width={cakeWidth - 120} height={56} rx={5} fill="url(#tier2)" />
-      {/* candles */}
-      {lit.map((isLit, i) => {
-        const cx = startX + i * candleSpacing;
-        return (
-          <g key={i} style={{ cursor: "pointer" }} onClick={() => onBlow(i)}>
-            <rect x={cx - 16} y={40} width={32} height={90} fill="transparent" />
-            <rect
-              x={cx - 3}
-              y={88}
-              width={6}
-              height={36}
-              rx={1}
-              fill={i % 2 === 0 ? "#ff9a76" : "#ffd89b"}
-            />
-            <rect x={cx - 0.5} y={82} width={1} height={8} fill="#3a2540" />
-            {isLit && (
-              <g
-                style={{
-                  transformOrigin: `${cx}px 80px`,
-                  animation: "flame 0.6s ease-in-out infinite",
-                }}
-              >
-                <ellipse cx={cx} cy={75} rx={5} ry={9} fill="#ffb56b" opacity={0.9} />
-                <ellipse cx={cx} cy={73} rx={3} ry={6} fill="#fff8e7" />
-                <circle cx={cx} cy={70} r={1.5} fill="#fff" />
-              </g>
-            )}
-            {!isLit && (
-              <motion.g
-                initial={{ opacity: 0.7, y: 0 }}
-                animate={{ opacity: 0, y: -30 }}
-                transition={{ duration: 2, ease: "easeOut" }}
-              >
-                <circle cx={cx} cy={75} r={2} fill="rgba(245,233,212,0.4)" />
-                <circle cx={cx + 2} cy={68} r={1.5} fill="rgba(245,233,212,0.3)" />
-                <circle cx={cx - 2} cy={62} r={1} fill="rgba(245,233,212,0.2)" />
-              </motion.g>
-            )}
-          </g>
-        );
-      })}
-      <defs>
-        <linearGradient id="tier1" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#ff9a76" />
-          <stop offset="100%" stopColor="#b46e58" />
-        </linearGradient>
-        <linearGradient id="tier2" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor="#ffd89b" />
-          <stop offset="100%" stopColor="#e0a76a" />
-        </linearGradient>
-      </defs>
-    </svg>
+      {/* plate highlight */}
+      <div
+        style={{
+          position: "absolute",
+          bottom: 18,
+          left: "50%",
+          transform: "translateX(-50%)",
+          width: "104%",
+          height: 4,
+          borderRadius: "50%",
+          background:
+            "linear-gradient(90deg, transparent, rgba(255,255,255,0.25), transparent)",
+          zIndex: 1,
+        }}
+      />
+    </div>
+  );
+}
+
+function Candle({
+  lit,
+  idx,
+  onBlow,
+}: {
+  lit: boolean;
+  idx: number;
+  onBlow: () => void;
+}) {
+  /* alternating candle colors for a playful look */
+  const palette = ["#fff8e7", "#ff9a76", "#ffd89b", "#ff7eb3", "#b388ff"];
+  const candleColor = palette[idx % palette.length];
+
+  return (
+    <button
+      type="button"
+      onClick={onBlow}
+      aria-label={lit ? `Blow out candle ${idx + 1}` : `Candle ${idx + 1} (out)`}
+      style={{
+        position: "relative",
+        width: 14,
+        height: 70,
+        padding: 0,
+        background: "transparent",
+        border: "none",
+        cursor: lit ? "pointer" : "default",
+        display: "block",
+        WebkitTapHighlightColor: "transparent",
+      }}
+    >
+      {/* candle body */}
+      <span
+        aria-hidden
+        style={{
+          position: "absolute",
+          left: "50%",
+          bottom: 0,
+          transform: "translateX(-50%)",
+          width: 8,
+          height: 56,
+          borderRadius: "3px 3px 1px 1px",
+          background: `linear-gradient(180deg, ${candleColor} 0%, ${candleColor} 60%, rgba(0,0,0,0.15) 100%)`,
+          boxShadow:
+            "inset -2px 0 3px rgba(0,0,0,0.18), inset 2px 0 2px rgba(255,255,255,0.35), 0 2px 4px rgba(0,0,0,0.25)",
+        }}
+      />
+      {/* candle stripe (a small accent so they read as candles) */}
+      <span
+        aria-hidden
+        style={{
+          position: "absolute",
+          left: "50%",
+          bottom: 36,
+          transform: "translateX(-50%)",
+          width: 8,
+          height: 2,
+          background: "rgba(0,0,0,0.18)",
+        }}
+      />
+      {/* wick */}
+      <span
+        aria-hidden
+        style={{
+          position: "absolute",
+          left: "50%",
+          bottom: 56,
+          transform: "translateX(-50%)",
+          width: 1.5,
+          height: 6,
+          background: "#3a2540",
+          borderRadius: 1,
+        }}
+      />
+      {/* flame */}
+      {lit && (
+        <>
+          <span
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: "50%",
+              bottom: 60,
+              width: 12,
+              height: 18,
+              borderRadius: "50% 50% 45% 45% / 60% 60% 40% 40%",
+              background:
+                "radial-gradient(ellipse at 50% 75%, #fff8e7 0%, #ffd89b 35%, #ffb56b 65%, rgba(255,120,80,0.4) 100%)",
+              boxShadow:
+                "0 0 12px rgba(255,196,128,0.9), 0 0 24px rgba(255,158,118,0.6), 0 0 40px rgba(255,158,118,0.35)",
+              transformOrigin: "50% 100%",
+              animation: "flame-flicker 0.5s ease-in-out infinite",
+              pointerEvents: "none",
+            }}
+          />
+          {/* hot core */}
+          <span
+            aria-hidden
+            style={{
+              position: "absolute",
+              left: "50%",
+              bottom: 62,
+              transform: "translateX(-50%)",
+              width: 4,
+              height: 7,
+              borderRadius: "50%",
+              background: "#fff",
+              filter: "blur(0.5px)",
+              opacity: 0.9,
+              pointerEvents: "none",
+            }}
+          />
+        </>
+      )}
+      {/* smoke after blow-out */}
+      {!lit && (
+        <span
+          aria-hidden
+          key={`smoke-${idx}`}
+          style={{
+            position: "absolute",
+            left: "50%",
+            bottom: 60,
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            background:
+              "radial-gradient(circle, rgba(245,233,212,0.5) 0%, rgba(245,233,212,0) 70%)",
+            transformOrigin: "50% 100%",
+            animation: "smoke-rise 1.6s ease-out forwards",
+            pointerEvents: "none",
+          }}
+        />
+      )}
+    </button>
+  );
+}
+
+/* deterministic sprinkles scattered on a tier */
+function Sprinkles({ seed, count }: { seed: number; count: number }) {
+  const rng = useMemo(() => mulberry32(seed), [seed]);
+  const items = useMemo(() => {
+    const colors = ["#fff8e7", "#b388ff", "#ff7eb3", "#ffd89b", "#ff9a76"];
+    return Array.from({ length: count }, () => ({
+      left: 4 + rng() * 92,
+      top: 30 + rng() * 42,
+      rot: rng() * 360,
+      color: colors[Math.floor(rng() * colors.length)],
+      w: 3 + rng() * 2,
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [count]);
+  return (
+    <>
+      {items.map((s, i) => (
+        <span
+          key={i}
+          aria-hidden
+          style={{
+            position: "absolute",
+            left: `${s.left}%`,
+            top: `${s.top}%`,
+            width: s.w,
+            height: 1.5,
+            background: s.color,
+            transform: `rotate(${s.rot}deg)`,
+            borderRadius: 1,
+            opacity: 0.9,
+          }}
+        />
+      ))}
+    </>
   );
 }
 
 /* ─────────────────────────────────────────────────────────────────────
- * 4. Photo Orbit — three.js carousel of Simren's photos
+ * 4. Photo Gallery — floating cards using HTML <img> (auto-orients EXIF)
  *
- * Each photo becomes a textured plane orbiting the camera. Hover
- * pauses + zooms the focused plane. Scroll inside the section
- * advances the orbit (so the gallery feels scroll-driven).
+ * Cards are absolutely positioned in a wide stage, slightly tilted
+ * and offset; one is "active" at a time and floats forward. Tap/click
+ * to advance. Auto-cycles otherwise. Mobile-friendly.
  * ─────────────────────────────────────────────────────────────────── */
-function PhotoOrbit({ photos, reduced }: { photos: string[]; reduced: boolean }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const sectionRef = useRef<HTMLDivElement>(null);
-  const [activeIdx, setActiveIdx] = useState<number | null>(null);
-  const activeIdxRef = useRef<number | null>(null);
+function PhotoGallery({ photos, reduced }: { photos: string[]; reduced: boolean }) {
+  const [active, setActive] = useState(0);
+  const total = photos.length;
+
+  /* auto-advance unless reduced motion */
   useEffect(() => {
-    activeIdxRef.current = activeIdx;
-  }, [activeIdx]);
+    if (reduced || total <= 1) return;
+    const id = window.setInterval(() => {
+      setActive((i) => (i + 1) % total);
+    }, 4200);
+    return () => window.clearInterval(id);
+  }, [reduced, total]);
 
-  useEffect(() => {
-    const container = containerRef.current;
-    if (!container || photos.length === 0) return;
-
-    const w = () => container.clientWidth;
-    const h = () => container.clientHeight;
-
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: true,
-    });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(w(), h());
-    container.appendChild(renderer.domElement);
-    renderer.domElement.style.display = "block";
-
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(45, w() / h(), 0.1, 1000);
-    camera.position.set(0, 0, 14);
-
-    /* warm rim light + ambient */
-    scene.add(new THREE.AmbientLight(0xfff0d6, 0.85));
-    const dir = new THREE.DirectionalLight(0xffb56b, 0.6);
-    dir.position.set(5, 8, 6);
-    scene.add(dir);
-
-    const loader = new THREE.TextureLoader();
-    loader.crossOrigin = "anonymous";
-
-    const planes: THREE.Mesh[] = [];
-    const radius = Math.max(6, Math.min(9, photos.length * 0.9));
-    const placeholderMat = new THREE.MeshStandardMaterial({
-      color: 0x2a1a3a,
-      roughness: 0.8,
-    });
-
-    photos.forEach((src, i) => {
-      const angle = (i / photos.length) * Math.PI * 2;
-      // landscape default; will adjust on load
-      const geom = new THREE.PlaneGeometry(3.6, 2.4, 1, 1);
-      const mesh = new THREE.Mesh(geom, placeholderMat);
-      mesh.position.set(Math.cos(angle) * radius, 0, Math.sin(angle) * radius);
-      mesh.lookAt(0, 0, 0);
-      mesh.userData.baseAngle = angle;
-      mesh.userData.idx = i;
-      scene.add(mesh);
-      planes.push(mesh);
-
-      loader.load(
-        src,
-        (tex) => {
-          tex.colorSpace = THREE.SRGBColorSpace;
-          tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
-          const aspect = tex.image.width / tex.image.height;
-          // Resize plane to match aspect — keep height at 3, width = 3*aspect
-          const baseH = 3.0;
-          const baseW = baseH * aspect;
-          mesh.geometry.dispose();
-          mesh.geometry = new THREE.PlaneGeometry(baseW, baseH, 1, 1);
-          mesh.material = new THREE.MeshStandardMaterial({
-            map: tex,
-            roughness: 0.5,
-            metalness: 0.0,
-            emissive: 0x110a1c,
-            emissiveIntensity: 0.4,
-            side: THREE.DoubleSide,
-          });
-        },
-        undefined,
-        () => {
-          /* on error keep placeholder */
-        },
-      );
-    });
-
-    /* Raycaster for hover */
-    const raycaster = new THREE.Raycaster();
-    const pointer = new THREE.Vector2();
-    let hoveredIdx: number | null = null;
-
-    function onPointerMove(e: PointerEvent) {
-      const rect = renderer.domElement.getBoundingClientRect();
-      pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
-    }
-    function onPointerLeave() {
-      pointer.x = -1000;
-      pointer.y = -1000;
-    }
-    renderer.domElement.addEventListener("pointermove", onPointerMove);
-    renderer.domElement.addEventListener("pointerleave", onPointerLeave);
-
-    function onResize() {
-      renderer.setSize(w(), h());
-      camera.aspect = w() / h();
-      camera.updateProjectionMatrix();
-    }
-    window.addEventListener("resize", onResize);
-
-    /* scroll-driven offset */
-    let scrollOffset = 0;
-    function onScroll() {
-      const sec = sectionRef.current;
-      if (!sec) return;
-      const rect = sec.getBoundingClientRect();
-      const vh = window.innerHeight;
-      // 0 when section just enters bottom, 1 when fully scrolled past
-      const p = 1 - (rect.top + rect.height / 2) / vh;
-      scrollOffset = p;
-    }
-    const scrollContainer = sectionRef.current?.parentElement?.parentElement;
-    scrollContainer?.addEventListener("scroll", onScroll, { passive: true });
-    onScroll();
-
-    const clock = new THREE.Clock();
-    let raf = 0;
-    function tick() {
-      const t = clock.getElapsedTime();
-
-      // raycast for hover
-      raycaster.setFromCamera(pointer, camera);
-      const hits = raycaster.intersectObjects(planes);
-      const newHover = hits.length > 0 ? (hits[0].object.userData.idx as number) : null;
-      if (newHover !== hoveredIdx) {
-        hoveredIdx = newHover;
-        if (newHover !== activeIdxRef.current) setActiveIdx(newHover);
-      }
-
-      const orbitT = t * 0.08 + scrollOffset * Math.PI * 0.6;
-
-      for (let i = 0; i < planes.length; i++) {
-        const m = planes[i];
-        const baseAngle = m.userData.baseAngle as number;
-        const angle = baseAngle + orbitT;
-        const isActive = i === hoveredIdx;
-        const targetR = isActive ? radius * 0.62 : radius;
-        // smooth radius
-        const cur = m.position.length();
-        const newR = cur + (targetR - cur) * 0.08;
-        m.position.x = Math.cos(angle) * newR;
-        m.position.z = Math.sin(angle) * newR;
-        m.position.y = Math.sin(t * 0.5 + i) * 0.35; // gentle bob
-        m.lookAt(0, 0, 0);
-        // tiny tilt
-        m.rotation.z = Math.sin(t * 0.4 + i * 0.7) * 0.05;
-        // scale pop on active
-        const targetScale = isActive ? 1.18 : 1.0;
-        const curScale = m.scale.x;
-        const nextScale = curScale + (targetScale - curScale) * 0.1;
-        m.scale.set(nextScale, nextScale, nextScale);
-      }
-
-      renderer.render(scene, camera);
-      raf = requestAnimationFrame(tick);
-    }
-    if (!reduced) tick();
-    else renderer.render(scene, camera);
-
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", onResize);
-      scrollContainer?.removeEventListener("scroll", onScroll);
-      renderer.domElement.removeEventListener("pointermove", onPointerMove);
-      renderer.domElement.removeEventListener("pointerleave", onPointerLeave);
-      planes.forEach((m) => {
-        m.geometry.dispose();
-        const mat = m.material as THREE.Material | THREE.Material[];
-        if (Array.isArray(mat)) mat.forEach((x) => x.dispose());
-        else mat.dispose();
-      });
-      renderer.dispose();
-      placeholderMat.dispose();
-      if (renderer.domElement.parentElement === container) {
-        container.removeChild(renderer.domElement);
-      }
-    };
-  }, [photos, reduced]);
+  function next() {
+    setActive((i) => (i + 1) % total);
+  }
+  function prev() {
+    setActive((i) => (i - 1 + total) % total);
+  }
 
   return (
     <section
-      ref={sectionRef}
       style={{
         minHeight: "100dvh",
         display: "flex",
@@ -984,47 +1141,160 @@ function PhotoOrbit({ photos, reduced }: { photos: string[]; reduced: boolean })
         style={{
           fontSize: "clamp(20px, 3vw, 30px)",
           fontStyle: "italic",
-          margin: "0 0 32px 0",
+          margin: "0 0 40px 0",
           color: "rgba(245,233,212,0.92)",
           fontWeight: 300,
           maxWidth: 640,
         }}
       >
-        Moments worth keeping. Hover to hold one still.
+        Moments worth keeping.
       </motion.p>
 
       <div
-        ref={containerRef}
         style={{
-          width: "min(960px, 96vw)",
-          height: "min(560px, 65vh)",
+          width: "min(720px, 94vw)",
+          height: "min(560px, 70vh)",
           position: "relative",
-          borderRadius: 18,
-          overflow: "hidden",
+          perspective: "1400px",
+          /* subtle inner radial wash so cards float against a gentle stage */
           background:
-            "radial-gradient(ellipse at center, rgba(50,25,75,0.4) 0%, rgba(15,8,25,0.2) 70%)",
-          boxShadow:
-            "inset 0 0 60px rgba(255,196,128,0.06), 0 30px 80px rgba(0,0,0,0.5)",
-        }}
-      />
-
-      <motion.p
-        animate={{ opacity: activeIdx === null ? 0.4 : 0.85 }}
-        transition={{ duration: 0.4 }}
-        style={{
-          marginTop: 24,
-          fontSize: 12,
-          letterSpacing: "0.25em",
-          textTransform: "uppercase",
-          color: "rgba(245,233,212,0.55)",
+            "radial-gradient(ellipse at center, rgba(50,25,75,0.35) 0%, rgba(15,8,25,0) 70%)",
+          borderRadius: 18,
         }}
       >
-        {activeIdx === null
-          ? `${photos.length} ${photos.length === 1 ? "photo" : "photos"}`
-          : `${(activeIdx + 1).toString().padStart(2, "0")} / ${photos.length
-              .toString()
-              .padStart(2, "0")}`}
-      </motion.p>
+        {photos.map((src, i) => {
+          /* stack offset relative to active card */
+          const offset = i - active;
+          /* normalize for wrap: bring far cards to nearest side */
+          const normalized =
+            offset > total / 2
+              ? offset - total
+              : offset < -total / 2
+                ? offset + total
+                : offset;
+          const isActive = normalized === 0;
+          /* only render the 5 nearest cards for perf */
+          if (Math.abs(normalized) > 2) return null;
+
+          const rotY = normalized * -22;
+          const translateX = normalized * 60;
+          const translateZ = isActive ? 0 : -120 - Math.abs(normalized) * 60;
+          const opacity = Math.abs(normalized) > 2 ? 0 : 1 - Math.abs(normalized) * 0.25;
+          const tilt = isActive ? 0 : normalized * 4;
+
+          return (
+            <button
+              key={src}
+              type="button"
+              onClick={() => {
+                if (isActive) next();
+                else setActive(i);
+              }}
+              aria-label={isActive ? "Next photo" : `Bring photo ${i + 1} forward`}
+              style={{
+                position: "absolute",
+                inset: 0,
+                margin: "auto",
+                width: "min(360px, 70vw)",
+                height: "min(480px, 60vh)",
+                padding: 10,
+                background: "linear-gradient(145deg, #fff8e7 0%, #f0e0c8 100%)",
+                border: "none",
+                borderRadius: 14,
+                cursor: "pointer",
+                transform: `translate3d(${translateX}px, 0, ${translateZ}px) rotateY(${rotY}deg) rotateZ(${tilt}deg)`,
+                transformStyle: "preserve-3d",
+                transition:
+                  "transform 0.9s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.6s ease, box-shadow 0.6s ease",
+                opacity,
+                zIndex: 100 - Math.abs(normalized),
+                boxShadow: isActive
+                  ? "0 30px 80px rgba(0,0,0,0.6), 0 0 40px rgba(255,196,128,0.25), inset 0 0 0 1px rgba(255,255,255,0.4)"
+                  : "0 20px 50px rgba(0,0,0,0.45), inset 0 0 0 1px rgba(255,255,255,0.2)",
+                WebkitTapHighlightColor: "transparent",
+              }}
+            >
+              <img
+                src={src}
+                alt={`Photo ${i + 1} of ${total}`}
+                draggable={false}
+                loading={Math.abs(normalized) <= 1 ? "eager" : "lazy"}
+                style={{
+                  width: "100%",
+                  height: "100%",
+                  objectFit: "cover",
+                  borderRadius: 8,
+                  display: "block",
+                  pointerEvents: "none",
+                  /* HTML img auto-honors EXIF; this guarantees it on all browsers */
+                  imageOrientation: "from-image",
+                } as React.CSSProperties}
+              />
+            </button>
+          );
+        })}
+      </div>
+
+      {/* controls + counter */}
+      <div
+        style={{
+          marginTop: 28,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          gap: 24,
+        }}
+      >
+        <button
+          type="button"
+          onClick={prev}
+          aria-label="Previous photo"
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: "50%",
+            border: "1px solid rgba(255,196,128,0.3)",
+            background: "rgba(40,20,60,0.4)",
+            color: "#ffd89b",
+            cursor: "pointer",
+            fontSize: 18,
+            lineHeight: 1,
+            WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          ‹
+        </button>
+        <div
+          style={{
+            fontSize: 12,
+            letterSpacing: "0.25em",
+            textTransform: "uppercase",
+            color: "rgba(245,233,212,0.55)",
+            minWidth: 80,
+          }}
+        >
+          {(active + 1).toString().padStart(2, "0")} / {total.toString().padStart(2, "0")}
+        </div>
+        <button
+          type="button"
+          onClick={next}
+          aria-label="Next photo"
+          style={{
+            width: 40,
+            height: 40,
+            borderRadius: "50%",
+            border: "1px solid rgba(255,196,128,0.3)",
+            background: "rgba(40,20,60,0.4)",
+            color: "#ffd89b",
+            cursor: "pointer",
+            fontSize: 18,
+            lineHeight: 1,
+            WebkitTapHighlightColor: "transparent",
+          }}
+        >
+          ›
+        </button>
+      </div>
     </section>
   );
 }
@@ -1143,317 +1413,7 @@ function WishesSection() {
   );
 }
 
-/* ─────────────────────────────────────────────────────────────────────
- * 6. Constellation — WebGL particle sky; click to spawn glowing stars
- * ─────────────────────────────────────────────────────────────────── */
-function ConstellationSection({ reduced }: { reduced: boolean }) {
-  const canvasRef = useRef<HTMLDivElement>(null);
-  const [count, setCount] = useState(0);
-  const apiRef = useRef<{ addStarAt: (nx: number, ny: number) => void } | null>(
-    null,
-  );
-
-  useEffect(() => {
-    const container = canvasRef.current;
-    if (!container) return;
-
-    const w = () => container.clientWidth;
-    const h = () => container.clientHeight;
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(w(), h());
-    container.appendChild(renderer.domElement);
-    renderer.domElement.style.display = "block";
-    renderer.domElement.style.cursor = "crosshair";
-
-    const scene = new THREE.Scene();
-    const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -10, 10);
-    camera.position.z = 1;
-
-    /* background ambient stars (already-existing) */
-    const ambientCount = reduced ? 80 : 240;
-    const ambGeom = new THREE.BufferGeometry();
-    const ambPos = new Float32Array(ambientCount * 3);
-    const ambSize = new Float32Array(ambientCount);
-    const rng = mulberry32(33);
-    for (let i = 0; i < ambientCount; i++) {
-      ambPos[i * 3] = (rng() * 2 - 1) * 0.95;
-      ambPos[i * 3 + 1] = (rng() * 2 - 1) * 0.95;
-      ambPos[i * 3 + 2] = 0;
-      ambSize[i] = 1 + rng() * 2;
-    }
-    ambGeom.setAttribute("position", new THREE.BufferAttribute(ambPos, 3));
-    ambGeom.setAttribute("size", new THREE.BufferAttribute(ambSize, 1));
-    const ambMat = new THREE.ShaderMaterial({
-      uniforms: { uTime: { value: 0 }, uPixelRatio: { value: renderer.getPixelRatio() } },
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      vertexShader: `
-        attribute float size;
-        uniform float uTime;
-        uniform float uPixelRatio;
-        varying float vAlpha;
-        void main() {
-          vAlpha = 0.4 + 0.6 * sin(uTime * 1.5 + position.x * 8.0 + position.y * 6.0);
-          gl_PointSize = size * uPixelRatio;
-          gl_Position = vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        varying float vAlpha;
-        void main() {
-          vec2 c = gl_PointCoord - 0.5;
-          float d = length(c);
-          if (d > 0.5) discard;
-          float a = smoothstep(0.5, 0.0, d) * vAlpha * 0.8;
-          gl_FragColor = vec4(1.0, 0.96, 0.86, a);
-        }
-      `,
-    });
-    const ambient = new THREE.Points(ambGeom, ambMat);
-    scene.add(ambient);
-
-    /* user-spawned stars — accumulate into a single buffer */
-    const MAX_STARS = 256;
-    const starGeom = new THREE.BufferGeometry();
-    const starPos = new Float32Array(MAX_STARS * 3);
-    const starBirth = new Float32Array(MAX_STARS);
-    const starColor = new Float32Array(MAX_STARS * 3);
-    starGeom.setAttribute("position", new THREE.BufferAttribute(starPos, 3));
-    starGeom.setAttribute("aBirth", new THREE.BufferAttribute(starBirth, 1));
-    starGeom.setAttribute("aColor", new THREE.BufferAttribute(starColor, 3));
-    starGeom.setDrawRange(0, 0);
-    const starMat = new THREE.ShaderMaterial({
-      uniforms: {
-        uTime: { value: 0 },
-        uPixelRatio: { value: renderer.getPixelRatio() },
-      },
-      transparent: true,
-      depthWrite: false,
-      blending: THREE.AdditiveBlending,
-      vertexShader: `
-        attribute float aBirth;
-        attribute vec3 aColor;
-        uniform float uTime;
-        uniform float uPixelRatio;
-        varying vec3 vColor;
-        varying float vLife;
-        void main() {
-          float life = uTime - aBirth;
-          // pop in then settle to gentle pulse
-          float intro = smoothstep(0.0, 0.45, life);
-          float pulse = 0.85 + 0.15 * sin(uTime * 2.5 + aBirth * 5.0);
-          vLife = intro * pulse;
-          vColor = aColor;
-          gl_PointSize = (28.0 + 18.0 * intro) * uPixelRatio;
-          gl_Position = vec4(position, 1.0);
-        }
-      `,
-      fragmentShader: `
-        varying vec3 vColor;
-        varying float vLife;
-        void main() {
-          vec2 c = gl_PointCoord - 0.5;
-          float d = length(c);
-          if (d > 0.5) discard;
-          // sharp core + soft halo
-          float core = smoothstep(0.18, 0.0, d);
-          float halo = smoothstep(0.5, 0.18, d) * 0.55;
-          float a = (core + halo) * vLife;
-          vec3 col = mix(vColor, vec3(1.0, 0.97, 0.9), core * 0.7);
-          gl_FragColor = vec4(col, a);
-        }
-      `,
-    });
-    const userStars = new THREE.Points(starGeom, starMat);
-    scene.add(userStars);
-
-    /* connection lines — re-built on each add */
-    const lineMat = new THREE.LineBasicMaterial({
-      color: 0xffc480,
-      transparent: true,
-      opacity: 0.35,
-    });
-    let lineSeg: THREE.Line | null = null;
-
-    let starCount = 0;
-    const palette: [number, number, number][] = [
-      [1.0, 0.85, 0.61],
-      [1.0, 0.6, 0.46],
-      [1.0, 0.49, 0.7],
-      [0.7, 0.53, 1.0],
-      [1.0, 0.97, 0.9],
-    ];
-
-    function addStarAt(nx: number, ny: number) {
-      if (starCount >= MAX_STARS) return;
-      starPos[starCount * 3] = nx;
-      starPos[starCount * 3 + 1] = ny;
-      starPos[starCount * 3 + 2] = 0;
-      const c = palette[Math.floor(Math.random() * palette.length)];
-      starColor[starCount * 3] = c[0];
-      starColor[starCount * 3 + 1] = c[1];
-      starColor[starCount * 3 + 2] = c[2];
-      starBirth[starCount] = clock.getElapsedTime();
-      starCount += 1;
-      starGeom.setDrawRange(0, starCount);
-      starGeom.attributes.position.needsUpdate = true;
-      starGeom.attributes.aBirth.needsUpdate = true;
-      starGeom.attributes.aColor.needsUpdate = true;
-
-      // rebuild line strip
-      if (lineSeg) {
-        scene.remove(lineSeg);
-        lineSeg.geometry.dispose();
-        lineSeg = null;
-      }
-      if (starCount >= 2) {
-        const lg = new THREE.BufferGeometry();
-        const lp = new Float32Array(starCount * 3);
-        for (let i = 0; i < starCount; i++) {
-          lp[i * 3] = starPos[i * 3];
-          lp[i * 3 + 1] = starPos[i * 3 + 1];
-          lp[i * 3 + 2] = -0.01;
-        }
-        lg.setAttribute("position", new THREE.BufferAttribute(lp, 3));
-        lineSeg = new THREE.Line(lg, lineMat);
-        scene.add(lineSeg);
-      }
-
-      setCount(starCount);
-    }
-
-    apiRef.current = { addStarAt };
-
-    function onClick(e: PointerEvent) {
-      const rect = renderer.domElement.getBoundingClientRect();
-      const nx = ((e.clientX - rect.left) / rect.width) * 2 - 1;
-      const ny = -(((e.clientY - rect.top) / rect.height) * 2 - 1);
-      addStarAt(nx, ny);
-    }
-    renderer.domElement.addEventListener("pointerdown", onClick);
-
-    function onResize() {
-      renderer.setSize(w(), h());
-      ambMat.uniforms.uPixelRatio.value = renderer.getPixelRatio();
-      starMat.uniforms.uPixelRatio.value = renderer.getPixelRatio();
-    }
-    window.addEventListener("resize", onResize);
-
-    const clock = new THREE.Clock();
-    let raf = 0;
-    function tick() {
-      const t = clock.getElapsedTime();
-      ambMat.uniforms.uTime.value = t;
-      starMat.uniforms.uTime.value = t;
-      renderer.render(scene, camera);
-      raf = requestAnimationFrame(tick);
-    }
-    tick();
-
-    return () => {
-      cancelAnimationFrame(raf);
-      window.removeEventListener("resize", onResize);
-      renderer.domElement.removeEventListener("pointerdown", onClick);
-      starGeom.dispose();
-      ambGeom.dispose();
-      ambMat.dispose();
-      starMat.dispose();
-      lineMat.dispose();
-      if (lineSeg) lineSeg.geometry.dispose();
-      renderer.dispose();
-      apiRef.current = null;
-      if (renderer.domElement.parentElement === container) {
-        container.removeChild(renderer.domElement);
-      }
-    };
-  }, [reduced]);
-
-  return (
-    <section
-      style={{
-        minHeight: "100dvh",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-        justifyContent: "center",
-        padding: "120px 24px",
-        textAlign: "center",
-      }}
-    >
-      <motion.h2
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true, amount: 0.5 }}
-        transition={{ duration: 1 }}
-        style={{
-          fontSize: "clamp(13px, 1.6vw, 15px)",
-          letterSpacing: "0.4em",
-          textTransform: "uppercase",
-          color: "rgba(245,233,212,0.55)",
-          margin: "0 0 12px 0",
-          fontWeight: 400,
-        }}
-      >
-        Step Two
-      </motion.h2>
-      <motion.p
-        initial={{ opacity: 0 }}
-        whileInView={{ opacity: 1 }}
-        viewport={{ once: true, amount: 0.5 }}
-        transition={{ duration: 1.2, delay: 0.3 }}
-        style={{
-          fontSize: "clamp(20px, 3vw, 30px)",
-          fontStyle: "italic",
-          margin: "0 0 16px 0",
-          color: "rgba(245,233,212,0.92)",
-          fontWeight: 300,
-          maxWidth: 640,
-        }}
-      >
-        Tap the sky. Place a star wherever you want one.
-      </motion.p>
-      <motion.p
-        initial={{ opacity: 0 }}
-        whileInView={{ opacity: 1 }}
-        viewport={{ once: true, amount: 0.5 }}
-        transition={{ duration: 1.2, delay: 0.6 }}
-        style={{
-          fontSize: 13,
-          color: "rgba(245,233,212,0.45)",
-          letterSpacing: "0.15em",
-          textTransform: "uppercase",
-          margin: 0,
-        }}
-      >
-        {count === 0
-          ? "the canvas is yours"
-          : `${count} ${count === 1 ? "star" : "stars"} for ${NAME}`}
-      </motion.p>
-
-      <div
-        ref={canvasRef}
-        style={{
-          marginTop: 40,
-          width: "min(720px, 92vw)",
-          height: "min(420px, 60vh)",
-          borderRadius: 18,
-          border: "1px solid rgba(255,196,128,0.2)",
-          background:
-            "radial-gradient(ellipse at center, rgba(40,20,60,0.6) 0%, rgba(20,10,30,0.4) 70%)",
-          position: "relative",
-          overflow: "hidden",
-          boxShadow:
-            "inset 0 0 60px rgba(255,196,128,0.05), 0 20px 60px rgba(0,0,0,0.4)",
-        }}
-      />
-    </section>
-  );
-}
-
-/* ── 7. Finale ───────────────────────────────────────────────────────── */
+/* ── 6. Finale ───────────────────────────────────────────────────────── */
 function Finale() {
   const [burst, setBurst] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -1558,30 +1518,19 @@ function Finale() {
           display: "flex",
           flexDirection: "column",
           alignItems: "center",
-          gap: 8,
+          gap: 10,
         }}
       >
         <div style={{ width: 40, height: 1, background: "rgba(245,233,212,0.3)" }} />
         <div
           style={{
             fontSize: 13,
-            letterSpacing: "0.3em",
+            letterSpacing: "0.4em",
             textTransform: "uppercase",
-            color: "rgba(245,233,212,0.5)",
+            color: "rgba(245,233,212,0.55)",
           }}
         >
           with love
-        </div>
-        <div
-          style={{
-            fontSize: 22,
-            fontStyle: "italic",
-            color: "#ffd89b",
-            marginTop: 4,
-            fontFamily: "ui-serif, Georgia, serif",
-          }}
-        >
-          — {FROM}
         </div>
       </motion.div>
     </section>
