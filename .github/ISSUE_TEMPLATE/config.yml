@@ -1,0 +1,13 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Security vulnerability
+    url: mailto:security@spacefield.co
+    about: >-
+      Do NOT open a public issue for security problems. Email
+      security@spacefield.co — see SECURITY.md for our disclosure
+      policy and 72-hour acknowledgement target.
+  - name: Customer support
+    url: https://spacefield.co/help
+    about: >-
+      For product questions, billing, or account issues, please use the
+      in-app help center rather than opening a GitHub issue.
