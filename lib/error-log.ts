@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
+import { releaseInfo } from "@/lib/release-info";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import type { ErrorLevel } from "@/app/admin/_types";
@@ -59,6 +60,21 @@ export async function logError(input: LogErrorInput): Promise<void> {
         ? input.fingerprint.trim().slice(0, 64)
         : autoFingerprint(message, input.stack);
 
+    // Stamp release info onto every error so /admin/errors can show
+    // which deploy / region a crash came from without us having to add
+    // a column per dimension. `release` becomes a top-level key inside
+    // the existing JSONB `context` column.
+    const release = releaseInfo();
+    const mergedContext: Record<string, unknown> = {
+      ...(input.context ?? {}),
+      release: {
+        commit: release.commit,
+        region: release.region,
+        deployment_id: release.deployment_id,
+        env: release.env,
+      },
+    };
+
     const admin = createAdminClient();
     const { error } = await admin.from("error_events").insert({
       level: input.level ?? "error",
@@ -71,7 +87,7 @@ export async function logError(input: LogErrorInput): Promise<void> {
       url: input.url ?? null,
       user_agent: input.user_agent ?? null,
       stack: input.stack ?? null,
-      context: input.context ?? {},
+      context: mergedContext,
     });
     if (error) {
       // eslint-disable-next-line no-console
