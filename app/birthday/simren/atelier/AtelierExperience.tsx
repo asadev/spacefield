@@ -134,39 +134,48 @@ export default function AtelierExperience({ photos }: Props) {
 
       {/* ── 3D Canvas ──────────────────────────────────────────────── */}
       {!contextLost && (
-        <Canvas
-          shadows
-          dpr={[1, 1.5]}
-          gl={{
-            antialias: true,
-            powerPreference: "low-power",
-            alpha: true,
-          }}
-          onCreated={({ gl }) => {
-            gl.setClearColor(0x000000, 0); // transparent over CREAM div
-            gl.shadowMap.type = THREE.PCFSoftShadowMap;
-            const canvas = gl.domElement;
-            canvas.addEventListener("webglcontextlost", (e) => {
-              e.preventDefault();
-              setContextLost(true);
-            });
-          }}
+        <div
           style={{
             position: "absolute",
             inset: 0,
             zIndex: 1,
             touchAction: "none",
+            // Explicit width/height ensures r3f's ResizeObserver picks up
+            // viewport size on first mount instead of falling back to its
+            // 300x150 default. `inset:0` on a positioned ancestor isn't
+            // enough on its own for the auto-sizer.
+            width: "100%",
+            height: "100%",
           }}
         >
-          <Suspense fallback={null}>
-            <Scene
-              photos={photos}
-              liftedIndex={liftedIndex}
-              onLift={setLiftedIndex}
-              isMobile={isMobile}
-            />
-          </Suspense>
-        </Canvas>
+          <Canvas
+            shadows
+            dpr={[1, 1.5]}
+            gl={{
+              antialias: true,
+              powerPreference: "low-power",
+              alpha: true,
+            }}
+            onCreated={({ gl }) => {
+              gl.setClearColor(0x000000, 0); // transparent over CREAM div
+              gl.shadowMap.type = THREE.PCFSoftShadowMap;
+              const canvas = gl.domElement;
+              canvas.addEventListener("webglcontextlost", (e) => {
+                e.preventDefault();
+                setContextLost(true);
+              });
+            }}
+          >
+            <Suspense fallback={null}>
+              <Scene
+                photos={photos}
+                liftedIndex={liftedIndex}
+                onLift={setLiftedIndex}
+                isMobile={isMobile}
+              />
+            </Suspense>
+          </Canvas>
+        </div>
       )}
 
       {/* ── DOM overlay (title + chrome) ───────────────────────────── */}
