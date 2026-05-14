@@ -884,6 +884,16 @@ export default function SkylineExperience({ photos }: { photos: string[] }) {
           gl={{ powerPreference: "low-power", antialias: true }}
           camera={{ position: [0, 6, 90], fov: 45, near: 0.1, far: 800 }}
           style={{ width: "100%", height: "100%", display: "block" }}
+          onCreated={(state) => {
+            // Force r3f to reset to viewport size — its ResizeObserver
+            // can miss the initial mount on this Next/Turbopack build,
+            // leaving the renderer drawing into a 300x150 buffer.
+            const sync = () => {
+              state.setSize(window.innerWidth, window.innerHeight);
+            };
+            sync();
+            window.addEventListener("resize", sync);
+          }}
         >
           <SkylineScene
             buildings={buildings}
