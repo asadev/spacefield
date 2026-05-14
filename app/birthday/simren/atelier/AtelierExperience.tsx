@@ -157,7 +157,8 @@ export default function AtelierExperience({ photos }: Props) {
               alpha: true,
             }}
             style={{ width: "100%", height: "100%", display: "block" }}
-            onCreated={({ gl }) => {
+            onCreated={(state) => {
+              const { gl } = state;
               gl.setClearColor(0x000000, 0); // transparent over CREAM div
               gl.shadowMap.type = THREE.PCFSoftShadowMap;
               const canvas = gl.domElement;
@@ -165,6 +166,14 @@ export default function AtelierExperience({ photos }: Props) {
                 e.preventDefault();
                 setContextLost(true);
               });
+              // Force r3f to reset to viewport size — its ResizeObserver
+              // can miss the initial mount on this Next/Turbopack build,
+              // leaving the renderer drawing into a 300x150 buffer.
+              const sync = () => {
+                state.setSize(window.innerWidth, window.innerHeight);
+              };
+              sync();
+              window.addEventListener("resize", sync);
             }}
           >
             <Suspense fallback={null}>
