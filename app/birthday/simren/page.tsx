@@ -25,6 +25,22 @@ type Variant = {
 
 const VARIANTS: Variant[] = [
   {
+    slug: "city",
+    name: "City",
+    tagline: "A whole city, quietly preparing.",
+    mode: "dark",
+    accent: "linear-gradient(135deg, #1a1029, #3a2050, #ffb56b)",
+    live: true,
+  },
+  {
+    slug: "skyline",
+    name: "Skyline",
+    tagline: "Every window a wish, lit tonight.",
+    mode: "dark",
+    accent: "linear-gradient(135deg, #050a1a, #1a2a4a, #ffd89b)",
+    live: true,
+  },
+  {
     slug: "letter",
     name: "Letter",
     tagline: "A folded letter, sealed in wax.",
