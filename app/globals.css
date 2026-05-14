@@ -850,12 +850,17 @@ body {
  * keep paying compositor cost for CSS animations + filter blurs, which
  * is exactly the heat source on this app. Toggled via a <html
  * data-tab-hidden> attribute set by app/_components/TabVisibility.tsx
- * on first mount. */
+ * on first mount.
+ *
+ * NOTE: We deliberately do NOT also kill `transition` here — that
+ * would freeze framer-motion entrance animations whenever the tab
+ * was hidden during initial mount, leaving content stuck at opacity:0
+ * forever. Browsers already throttle running CSS transitions in
+ * hidden tabs, so the heat win from pausing them is negligible. */
 html[data-tab-hidden="1"] *,
 html[data-tab-hidden="1"] *::before,
 html[data-tab-hidden="1"] *::after {
   animation-play-state: paused !important;
-  transition: none !important;
 }
 
 /* ─── Brain float animation ─── */
