@@ -35,9 +35,23 @@ export default function BirthdayLayout({
 }) {
   const audioSrc = readFirstAudio();
   return (
-    <>
+    <div data-birthday-route>
+      {/* Spacefield's TabVisibility hack pauses all animations + kills
+       * transitions when the tab is in the background (heat-saving
+       * across the rest of the app). For these one-off birthday pages
+       * that breaks framer-motion entrance animations entirely — content
+       * gets stuck at opacity:0 if the tab was ever backgrounded during
+       * load. Override the rule for this subtree only. */}
+      <style>{`
+        html[data-tab-hidden="1"] [data-birthday-route] *,
+        html[data-tab-hidden="1"] [data-birthday-route] *::before,
+        html[data-tab-hidden="1"] [data-birthday-route] *::after {
+          transition: revert !important;
+          animation-play-state: running !important;
+        }
+      `}</style>
       <AutoMusic src={audioSrc} />
       {children}
-    </>
+    </div>
   );
 }

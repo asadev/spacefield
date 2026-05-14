@@ -25,7 +25,7 @@ const WISHES = [
   "That you keep the friends who tell you the truth and lose the ones who flinch from it.",
   "That mornings stay yours, and nights stay easy.",
   "That whatever you are building this year quietly arrives.",
-  "That twenty-three feels less like a number and more like a doorway you walked through on purpose.",
+  "That this year feels less like a number and more like a doorway you walked through on purpose.",
 ];
 
 const ROMAN = ["I", "II", "III", "IV", "V", "VI", "VII"];
@@ -98,8 +98,8 @@ export default function MagazineExperience({ photos }: { photos: string[] }) {
           <span>WHO CARRY IT</span>
         </div>
         <div className="coverline coverline-br">
-          <span>TWENTY-THREE:</span>
           <span>A FIELD GUIDE</span>
+          <span>TO BEING YOU</span>
         </div>
 
         {/* Cover title */}
@@ -117,7 +117,7 @@ export default function MagazineExperience({ photos }: { photos: string[] }) {
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.6, delay: 0.4 }}
         >
-          A COVER STORY &nbsp;·&nbsp; FOR HER TWENTY-THIRD &nbsp;·&nbsp; PLATES I–V, ONE CENTERFOLD,
+          A COVER STORY &nbsp;·&nbsp; PLATES I–V &nbsp;·&nbsp; ONE CENTERFOLD,
           <br />
           AND SEVEN WISHES SET IN ITALIC
         </motion.p>
@@ -239,14 +239,14 @@ export default function MagazineExperience({ photos }: { photos: string[] }) {
             <i className="rule-accent" />
           </div>
           <h2 className="spread-headline">
-            Twenty-three candles,
+            One cake,
             <br />
             <i>one wish.</i>
           </h2>
           <p className="center-blurb">
             Illustrated for this issue. Two tiers, cream icing, a single ribbon of accent across the upper
-            band. Twenty-three candles — one for each year so far — and a twenty-fourth, unlit, set aside
-            for whatever you decide the year ought to be.
+            band. Candles enough to count if you want to, and one more, unlit, set aside for whatever you
+            decide the year ought to be.
           </p>
         </div>
 
@@ -319,7 +319,7 @@ export default function MagazineExperience({ photos }: { photos: string[] }) {
           <p>
             <span className="dropcap">A</span>
             nd that, for now, is the issue. May the year be generous. May the room keep turning a few
-            degrees toward you. May twenty-three be the doorway, not the room. Happy birthday, Simren —
+            degrees toward you. May this year be the doorway, not the room. Happy birthday, Simren —
             <span className="fin">&nbsp;FIN</span>
           </p>
         </div>
@@ -360,7 +360,7 @@ function CakeIllustration() {
       viewBox="0 0 360 440"
       className="cake-svg"
       role="img"
-      aria-label="Illustrated two-tier birthday cake with twenty-three candles"
+      aria-label="Illustrated two-tier birthday cake with candles"
     >
       {/* Banner ribbon */}
       <g>

@@ -9,7 +9,7 @@ import Link from "next/link";
  */
 
 export const metadata: Metadata = {
-  title: "Happy Birthday, Simren",
+  title: { absolute: "Happy Birthday, Simren" },
   description: "Pick a feeling.",
   robots: { index: false, follow: false },
 };

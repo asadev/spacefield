@@ -47,7 +47,7 @@ const PARAGRAPHS = [
   "When the year was hard, you did not become smaller. You did the unglamorous work of staying yourself — answering messages you did not feel like answering, showing up to rooms that asked too much of you, being kind to people who had not yet earned it. That is a quieter kind of brave.",
   "So this is what I want for you, this year: a little more selfishness, a little more trouble, a little more of the thing you keep almost ordering and then don't. Take the longer route home. Buy the absurd flowers. Reply later than is strictly polite.",
   "The pictures tucked behind the page are evidence, not decoration. Proof that you have been collected — by people, by places, by ordinary afternoons that turned out to matter more than they advertised. Pull them out if you forget.",
-  "Twenty-six is not a number, it is a doorway. Walk through it slowly. Look around. The room is yours.",
+  "This year is not a number, it is a doorway. Walk through it slowly. Look around. The room is yours.",
 ];
 const SIGNOFF = "Yours, always —";
 const PS = "P.S. read this again whenever you forget.";
