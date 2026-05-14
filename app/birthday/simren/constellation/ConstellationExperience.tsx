@@ -321,7 +321,7 @@ function HeroTitle({ reduce }: { reduce: boolean }) {
 
   return (
     <motion.div
-      initial={reduce ? false : { opacity: 0 }}
+      initial={false}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.4, delay: 0.0 }}
       style={{
@@ -334,7 +334,7 @@ function HeroTitle({ reduce }: { reduce: boolean }) {
       }}
     >
       <motion.div
-        initial={reduce ? false : { opacity: 0, y: 8 }}
+        initial={false}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.6, delay: 0.4, ease }}
       >
@@ -352,7 +352,7 @@ function HeroTitle({ reduce }: { reduce: boolean }) {
       </motion.div>
 
       <motion.h1
-        initial={reduce ? false : { opacity: 0, letterSpacing: "0.32em" }}
+        initial={false}
         animate={{ opacity: 1, letterSpacing: "0.18em" }}
         transition={{ duration: 0.7, delay: 0.55, ease }}
         style={{
@@ -367,7 +367,7 @@ function HeroTitle({ reduce }: { reduce: boolean }) {
       </motion.h1>
 
       <motion.div
-        initial={reduce ? false : { opacity: 0, letterSpacing: "0.34em" }}
+        initial={false}
         animate={{ opacity: 1, letterSpacing: "0.2em" }}
         transition={{ duration: 0.7, delay: 0.63, ease }}
         style={{
@@ -382,7 +382,7 @@ function HeroTitle({ reduce }: { reduce: boolean }) {
       </motion.div>
 
       <motion.div
-        initial={reduce ? false : { opacity: 0, y: 6 }}
+        initial={false}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.7, delay: 0.71, ease }}
         style={{
@@ -396,7 +396,7 @@ function HeroTitle({ reduce }: { reduce: boolean }) {
       </motion.div>
 
       <motion.div
-        initial={reduce ? false : { opacity: 0 }}
+        initial={false}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.6, delay: 0.85 }}
         style={{ marginTop: 22 }}
@@ -463,7 +463,7 @@ function ChartCanvas({
           aspectRatio: `${VB_W} / ${VB_H}`,
           maxWidth: 920,
         }}
-        initial={reduce ? false : { opacity: 0 }}
+        initial={false}
         animate={{ opacity: 1 }}
         transition={{ duration: 0.4, delay: 0 }}
       >
@@ -513,7 +513,7 @@ function ChartCanvas({
             fill="none"
             stroke={GOLD}
             strokeWidth={1.2}
-            initial={reduce ? false : { pathLength: 0, opacity: 0 }}
+            initial={false}
             animate={{ pathLength: 1, opacity: 1 }}
             transition={{ duration: 0.8, delay: 0.15, ease }}
           />
@@ -526,7 +526,7 @@ function ChartCanvas({
             fill="none"
             stroke={HAIR_FAINT}
             strokeWidth={0.6}
-            initial={reduce ? false : { opacity: 0 }}
+            initial={false}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6, delay: 0.45 }}
           />
@@ -560,7 +560,7 @@ function ChartCanvas({
             strokeWidth={0.5}
             fill="none"
             strokeDasharray="2 5"
-            initial={reduce ? false : { opacity: 0 }}
+            initial={false}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.4, delay: 2.2 }}
           >
@@ -571,7 +571,7 @@ function ChartCanvas({
 
           {/* Compass rose */}
           <motion.g
-            initial={reduce ? false : { opacity: 0 }}
+            initial={false}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.4, delay: 2.2 }}
           >
@@ -602,7 +602,7 @@ function ChartCanvas({
                 stroke={HAIR}
                 strokeWidth={0.7}
                 strokeLinecap="round"
-                initial={reduce ? false : { pathLength: 0, opacity: 0 }}
+                initial={false}
                 animate={{ pathLength: 1, opacity: 1 }}
                 transition={{ duration: 0.9, delay: 1.5 + i * 0.08, ease }}
               />
@@ -616,7 +616,7 @@ function ChartCanvas({
 
           {/* Cake marginalia (in-chart) */}
           <motion.g
-            initial={reduce ? false : { opacity: 0 }}
+            initial={false}
             animate={{ opacity: 1 }}
             transition={{ duration: 0.5, delay: 2.0 }}
           >
@@ -711,7 +711,7 @@ function BodyFrame({ body, reduce, delay }: { body: Body; reduce: boolean; delay
 
   return (
     <motion.g
-      initial={reduce ? false : { opacity: 0, scale: 0.92 }}
+      initial={false}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ duration: 0.5, delay, ease }}
       style={{ transformOrigin: `${body.cx}px ${body.cy}px`, transformBox: "fill-box" }}
@@ -774,7 +774,7 @@ function PhotoBody({
 
   return (
     <motion.div
-      initial={reduce ? false : { opacity: 0 }}
+      initial={false}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.4, delay }}
       style={{
@@ -922,7 +922,7 @@ function Section({
 function WishCard({ wish, reduce }: { wish: Wish; reduce: boolean }) {
   return (
     <motion.div
-      initial={reduce ? false : { opacity: 0, y: 12 }}
+      initial={false}
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, amount: 0.3 }}
       transition={{ duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
