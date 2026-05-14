@@ -883,6 +883,7 @@ export default function SkylineExperience({ photos }: { photos: string[] }) {
           dpr={[1, 1.5]}
           gl={{ powerPreference: "low-power", antialias: true }}
           camera={{ position: [0, 6, 90], fov: 45, near: 0.1, far: 800 }}
+          style={{ width: "100%", height: "100%", display: "block" }}
         >
           <SkylineScene
             buildings={buildings}

@@ -156,6 +156,7 @@ export default function AtelierExperience({ photos }: Props) {
               powerPreference: "low-power",
               alpha: true,
             }}
+            style={{ width: "100%", height: "100%", display: "block" }}
             onCreated={({ gl }) => {
               gl.setClearColor(0x000000, 0); // transparent over CREAM div
               gl.shadowMap.type = THREE.PCFSoftShadowMap;
