@@ -1,7 +1,8 @@
 "use client";
 
-// NotificationBell — polls /api/notifications every 60s, shows unread badge,
-// dropdown with last 10. Graceful when signed out (just renders nothing).
+// NotificationBell — polls /api/notifications every 30s, shows unread badge,
+// dropdown with last 5 unread. Graceful when signed out (just renders nothing).
+// "View all" jumps to the full /inbox page.
 
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
@@ -25,7 +26,12 @@ export default function NotificationBell() {
 
   async function fetchItems() {
     try {
-      const res = await fetch("/api/notifications", { cache: "no-store" });
+      // Prefer the unread-only preview so the dropdown shows what's
+      // actually demanding attention. We still show the total unread
+      // count via the same endpoint's `unread` field.
+      const res = await fetch("/api/notifications?unread=1&limit=5", {
+        cache: "no-store",
+      });
       if (res.status === 401) {
         setAuthed(false);
         return;
@@ -41,7 +47,7 @@ export default function NotificationBell() {
 
   useEffect(() => {
     fetchItems();
-    const id = setInterval(fetchItems, 60_000);
+    const id = setInterval(fetchItems, 30_000);
     return () => clearInterval(id);
   }, []);
 
@@ -124,7 +130,13 @@ export default function NotificationBell() {
               ))
             )}
           </div>
-          <div className="border-t border-app px-3 py-2 text-right">
+          <div className="flex items-center justify-between border-t border-app px-3 py-2">
+            <Link
+              href="/inbox"
+              className="text-[0.6rem] uppercase tracking-[0.15em] text-muted hover:text-app"
+            >
+              View all
+            </Link>
             <Link
               href="/dashboard/alerts"
               className="text-[0.6rem] uppercase tracking-[0.15em] text-muted hover:text-app"
