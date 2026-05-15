@@ -52,6 +52,8 @@ interface BannerCacheEntry {
 
 const cache = new Map<string, BannerCacheEntry>();
 
+let warnedMissingEnv = false;
+
 function cacheKey(uid?: string, tier?: string): string {
   return `${uid ?? "__anon__"}|${tier ?? "__none__"}`;
 }
@@ -73,11 +75,23 @@ export async function getActiveBanners(
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  // SC-001 — no anon-key fallback. The `active_banners` RPC requires
+  // service-role to bypass RLS; falling back to anon used to silently
+  // return [] and made misconfigured deploys look like "no banners
+  // configured." Warn once (per worker) and degrade to no-banner.
   const serviceKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_SERVICE_ROLE ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !serviceKey) return [];
+    process.env.SUPABASE_SERVICE_ROLE;
+  if (!url || !serviceKey) {
+    if (!warnedMissingEnv) {
+      warnedMissingEnv = true;
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[runtime-banner] missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY — no banners will render",
+      );
+    }
+    return [];
+  }
 
   let rows: SiteBannerRow[] = [];
   try {

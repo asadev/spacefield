@@ -77,8 +77,11 @@ export default function GlobalError({ error, reset }: Props) {
               marginBottom: "1rem",
             }}
           >
-            {error.message ||
-              "Space Field hit an unexpected error before the page could render. Try reloading."}
+            {/* SC-004 — never render error.message to end users. The
+             * full error is in server logs; the user sees only the
+             * opaque digest below. */}
+            Space Field hit an unexpected error before the page could
+            render. Try reloading.
           </p>
           {error.digest && (
             <p

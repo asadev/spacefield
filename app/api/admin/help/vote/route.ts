@@ -99,11 +99,15 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    // SC-010 — `Secure` so the dedupe cookie isn't sent over plain
+    // HTTP; in dev the cookie just won't transmit, which is fine
+    // (localStorage still de-dupes client-side).
     cookieStore.set(cookieKey, valueRaw, {
       path: "/",
       maxAge: 60 * 60 * 24 * 365,
       httpOnly: false,
       sameSite: "lax",
+      secure: true,
     });
   } catch {
     // Ignore — the client-side localStorage guard still de-dupes.

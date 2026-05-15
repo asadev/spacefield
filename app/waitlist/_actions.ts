@@ -26,12 +26,20 @@ export async function joinWaitlist(formData: FormData) {
   const ipRaw = fwd.split(",")[0]?.trim() || null;
   const ipHash = ipRaw ? await sha256(ipRaw) : null;
 
+  // SC-007 — Vercel log lines used to contain the raw signup email,
+  // which made every "tail logs" session a PII spill waiting to
+  // happen (visible to anyone with deploy access, never expires).
+  // Hash with sha256 and keep the first 8 hex chars — enough to
+  // dedupe/correlate two log lines about the same submitter without
+  // recovering the address.
+  const emailTag = await emailLogTag(email);
+
   if (!url || !anon) {
     // Worst case: env not wired. Still log so Asad doesn't lose the lead.
     console.log(
       JSON.stringify({
         evt: "waitlist.signup.fallback",
-        email,
+        email_hash: emailTag,
         role,
         ua,
         ipHash,
@@ -65,23 +73,36 @@ export async function joinWaitlist(formData: FormData) {
           evt: "waitlist.signup.rpc_failed",
           status: res.status,
           body: body.slice(0, 500),
-          email,
+          email_hash: emailTag,
         }),
       );
     } else {
-      console.log(JSON.stringify({ evt: "waitlist.signup.ok", email }));
+      console.log(
+        JSON.stringify({ evt: "waitlist.signup.ok", email_hash: emailTag }),
+      );
     }
   } catch (err) {
     console.log(
       JSON.stringify({
         evt: "waitlist.signup.error",
         error: err instanceof Error ? err.message : String(err),
-        email,
+        email_hash: emailTag,
       }),
     );
   }
 
   redirect("/waitlist?ok=1");
+}
+
+/** SC-007 — sha256(email).slice(0,8) so log lines can correlate
+ * without storing the address. Lowercase first so case-only variants
+ * collide. */
+async function emailLogTag(email: string): Promise<string> {
+  try {
+    return (await sha256(email.toLowerCase())).slice(0, 8);
+  } catch {
+    return "unhashed";
+  }
 }
 
 async function sha256(s: string): Promise<string> {
