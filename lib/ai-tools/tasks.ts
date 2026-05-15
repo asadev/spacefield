@@ -1,35 +1,26 @@
-import "server-only";
-
-import { createClient } from "@/lib/supabase/server";
-import {
-  adminListTasks,
-  getTaskById,
-  listTasks,
-} from "@/lib/tasks/server";
-import type { TaskFilter, TaskRow } from "@/lib/tasks/types";
-
-/**
- * AI tools for the Tasks module.
+/* AI tools — tasks + projects.
  *
- * Each tool runs server-side with the caller's auth context. The
- * runtime calls the handler with `{ userId, workspaceId }` resolved
- * from the session. RLS does the heavy lifting; the handlers here only
- * shape input and trim output to be LLM-friendly.
+ * Surfaces the Tasks module to the agent runtime as a SkillDefinition.
+ * Mirrors the shape of `lib/agent/skills/*` so it can drop into
+ * ALL_SKILLS without any adapter:
+ *
+ *   import { tasksSkill } from "@/lib/ai-tools/tasks";
+ *   ALL_SKILLS.push(tasksSkill);
+ *
+ * All tool implementations use `ctx.supabase` (RLS-scoped) so the same
+ * workspace-member + tier checks the rest of the app relies on apply
+ * here too. The `task_complete` RPC is used for status=Done so
+ * notifications + activity fan-out match the manual UI path.
  */
 
-export interface AITool {
-  name: string;
-  description: string;
-  input_schema: {
-    type: "object";
-    properties: Record<string, unknown>;
-    required?: string[];
-  };
-  handler: (
-    input: Record<string, unknown>,
-    ctx: { userId: string; workspaceId: string }
-  ) => Promise<unknown>;
-}
+import "server-only";
+
+import { clampList, toolError, toolOk } from "@/lib/agent/skills/_helpers";
+import type {
+  SkillDefinition,
+  ToolDefinition,
+} from "@/lib/agent/runtime/types";
+import type { TaskRow } from "@/lib/tasks/types";
 
 /* ──────────────────── helpers ──────────────────── */
 
@@ -54,12 +45,15 @@ function projectionLite(t: TaskRow) {
   };
 }
 
+const TASK_SELECT =
+  "id, workspace_id, project_id, parent_task_id, title, description, status, priority, assignee_ids, due_at, start_at, completed_at, estimate_min, actual_min, custom, created_by, archived_at, deleted_at, created_at, updated_at";
+
 /* ──────────────────── tools ──────────────────── */
 
-const listTool: AITool = {
+const list_tasks: ToolDefinition = {
   name: "list_tasks",
   description:
-    "List up to 20 tasks in the current workspace. Optional filters: status, assignee ('me' or a user id), project (project id), due_before (ISO timestamp).",
+    "List up to 20 tasks in the current workspace. Optional filters: status, assignee ('me' or a user id), project (project id), due_before (ISO timestamp), priority, open_only.",
   input_schema: {
     type: "object",
     properties: {
@@ -73,30 +67,54 @@ const listTool: AITool = {
           priority: { type: "string" },
           open_only: { type: "boolean" },
         },
+        additionalProperties: false,
       },
     },
+    additionalProperties: false,
   },
-  handler: async (input, ctx) => {
-    const f = (input.filter ?? {}) as Record<string, unknown>;
-    const filter: TaskFilter = {
-      workspace_id: ctx.workspaceId,
-      status: asString(f.status),
-      assignee: asString(f.assignee),
-      project: asString(f.project),
-      due_before: asString(f.due_before),
-      priority: asString(f.priority) as TaskFilter["priority"],
-      open_only: Boolean(f.open_only),
-      limit: 20,
-    };
-    const rows = await listTasks(filter, ctx.userId);
-    return { tasks: rows.map(projectionLite) };
+  read_only: true,
+  execute: async (input, ctx) => {
+    const f = ((input as { filter?: Record<string, unknown> })?.filter ?? {}) as Record<
+      string,
+      unknown
+    >;
+    let q = ctx.supabase
+      .from("tasks")
+      .select(TASK_SELECT)
+      .eq("workspace_id", ctx.workspaceId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(20);
+
+    const status = asString(f.status);
+    const project = asString(f.project);
+    const priority = asString(f.priority);
+    const due_before = asString(f.due_before);
+    const assignee = asString(f.assignee);
+    const openOnly = Boolean(f.open_only);
+
+    if (status) q = q.eq("status", status);
+    if (project) q = q.eq("project_id", project);
+    if (priority) q = q.eq("priority", priority);
+    if (due_before) q = q.lte("due_at", due_before);
+    if (openOnly) q = q.is("completed_at", null);
+    if (assignee) {
+      const uid = assignee === "me" ? ctx.userId : assignee;
+      if (uid) q = q.contains("assignee_ids", [uid]);
+    }
+
+    const { data, error } = await q;
+    if (error) return toolError(error.message);
+    return toolOk({
+      tasks: clampList((data ?? []) as TaskRow[], 20).map(projectionLite),
+    });
   },
 };
 
-const createTool: AITool = {
+const create_task: ToolDefinition = {
   name: "create_task",
   description:
-    "Create a new task in the current workspace. Requires title; description, project_id, assignee_ids, due_at (ISO), priority (urgent|high|normal|low) are optional.",
+    "Create a new task in the current workspace. Requires title; description, project_id, assignee_ids, due_at (ISO), priority (urgent|high|normal|low), status are optional.",
   input_schema: {
     type: "object",
     properties: {
@@ -109,38 +127,40 @@ const createTool: AITool = {
       status: { type: "string" },
     },
     required: ["title"],
+    additionalProperties: false,
   },
-  handler: async (input, ctx) => {
-    const title = asString(input.title);
-    if (!title) throw new Error("title is required");
-    const supabase = await createClient();
+  read_only: false,
+  execute: async (input, ctx) => {
+    const i = (input ?? {}) as Record<string, unknown>;
+    const title = asString(i.title);
+    if (!title) return toolError("title is required");
     const insertPayload = {
       workspace_id: ctx.workspaceId,
       title,
-      description: asString(input.description) ?? null,
-      project_id: asString(input.project_id) ?? null,
-      assignee_ids: asStringArray(input.assignee_ids) ?? [],
-      due_at: asString(input.due_at) ?? null,
-      priority: (asString(input.priority) as TaskRow["priority"]) ?? "normal",
-      status: asString(input.status) ?? "Todo",
+      description: asString(i.description) ?? null,
+      project_id: asString(i.project_id) ?? null,
+      assignee_ids: asStringArray(i.assignee_ids) ?? [],
+      due_at: asString(i.due_at) ?? null,
+      priority: (asString(i.priority) as TaskRow["priority"]) ?? "normal",
+      status: asString(i.status) ?? "Todo",
       created_by: ctx.userId,
     };
-    const { data, error } = await supabase
+    const { data, error } = await ctx.supabase
       .from("tasks")
       .insert(insertPayload)
       .select(
         "id, workspace_id, project_id, title, status, priority, assignee_ids, due_at"
       )
       .single();
-    if (error) throw new Error(error.message);
-    return { task: data };
+    if (error) return toolError(error.message);
+    return toolOk({ task: data });
   },
 };
 
-const updateStatusTool: AITool = {
+const update_task_status: ToolDefinition = {
   name: "update_task_status",
   description:
-    "Move a task to a new status. If status is 'Done', invokes task_complete (which also notifies assignees and emits activity).",
+    "Move a task to a new status. If status is 'Done', invokes the task_complete RPC (which also notifies assignees and emits activity).",
   input_schema: {
     type: "object",
     properties: {
@@ -148,34 +168,38 @@ const updateStatusTool: AITool = {
       status: { type: "string" },
     },
     required: ["task_id", "status"],
+    additionalProperties: false,
   },
-  handler: async (input) => {
-    const taskId = asString(input.task_id);
-    const status = asString(input.status);
-    if (!taskId || !status) throw new Error("task_id and status required");
-    const supabase = await createClient();
+  read_only: false,
+  execute: async (input, ctx) => {
+    const i = (input ?? {}) as Record<string, unknown>;
+    const taskId = asString(i.task_id);
+    const status = asString(i.status);
+    if (!taskId || !status) {
+      return toolError("task_id and status required");
+    }
     if (status === "Done") {
-      const { data, error } = await supabase.rpc("task_complete", {
+      const { data, error } = await ctx.supabase.rpc("task_complete", {
         p_task_id: taskId,
       });
-      if (error) throw new Error(error.message);
-      return { task_id: data ?? taskId, status: "Done" };
+      if (error) return toolError(error.message);
+      return toolOk({ task_id: (data as string) ?? taskId, status: "Done" });
     }
-    const { data, error } = await supabase
+    const { data, error } = await ctx.supabase
       .from("tasks")
       .update({ status, completed_at: null })
       .eq("id", taskId)
       .select("id, status")
       .single();
-    if (error) throw new Error(error.message);
-    return { task: data };
+    if (error) return toolError(error.message);
+    return toolOk({ task: data });
   },
 };
 
-const searchTool: AITool = {
+const search_tasks: ToolDefinition = {
   name: "search_tasks",
   description:
-    "Search tasks by free-text query against title and description in the current workspace. Returns up to `limit` rows (default 20).",
+    "Search tasks by free-text query against title and description in the current workspace. Returns up to `limit` rows (default 20, max 50).",
   input_schema: {
     type: "object",
     properties: {
@@ -183,23 +207,37 @@ const searchTool: AITool = {
       limit: { type: "number" },
     },
     required: ["query"],
+    additionalProperties: false,
   },
-  handler: async (input, ctx) => {
-    const query = asString(input.query);
-    if (!query) throw new Error("query is required");
+  read_only: true,
+  execute: async (input, ctx) => {
+    const i = (input ?? {}) as Record<string, unknown>;
+    const query = asString(i.query);
+    if (!query) return toolError("query is required");
     const limit =
-      typeof input.limit === "number"
-        ? Math.min(Math.max(input.limit, 1), 50)
+      typeof i.limit === "number"
+        ? Math.min(Math.max(i.limit, 1), 50)
         : 20;
-    const rows = await listTasks(
-      { workspace_id: ctx.workspaceId, search: query, limit },
-      ctx.userId
-    );
-    return { tasks: rows.map(projectionLite) };
+    const term = query.replace(/[,()]/g, " ").trim();
+    let q = ctx.supabase
+      .from("tasks")
+      .select(TASK_SELECT)
+      .eq("workspace_id", ctx.workspaceId)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+      .limit(limit);
+    if (term) {
+      q = q.or(`title.ilike.%${term}%,description.ilike.%${term}%`);
+    }
+    const { data, error } = await q;
+    if (error) return toolError(error.message);
+    return toolOk({
+      tasks: clampList((data ?? []) as TaskRow[], limit).map(projectionLite),
+    });
   },
 };
 
-const summarizeTool: AITool = {
+const summarize_task: ToolDefinition = {
   name: "summarize_task",
   description:
     "Return a structured summary of a task — its fields, comments, and recent activity — formatted for use as LLM context.",
@@ -209,16 +247,26 @@ const summarizeTool: AITool = {
       task_id: { type: "string" },
     },
     required: ["task_id"],
+    additionalProperties: false,
   },
-  handler: async (input) => {
-    const taskId = asString(input.task_id);
-    if (!taskId) throw new Error("task_id is required");
-    const task = await getTaskById(taskId);
-    if (!task) throw new Error("task not found");
+  read_only: true,
+  execute: async (input, ctx) => {
+    const i = (input ?? {}) as Record<string, unknown>;
+    const taskId = asString(i.task_id);
+    if (!taskId) return toolError("task_id is required");
 
-    const supabase = await createClient();
+    const taskRes = await ctx.supabase
+      .from("tasks")
+      .select(TASK_SELECT)
+      .eq("id", taskId)
+      .is("deleted_at", null)
+      .maybeSingle();
+    if (taskRes.error) return toolError(taskRes.error.message);
+    const task = taskRes.data as TaskRow | null;
+    if (!task) return toolError("task not found");
+
     const [commentsRes, activitiesRes] = await Promise.all([
-      supabase
+      ctx.supabase
         .from("comments")
         .select("id, author_user_id, body, created_at, edited_at")
         .eq("entity_type", "task")
@@ -226,7 +274,7 @@ const summarizeTool: AITool = {
         .is("deleted_at", null)
         .order("created_at", { ascending: true })
         .limit(100),
-      supabase
+      ctx.supabase
         .from("activities")
         .select("id, actor_user_id, verb, payload, created_at")
         .eq("entity_type", "task")
@@ -235,7 +283,10 @@ const summarizeTool: AITool = {
         .limit(50),
     ]);
 
-    return {
+    if (commentsRes.error) return toolError(commentsRes.error.message);
+    if (activitiesRes.error) return toolError(activitiesRes.error.message);
+
+    return toolOk({
       task: {
         id: task.id,
         title: task.title,
@@ -250,31 +301,24 @@ const summarizeTool: AITool = {
       },
       comments: commentsRes.data ?? [],
       activity: activitiesRes.data ?? [],
-    };
+    });
   },
 };
 
-/* ──────────────────── admin helper (server-only consumption) ────── */
+export const tasksSkill: SkillDefinition = {
+  id: "tasks",
+  label: "Tasks & Projects",
+  description:
+    "List, create, update, search, and summarise tasks in the current workspace; status changes that complete a task fan out notifications and activity.",
+  systemFragment:
+    "Tasks are workspace-scoped. Use list_tasks with filters (status, assignee='me', project, priority, due_before, open_only) to answer 'what's on my plate'. Use create_task to add a task — only title is required; priority defaults to 'normal', status to 'Todo'. Use update_task_status to move a task; status='Done' triggers completion fan-out. Use search_tasks for free-text. Use summarize_task to fetch a task + its comments + recent activity for context.",
+  tools: [
+    list_tasks,
+    create_task,
+    update_task_status,
+    search_tasks,
+    summarize_task,
+  ],
+};
 
-/**
- * Convenience for the admin sweep view: an LLM can ask for any tasks
- * matching a workspace filter regardless of membership.
- */
-export async function adminSweep(opts: {
-  workspaceId?: string;
-  search?: string;
-  limit?: number;
-}) {
-  const rows = await adminListTasks(opts);
-  return { tasks: rows.map(projectionLite) };
-}
-
-export const TOOLS: AITool[] = [
-  listTool,
-  createTool,
-  updateStatusTool,
-  searchTool,
-  summarizeTool,
-];
-
-export default TOOLS;
+export default tasksSkill;

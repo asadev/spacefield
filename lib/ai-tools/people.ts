@@ -1,21 +1,25 @@
-/**
- * AI tools for the People (HR) module.
+/* AI tools — people (HR module).
  *
- * Surface shape mirrors `lib/agent/skills/*` (the existing in-repo
- * convention): each tool has a stable name, JSON-schema input, a
- * `read_only` flag, and an `execute` that takes the unknown input plus a
- * minimal user-context bag. The context object is intentionally a
- * subset of `UserContext` from the agent runtime so tasks/agents can
- * adopt this without us depending on the full runtime export.
+ * Surfaces the People module to the agent runtime as a SkillDefinition.
+ * Mirrors the shape of `lib/agent/skills/*` so it can drop into
+ * ALL_SKILLS without any adapter:
  *
- * The agent registry can import these tools and expose them under the
- * existing skill registration pattern, but they remain callable
- * stand-alone from a thin adapter.
+ *   import { peopleSkill } from "@/lib/ai-tools/people";
+ *   ALL_SKILLS.push(peopleSkill);
+ *
+ * All tool implementations use `ctx.supabase` (RLS-scoped). Dispatch is
+ * handled by the runtime's `executeToolGuarded`; there is no per-skill
+ * dispatcher here.
  */
 
-import { createClient } from "@/lib/supabase/server";
+import "server-only";
 
+import { clampList, toolError, toolOk } from "@/lib/agent/skills/_helpers";
 import { docExpiryBucket } from "@/lib/people/server";
+import type {
+  SkillDefinition,
+  ToolDefinition,
+} from "@/lib/agent/runtime/types";
 import type {
   Employee,
   EmployeeDocument,
@@ -23,40 +27,9 @@ import type {
   TimeOffBalance,
 } from "@/lib/people/types";
 
-// ─────────────────────── Tool result + context shapes ───────────────────────
+/* ──────────────────── tools ──────────────────── */
 
-export type PeopleToolResult = { ok: true; data?: unknown } | { ok: false; error: string };
-
-export interface PeopleToolContext {
-  /** Workspace the call is scoped to. */
-  workspaceId: string;
-  /** Calling user's id, when present. */
-  userId?: string | null;
-}
-
-export interface PeopleTool {
-  name: string;
-  description: string;
-  input_schema: Record<string, unknown>;
-  read_only: boolean;
-  execute(input: unknown, ctx: PeopleToolContext): Promise<PeopleToolResult>;
-}
-
-function ok(data: unknown): PeopleToolResult {
-  return { ok: true, data };
-}
-
-function err(message: string): PeopleToolResult {
-  return { ok: false, error: message };
-}
-
-function clamp<T>(rows: T[], limit = 50): T[] {
-  return rows.slice(0, limit);
-}
-
-// ─────────────────────── search_employees ───────────────────────
-
-const search_employees: PeopleTool = {
+const search_employees: ToolDefinition = {
   name: "search_employees",
   description:
     "Search employees in the active workspace by name/title/email/department, with optional status + manager filters.",
@@ -66,7 +39,10 @@ const search_employees: PeopleTool = {
       query: { type: "string", description: "Free-text substring match" },
       department: { type: "string" },
       status: { type: "string", enum: ["active", "on_leave", "terminated"] },
-      manager_id: { type: "string", description: "Limit to direct reports of this employee id" },
+      manager_id: {
+        type: "string",
+        description: "Limit to direct reports of this employee id",
+      },
       limit: { type: "number", description: "Default 25, max 100" },
     },
     additionalProperties: false,
@@ -80,8 +56,7 @@ const search_employees: PeopleTool = {
       manager_id?: string;
       limit?: number;
     };
-    const supabase = await createClient();
-    let q = supabase
+    let q = ctx.supabase
       .from("employees")
       .select(
         "id, full_name, email, job_title, department, manager_id, location, employment_type, status, hire_date"
@@ -99,14 +74,12 @@ const search_employees: PeopleTool = {
       );
     }
     const { data, error } = await q;
-    if (error) return err(error.message);
-    return ok(clamp((data ?? []) as Employee[], 100));
+    if (error) return toolError(error.message);
+    return toolOk(clampList((data ?? []) as Employee[], 100));
   },
 };
 
-// ─────────────────────── get_timeoff_balance ───────────────────────
-
-const get_timeoff_balance: PeopleTool = {
+const get_timeoff_balance: ToolDefinition = {
   name: "get_timeoff_balance",
   description:
     "Get an employee's time-off balances. Pass employee_id; optionally restrict to one policy_id.",
@@ -122,23 +95,22 @@ const get_timeoff_balance: PeopleTool = {
   read_only: true,
   execute: async (input, ctx) => {
     const i = input as { employee_id: string; policy_id?: string };
-    if (!i.employee_id) return err("employee_id required");
-    const supabase = await createClient();
-    let q = supabase
+    if (!i.employee_id) return toolError("employee_id required");
+    let q = ctx.supabase
       .from("time_off_balances")
-      .select("*, policy:time_off_policies(id, name, kind, accrual_per_year_days, cap)")
+      .select(
+        "*, policy:time_off_policies(id, name, kind, accrual_per_year_days, cap)"
+      )
       .eq("workspace_id", ctx.workspaceId)
       .eq("employee_id", i.employee_id);
     if (i.policy_id) q = q.eq("policy_id", i.policy_id);
     const { data, error } = await q;
-    if (error) return err(error.message);
-    return ok((data ?? []) as TimeOffBalance[]);
+    if (error) return toolError(error.message);
+    return toolOk((data ?? []) as TimeOffBalance[]);
   },
 };
 
-// ─────────────────────── request_timeoff ───────────────────────
-
-const request_timeoff: PeopleTool = {
+const request_timeoff: ToolDefinition = {
   name: "request_timeoff",
   description:
     "Submit a time-off request for the calling user against a policy. Dates are inclusive (YYYY-MM-DD).",
@@ -154,7 +126,7 @@ const request_timeoff: PeopleTool = {
     additionalProperties: false,
   },
   read_only: false,
-  execute: async (input) => {
+  execute: async (input, ctx) => {
     const i = input as {
       policy_id: string;
       start_date: string;
@@ -162,23 +134,23 @@ const request_timeoff: PeopleTool = {
       reason?: string;
     };
     if (!i.policy_id || !i.start_date || !i.end_date) {
-      return err("policy_id, start_date, end_date required");
+      return toolError("policy_id, start_date, end_date required");
     }
-    const supabase = await createClient();
-    const { data, error } = await supabase.rpc("submit_time_off_request", {
-      p_policy_id: i.policy_id,
-      p_start: i.start_date,
-      p_end: i.end_date,
-      p_reason: i.reason ?? null,
-    });
-    if (error) return err(error.message);
-    return ok({ request_id: data as string });
+    const { data, error } = await ctx.supabase.rpc(
+      "submit_time_off_request",
+      {
+        p_policy_id: i.policy_id,
+        p_start: i.start_date,
+        p_end: i.end_date,
+        p_reason: i.reason ?? null,
+      }
+    );
+    if (error) return toolError(error.message);
+    return toolOk({ request_id: data as string });
   },
 };
 
-// ─────────────────────── find_doc_expiries ───────────────────────
-
-const find_doc_expiries: PeopleTool = {
+const find_doc_expiries: ToolDefinition = {
   name: "find_doc_expiries",
   description:
     "Find employee documents (Emirates ID, visa, passport, etc.) expiring within the given window.",
@@ -193,16 +165,15 @@ const find_doc_expiries: PeopleTool = {
     additionalProperties: false,
   },
   read_only: true,
-  execute: async (input) => {
+  execute: async (input, ctx) => {
     const i = (input ?? {}) as { within_days?: number };
     const within = Math.min(Math.max(i.within_days ?? 30, 1), 365);
-    const supabase = await createClient();
-    const { data, error } = await supabase.rpc("expiring_docs", {
+    const { data, error } = await ctx.supabase.rpc("expiring_docs", {
       p_within_days: within,
     });
-    if (error) return err(error.message);
+    if (error) return toolError(error.message);
     const rows = (data ?? []) as ExpiringDocRow[];
-    return ok(
+    return toolOk(
       rows.map((r) => ({
         ...r,
         urgency: docExpiryBucket(r.expires_at),
@@ -211,9 +182,7 @@ const find_doc_expiries: PeopleTool = {
   },
 };
 
-// ─────────────────────── list_direct_reports ───────────────────────
-
-const list_direct_reports: PeopleTool = {
+const list_direct_reports: ToolDefinition = {
   name: "list_direct_reports",
   description:
     "List direct reports of an employee. If manager_id is omitted, defaults to the caller's employee record.",
@@ -227,10 +196,9 @@ const list_direct_reports: PeopleTool = {
   read_only: true,
   execute: async (input, ctx) => {
     const i = (input ?? {}) as { manager_id?: string };
-    const supabase = await createClient();
     let managerId = i.manager_id;
-    if (!managerId && ctx.userId) {
-      const { data: me } = await supabase
+    if (!managerId) {
+      const { data: me } = await ctx.supabase
         .from("employees")
         .select("id")
         .eq("workspace_id", ctx.workspaceId)
@@ -238,22 +206,20 @@ const list_direct_reports: PeopleTool = {
         .maybeSingle();
       managerId = (me?.id as string | undefined) ?? undefined;
     }
-    if (!managerId) return ok([]);
-    const { data, error } = await supabase
+    if (!managerId) return toolOk([]);
+    const { data, error } = await ctx.supabase
       .from("employees")
       .select("id, full_name, email, job_title, department, status")
       .eq("workspace_id", ctx.workspaceId)
       .eq("manager_id", managerId)
       .is("archived_at", null)
       .order("full_name");
-    if (error) return err(error.message);
-    return ok((data ?? []) as Employee[]);
+    if (error) return toolError(error.message);
+    return toolOk((data ?? []) as Employee[]);
   },
 };
 
-// ─────────────────────── list_org_chain ───────────────────────
-
-const list_org_chain: PeopleTool = {
+const list_org_chain: ToolDefinition = {
   name: "list_org_chain",
   description:
     "Returns the org chain (manager → manager's manager → ...) up from an employee to the root.",
@@ -266,34 +232,34 @@ const list_org_chain: PeopleTool = {
   read_only: true,
   execute: async (input, ctx) => {
     const i = input as { employee_id: string };
-    if (!i.employee_id) return err("employee_id required");
-    const supabase = await createClient();
-    type ChainRow = Pick<Employee, "id" | "full_name" | "job_title" | "manager_id">;
+    if (!i.employee_id) return toolError("employee_id required");
+    type ChainRow = Pick<
+      Employee,
+      "id" | "full_name" | "job_title" | "manager_id"
+    >;
     const chain: ChainRow[] = [];
     let current: string | null = i.employee_id;
     const seen = new Set<string>();
     for (let hop = 0; hop < 16 && current; hop += 1) {
       if (seen.has(current)) break;
       seen.add(current);
-      const res = await supabase
+      const res = await ctx.supabase
         .from("employees")
         .select("id, full_name, job_title, manager_id")
         .eq("workspace_id", ctx.workspaceId)
         .eq("id", current)
         .maybeSingle();
-      if (res.error) return err(res.error.message);
+      if (res.error) return toolError(res.error.message);
       const row = res.data as ChainRow | null;
       if (!row) break;
       chain.push(row);
       current = row.manager_id;
     }
-    return ok(chain);
+    return toolOk(chain);
   },
 };
 
-// ─────────────────────── list_org_under ───────────────────────
-
-const list_org_under: PeopleTool = {
+const list_org_under: ToolDefinition = {
   name: "list_org_under",
   description:
     "List every employee reporting (directly or indirectly) under a given employee. Returns flat list with depth.",
@@ -308,28 +274,26 @@ const list_org_under: PeopleTool = {
   read_only: true,
   execute: async (input, ctx) => {
     const i = input as { employee_id: string };
-    if (!i.employee_id) return err("employee_id required");
-    const supabase = await createClient();
-    const { data, error } = await supabase
+    if (!i.employee_id) return toolError("employee_id required");
+    const { data, error } = await ctx.supabase
       .from("employees")
       .select("id, full_name, job_title, manager_id, status")
       .eq("workspace_id", ctx.workspaceId)
       .is("archived_at", null);
-    if (error) return err(error.message);
+    if (error) return toolError(error.message);
 
-    const byManager = new Map<string | null, Pick<Employee, "id" | "full_name" | "job_title" | "manager_id" | "status">[]>();
-    for (const row of (data ?? []) as Pick<
+    type SubtreeRow = Pick<
       Employee,
       "id" | "full_name" | "job_title" | "manager_id" | "status"
-    >[]) {
+    >;
+    const byManager = new Map<string | null, SubtreeRow[]>();
+    for (const row of (data ?? []) as SubtreeRow[]) {
       const list = byManager.get(row.manager_id) ?? [];
       list.push(row);
       byManager.set(row.manager_id, list);
     }
 
-    type FlatRow = Pick<Employee, "id" | "full_name" | "job_title" | "manager_id" | "status"> & {
-      depth: number;
-    };
+    type FlatRow = SubtreeRow & { depth: number };
     const out: FlatRow[] = [];
     const walk = (rootId: string, depth: number): void => {
       if (depth > 16) return;
@@ -340,13 +304,11 @@ const list_org_under: PeopleTool = {
       }
     };
     walk(i.employee_id, 1);
-    return ok(out);
+    return toolOk(out);
   },
 };
 
-// ─────────────────────── list_timeoff_requests ───────────────────────
-
-const list_timeoff_requests: PeopleTool = {
+const list_timeoff_requests: ToolDefinition = {
   name: "list_timeoff_requests",
   description:
     "List recent time-off requests in the workspace, with optional status + employee filters.",
@@ -369,8 +331,7 @@ const list_timeoff_requests: PeopleTool = {
       status?: "pending" | "approved" | "denied" | "cancelled";
       limit?: number;
     };
-    const supabase = await createClient();
-    let q = supabase
+    let q = ctx.supabase
       .from("time_off_requests")
       .select("*")
       .eq("workspace_id", ctx.workspaceId)
@@ -379,16 +340,15 @@ const list_timeoff_requests: PeopleTool = {
     if (i.status) q = q.eq("status", i.status);
     if (i.employee_id) q = q.eq("employee_id", i.employee_id);
     const { data, error } = await q;
-    if (error) return err(error.message);
-    return ok(data ?? []);
+    if (error) return toolError(error.message);
+    return toolOk(data ?? []);
   },
 };
 
-// ─────────────────────── list_employee_documents ───────────────────────
-
-const list_employee_documents: PeopleTool = {
+const list_employee_documents: ToolDefinition = {
   name: "list_employee_documents",
-  description: "List an employee's documents (EID, visa, passport, contract, etc.).",
+  description:
+    "List an employee's documents (EID, visa, passport, contract, etc.).",
   input_schema: {
     type: "object",
     properties: { employee_id: { type: "string" } },
@@ -396,17 +356,16 @@ const list_employee_documents: PeopleTool = {
     additionalProperties: false,
   },
   read_only: true,
-  execute: async (input) => {
+  execute: async (input, ctx) => {
     const i = input as { employee_id: string };
-    if (!i.employee_id) return err("employee_id required");
-    const supabase = await createClient();
-    const { data, error } = await supabase
+    if (!i.employee_id) return toolError("employee_id required");
+    const { data, error } = await ctx.supabase
       .from("employee_documents")
       .select("*")
       .eq("employee_id", i.employee_id)
       .order("expires_at", { ascending: true });
-    if (error) return err(error.message);
-    return ok(
+    if (error) return toolError(error.message);
+    return toolOk(
       ((data ?? []) as EmployeeDocument[]).map((d) => ({
         ...d,
         urgency: docExpiryBucket(d.expires_at),
@@ -415,36 +374,24 @@ const list_employee_documents: PeopleTool = {
   },
 };
 
-// ─────────────────────── Registry ───────────────────────
+export const peopleSkill: SkillDefinition = {
+  id: "people",
+  label: "People & HR",
+  description:
+    "Search employees, inspect time-off balances, submit time-off requests, walk the org chart, and surface expiring HR documents.",
+  systemFragment:
+    "People records are workspace-scoped. Use search_employees with free-text query + optional department/status/manager filters. Use get_timeoff_balance (requires employee_id) and list_timeoff_requests (workspace-wide, filterable by status + employee). Use request_timeoff to submit a leave request for the caller; dates are inclusive YYYY-MM-DD. Use list_direct_reports (defaults to caller's own reports), list_org_chain (upwards), and list_org_under (downwards subtree) for hierarchy questions. Use find_doc_expiries to surface upcoming Emirates ID/visa/passport expiries; list_employee_documents drills into one employee's docs.",
+  tools: [
+    search_employees,
+    get_timeoff_balance,
+    request_timeoff,
+    find_doc_expiries,
+    list_direct_reports,
+    list_org_chain,
+    list_org_under,
+    list_timeoff_requests,
+    list_employee_documents,
+  ],
+};
 
-export const peopleTools: PeopleTool[] = [
-  search_employees,
-  get_timeoff_balance,
-  request_timeoff,
-  find_doc_expiries,
-  list_direct_reports,
-  list_org_chain,
-  list_org_under,
-  list_timeoff_requests,
-  list_employee_documents,
-];
-
-/** Look up a tool by name. */
-export function findPeopleTool(name: string): PeopleTool | undefined {
-  return peopleTools.find((t) => t.name === name);
-}
-
-/**
- * Convenience runner that dispatches a tool by name. Useful when wiring
- * into the agent runtime: the runtime supplies (ctx, name, input), we
- * pick the tool and execute it.
- */
-export async function executePeopleTool(
-  name: string,
-  input: unknown,
-  ctx: PeopleToolContext
-): Promise<PeopleToolResult> {
-  const tool = findPeopleTool(name);
-  if (!tool) return { ok: false, error: `unknown tool: ${name}` };
-  return tool.execute(input, ctx);
-}
+export default peopleSkill;
