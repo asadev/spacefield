@@ -148,7 +148,7 @@ function shareRouter(request: NextRequest): NextResponse | null {
   const isDevLocal =
     process.env.NODE_ENV === "development" &&
     (host === "localhost" || host === "127.0.0.1");
-  if (isDevLocal && /^\/birthday\/[a-z0-9-]+\/?$/i.test(path)) {
+  if (isDevLocal && /^\/birthday\/[a-z0-9-]+(\/[a-z0-9-]+)?\/?$/i.test(path)) {
     return null;
   }
 
@@ -377,7 +377,7 @@ export async function middleware(request: NextRequest) {
       !process.env.NEXT_PUBLIC_SUPABASE_URL ||
       !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     ) {
-      return applySecurityHeaders(response, requestId);
+      return applySecurityHeaders(response, requestId, path);
     }
 
     const supabase = createServerClient(
@@ -406,7 +406,7 @@ export async function middleware(request: NextRequest) {
     // here — the side-effect is the point.
     await supabase.auth.getUser();
 
-    return applySecurityHeaders(response, requestId);
+    return applySecurityHeaders(response, requestId, path);
   } catch (err) {
     // Top-level safety net — log and re-throw so Next.js can serve its
     // normal error response. We never want middleware to swallow an
