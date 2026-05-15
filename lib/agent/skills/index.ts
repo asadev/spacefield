@@ -27,6 +27,16 @@ import type {
   UserContext,
 } from "@/lib/agent/runtime/types";
 
+// 2026-05-14 overnight build — 5 new skills shipped by parallel feature
+// agents. Located in lib/ai-tools/* (the legacy folder convention is
+// lib/agent/skills/*, but these are full SkillDefinition objects and
+// slot into ALL_SKILLS without conversion).
+import { tasksSkill } from "@/lib/ai-tools/tasks";
+import { peopleSkill } from "@/lib/ai-tools/people";
+import { collabSkill } from "@/lib/ai-tools/collab";
+import { searchSkill } from "@/lib/ai-tools/search";
+import { extrasSkill } from "@/lib/ai-tools/extras";
+
 export const ALL_SKILLS: SkillDefinition[] = [
   workspaceSkill,
   crmContactsSkill,
@@ -38,6 +48,12 @@ export const ALL_SKILLS: SkillDefinition[] = [
   boardsSkill,
   appsSkill,
   metaSkill,
+  // 2026-05-14 batch
+  tasksSkill,
+  peopleSkill,
+  collabSkill,
+  searchSkill,
+  extrasSkill,
 ];
 
 export function getSkillsByIds(ids: string[]): SkillDefinition[] {

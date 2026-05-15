@@ -1,14 +1,17 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { withApiHandler } from "@/lib/api-wrap";
-import { createClient } from "@/lib/supabase/server";
 import {
+  createProject,
   getAuthUserId,
   listProjects,
   resolveWorkspaceId,
 } from "@/lib/tasks/server";
 import { ProjectCreateSchema } from "@/lib/tasks/validation";
-import { DEFAULT_PROJECT_STATUSES } from "@/lib/tasks/types";
+import {
+  DEFAULT_PROJECT_STATUSES,
+  type ProjectStatus,
+} from "@/lib/tasks/types";
 
 export const dynamic = "force-dynamic";
 
@@ -47,28 +50,29 @@ export const POST = withApiHandler(
       );
     }
     const body = parsed.data;
-    const supabase = await createClient();
-    const insertPayload = {
-      workspace_id: body.workspace_id,
-      name: body.name,
-      slug: body.slug,
-      description: body.description ?? null,
-      status: body.status ?? "active",
-      status_schema:
-        body.status_schema ?? (DEFAULT_PROJECT_STATUSES as unknown as string[]),
-      color: body.color ?? null,
-      icon: body.icon ?? null,
-      created_by: userId,
-    };
-    const { data, error } = await supabase
-      .from("projects")
-      .insert(insertPayload)
-      .select("*")
-      .single();
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    try {
+      // Zod's enum widens to string; createProject expects ProjectStatus.
+      // The schema already validates the value, so casting is safe.
+      const project = await createProject({
+        workspace_id: body.workspace_id,
+        name: body.name,
+        slug: body.slug,
+        description: body.description ?? null,
+        status: (body.status ?? "active") as ProjectStatus,
+        status_schema:
+          body.status_schema ??
+          (DEFAULT_PROJECT_STATUSES as unknown as string[]),
+        color: body.color ?? null,
+        icon: body.icon ?? null,
+        created_by: userId,
+      });
+      return NextResponse.json({ project }, { status: 201 });
+    } catch (e) {
+      return NextResponse.json(
+        { error: (e as Error).message },
+        { status: 400 }
+      );
     }
-    return NextResponse.json({ project: data }, { status: 201 });
   },
   { source: "projects.create", rateLimit: { count: 30, window_sec: 60 } }
 );
