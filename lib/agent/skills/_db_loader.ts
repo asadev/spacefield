@@ -19,6 +19,8 @@
  */
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { safeFetch, SafeFetchError } from "@/lib/safe-fetch";
+import { log } from "@/lib/log";
 
 import type {
   SkillDefinition,
@@ -275,19 +277,12 @@ async function dispatchHttp(
   }
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 10_000);
-    let res: Response;
-    try {
-      res = await fetch(url, {
-        method: "POST",
-        headers,
-        body,
-        signal: controller.signal,
-      });
-    } finally {
-      clearTimeout(timeout);
-    }
+    const res = await safeFetch(url, {
+      method: "POST",
+      headers,
+      body,
+      timeoutMs: 10_000,
+    });
     if (!res.ok) {
       const text = await res.text().catch(() => "");
       return toolError(
@@ -302,6 +297,14 @@ async function dispatchHttp(
     const text = await res.text().catch(() => "");
     return toolOk(text);
   } catch (e) {
+    if (e instanceof SafeFetchError) {
+      log.warn("skill.http_handler_blocked", {
+        skill_id: skillId,
+        tool: def.name,
+        reason: e.reason,
+      });
+      return toolError(`handler blocked by SSRF guard: ${e.reason}`);
+    }
     return toolError((e as Error).message);
   }
 }
