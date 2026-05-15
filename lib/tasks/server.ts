@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { escapeForLike, escapeForOr } from "@/lib/escape-helpers";
 import { log } from "@/lib/log";
 import { indexDocument, unindexDocument } from "@/lib/search/indexer";
 
@@ -85,7 +86,7 @@ export async function listTasks(
     }
   }
   if (filter.search) {
-    const term = filter.search.replace(/[,()]/g, " ").trim();
+    const term = escapeForOr(escapeForLike(filter.search.trim()));
     if (term) {
       q = q.or(`title.ilike.%${term}%,description.ilike.%${term}%`);
     }
@@ -464,7 +465,7 @@ export async function adminListTasks(opts: {
   if (opts.status) q = q.eq("status", opts.status);
   if (opts.priority) q = q.eq("priority", opts.priority);
   if (opts.search) {
-    const term = opts.search.replace(/[,()]/g, " ").trim();
+    const term = escapeForOr(escapeForLike(opts.search.trim()));
     if (term) q = q.or(`title.ilike.%${term}%,description.ilike.%${term}%`);
   }
   q = q.limit(Math.min(Math.max(opts.limit ?? 200, 1), 1000));
