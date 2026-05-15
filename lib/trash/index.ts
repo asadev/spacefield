@@ -51,12 +51,16 @@ const TRASH_TABLES: TrashTable[] = [
   // path below means listing keeps working if they're missing.
   { entityType: "task", table: "tasks", labelColumn: "title" },
   { entityType: "project", table: "projects", labelColumn: "name" },
-  { entityType: "employee", table: "employees", labelColumn: "name" },
-  {
-    entityType: "employee_document",
-    table: "employee_documents",
-    labelColumn: "title",
-  },
+  // NOTE: `employees` and `employee_documents` are intentionally NOT
+  // included here. Those tables use `archived_at` (employees) / no
+  // soft-delete column at all (employee_documents) per
+  // supabase/migrations/20260514e_people.sql — not the `deleted_at`
+  // column this trash UI keys on. Restoring an archived employee /
+  // purging a document needs its own un-archive flow in /people admin;
+  // that's out of scope for this universal recycle-bin module. The
+  // earlier entries referenced non-existent columns (`name`, `title`)
+  // and would have only ever produced 42703 errors swallowed by the
+  // try/catch below anyway.
 ];
 
 export interface TrashRow {
