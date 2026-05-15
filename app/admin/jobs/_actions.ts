@@ -102,12 +102,13 @@ export async function updateCron(formData: FormData): Promise<void> {
 /**
  * Manual trigger. We:
  *   1. Insert a `cron_runs` row with status='running', triggered_by='manual'.
- *   2. Issue a server-side fetch to the cron path with both:
- *        a) `?triggered_by=manual&secret=<CRON_SECRET>` query string —
- *           lets routes that opt into `lib/cron/_check_enabled.ts`
- *           recognize this as an admin trigger.
- *        b) `Authorization: Bearer <CRON_SECRET>` header — matches the
- *           existing auth model (e.g. social-publish today).
+ *   2. Issue a server-side fetch to the cron path with:
+ *        a) `?triggered_by=manual` query string — flag that the call
+ *           is an admin trigger (not auth — just metadata).
+ *        b) `Authorization: Bearer <CRON_SECRET>` header — the only
+ *           place the secret travels. SC-002 removed the prior
+ *           `?secret=<CRON_SECRET>` query-string copy, which leaked
+ *           into Vercel access logs.
  *   3. Update the `cron_runs` row with success/error + duration.
  *   4. Audit `cron.run_now`.
  *
@@ -319,10 +320,16 @@ function buildCronUrl(cronPath: string): string {
 }
 
 function appendManualParams(url: string): string {
+  // SC-002 — Historically we appended `?secret=<CRON_SECRET>` here so
+  // routes using `lib/cron/_check_enabled.ts` (which read the query)
+  // could authorize. That put the secret into request URLs, which
+  // Vercel logs verbatim, third-party analytics scoop up, and CDN
+  // caches keep around. The secret now travels ONLY in the
+  // `Authorization: Bearer` header that the caller already sets.
+  // Cron handlers should read from the header — anything still
+  // reading `?secret=` needs to be migrated.
   const u = new URL(url);
   u.searchParams.set("triggered_by", "manual");
-  const secret = process.env.CRON_SECRET;
-  if (secret) u.searchParams.set("secret", secret);
   return u.toString();
 }
 

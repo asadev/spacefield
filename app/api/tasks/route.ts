@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { withApiHandler } from "@/lib/api-wrap";
+import { safeErrorMessage } from "@/lib/safe-error";
 import {
   createTask,
   getAuthUserId,
@@ -77,7 +78,13 @@ export const POST = withApiHandler(
       return NextResponse.json({ task }, { status: 201 });
     } catch (e) {
       return NextResponse.json(
-        { error: (e as Error).message },
+        {
+          error: safeErrorMessage(e, {
+            source: "tasks.create",
+            userId,
+            fallback: "create_failed",
+          }),
+        },
         { status: 400 }
       );
     }

@@ -6,6 +6,7 @@ import {
   softDeleteComment,
   updateCommentBody,
 } from "@/lib/collab/comments";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createClient } from "@/lib/supabase/server";
 
 /* /api/comments — polymorphic thread API.
@@ -51,7 +52,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ items });
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "list_failed" },
+      {
+        error: safeErrorMessage(e, {
+          source: "comments.list",
+          userId: user.id,
+          fallback: "list_failed",
+        }),
+      },
       { status: 400 }
     );
   }
@@ -103,7 +110,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ item });
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "create_failed" },
+      {
+        error: safeErrorMessage(e, {
+          source: "comments.create",
+          userId: user.id,
+          fallback: "create_failed",
+        }),
+      },
       { status: 400 }
     );
   }
@@ -144,7 +157,13 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ item });
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "update_failed" },
+      {
+        error: safeErrorMessage(e, {
+          source: "comments.update",
+          userId: user.id,
+          fallback: "update_failed",
+        }),
+      },
       { status: 400 }
     );
   }
@@ -167,7 +186,13 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "delete_failed" },
+      {
+        error: safeErrorMessage(e, {
+          source: "comments.delete",
+          userId: user.id,
+          fallback: "delete_failed",
+        }),
+      },
       { status: 400 }
     );
   }

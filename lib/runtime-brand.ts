@@ -38,6 +38,8 @@ interface BrandCacheEntry {
 
 const cache = new Map<string, BrandCacheEntry>();
 
+let warnedMissingEnv = false;
+
 function cacheKey(workspaceId?: string | null): string {
   return workspaceId ?? "__global__";
 }
@@ -58,11 +60,23 @@ export async function getActiveBrand(
   }
 
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  // SC-001 — no anon-key fallback. `active_brand` RPC needs service
+  // role; falling back to anon used to silently return no brand and
+  // looked indistinguishable from "no brand configured." Warn once
+  // per worker and degrade to default tokens.
   const serviceKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_SERVICE_ROLE ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !serviceKey) return null;
+    process.env.SUPABASE_SERVICE_ROLE;
+  if (!url || !serviceKey) {
+    if (!warnedMissingEnv) {
+      warnedMissingEnv = true;
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[runtime-brand] missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY — brand vars will fall back to defaults",
+      );
+    }
+    return null;
+  }
 
   let row: BrandConfigRow | null = null;
   try {
