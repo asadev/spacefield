@@ -5,9 +5,11 @@ import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { ThemeProvider, themeInitScript } from "@/components/ThemeProvider";
 import CommandPaletteProvider from "@/components/CommandPaletteProvider";
+import CookieConsent from "@/components/CookieConsent";
 import TabVisibility from "./_components/TabVisibility";
 import SiteBanner from "./_components/SiteBanner";
 import { getActiveBrand, brandCssVarsBlock } from "@/lib/runtime-brand";
+import { getConsentCookie } from "@/lib/cookie-consent";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -71,6 +73,7 @@ export default async function RootLayout({
   const brand = await getActiveBrand();
   const brandCss = brandCssVarsBlock(brand);
   const faviconUrl = brand?.favicon_url ?? null;
+  const consent = await getConsentCookie();
 
   return (
     <html
@@ -90,6 +93,7 @@ export default async function RootLayout({
         <TabVisibility />
         <ThemeProvider>
           <CommandPaletteProvider>{children}</CommandPaletteProvider>
+          <CookieConsent initialAccepted={consent !== null} />
         </ThemeProvider>
         <Analytics />
         <SpeedInsights />
