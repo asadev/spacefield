@@ -5,6 +5,8 @@
  * bundle. See `_markdown.ts` for full docs.
  */
 
+import { safeHref } from "@/lib/safe-href";
+
 const ESCAPE_MAP: Record<string, string> = {
   "&": "&amp;",
   "<": "&lt;",
@@ -17,6 +19,15 @@ function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ESCAPE_MAP[c]!);
 }
 
+/**
+ * SB-004: validate URL scheme before letting it land in href/src.
+ * Mirrors `_markdown.ts::safeUrl`.
+ */
+function safeUrl(raw: string): string {
+  const safe = safeHref(raw);
+  return safe ? escapeHtml(safe) : "#";
+}
+
 function inline(text: string): string {
   let out = escapeHtml(text);
   const codeStash: string[] = [];
@@ -26,15 +37,16 @@ function inline(text: string): string {
     );
     return ` CODE${codeStash.length - 1} `;
   });
+  // SB-004: scheme-allowlist URLs on both image and link rendering.
   out = out.replace(
     /!\[([^\]]*)\]\(([^)\s]+)\)/g,
     (_m, alt, url) =>
-      `<img src="${url}" alt="${alt}" class="my-3 max-w-full rounded-lg border border-app" />`
+      `<img src="${safeUrl(url)}" alt="${alt}" class="my-3 max-w-full rounded-lg border border-app" />`
   );
   out = out.replace(
     /\[([^\]]+)\]\(([^)\s]+)\)/g,
     (_m, label, url) =>
-      `<a href="${url}" class="text-tool-accent underline hover:opacity-80" rel="noopener noreferrer">${label}</a>`
+      `<a href="${safeUrl(url)}" class="text-tool-accent underline hover:opacity-80" rel="noopener noreferrer">${label}</a>`
   );
   out = out.replace(/\*\*([^*\n]+)\*\*/g, "<strong>$1</strong>");
   out = out.replace(/__([^_\n]+)__/g, "<strong>$1</strong>");

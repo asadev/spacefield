@@ -35,6 +35,28 @@ export interface MintLinkResult {
   error?: string;
 }
 
+/**
+ * SB-002: strip raw HTML out of `embed` blocks before persisting. We
+ * have no server-side HTML sanitiser, and the viewer also refuses to
+ * render raw `block.html`, so the safest defence is to never store it.
+ * Other block kinds are left alone — they're plain strings the viewer
+ * always renders as text (or as `src` attributes elsewhere).
+ */
+function stripUnsafePayloadBlocks(payload: Record<string, unknown>): Record<string, unknown> {
+  const blocks = (payload as { blocks?: unknown }).blocks;
+  if (!Array.isArray(blocks)) return payload;
+  const cleaned = blocks.map((b) => {
+    if (b && typeof b === "object" && (b as { kind?: unknown }).kind === "embed") {
+      // Drop the raw html field. Viewer renders a "[embed removed for
+      // safety]" placeholder for this kind regardless.
+      const { html: _drop, ...rest } = b as { html?: unknown; [k: string]: unknown };
+      return { ...rest, kind: "embed", html: "" };
+    }
+    return b;
+  });
+  return { ...payload, blocks: cleaned };
+}
+
 export async function mintLink(input: MintLinkInput): Promise<MintLinkResult> {
   if (!TOSHARE_TYPES.includes(input.type)) {
     return { ok: false, error: `invalid type: ${input.type}` };
@@ -46,11 +68,14 @@ export async function mintLink(input: MintLinkInput): Promise<MintLinkResult> {
     return { ok: false, error: "not signed in" };
   }
 
+  // SB-002: pre-sanitise any payload blocks before any other merging.
+  const sanitisedPayload = stripUnsafePayloadBlocks(input.payload);
+
   // If a workspace is set, pull in defaults: subdomain + brand logo +
   // brand color. The link payload only overrides these if it explicitly
   // sets them.
   let resolvedSubdomain = input.customSubdomain ?? null;
-  let mergedPayload = input.payload;
+  let mergedPayload: Record<string, unknown> = sanitisedPayload;
   if (input.workspaceId) {
     const { data: ws } = await supabase
       .from("workspaces")
@@ -61,7 +86,7 @@ export async function mintLink(input: MintLinkInput): Promise<MintLinkResult> {
       if (!resolvedSubdomain && ws.toshare_subdomain) {
         resolvedSubdomain = ws.toshare_subdomain as string;
       }
-      const payloadCopy = { ...input.payload };
+      const payloadCopy = { ...sanitisedPayload };
       // Only fill-in defaults if the payload doesn't already have them
       if (!payloadCopy.brandColor && ws.toshare_brand_color) {
         payloadCopy.brandColor = ws.toshare_brand_color;
