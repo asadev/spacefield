@@ -5,6 +5,13 @@ const nextConfig: NextConfig = {
   // deploy pipeline test 2026-04-09
   experimental: {
     optimizePackageImports: ['framer-motion'],
+    // Cap server-action / inbound JSON bodies so attackers can't pin a
+    // worker buffering 100 MB on every request. File-upload paths use
+    // presigned URLs or stream straight to R2, not server actions, so
+    // this ceiling is conservative.
+    serverActions: {
+      bodySizeLimit: '2mb',
+    },
   },
   images: {
     remotePatterns: [

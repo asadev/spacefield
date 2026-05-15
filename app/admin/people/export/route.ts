@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { checkIsAdmin } from "@/app/admin/_lib";
+import { escapeCsvCell, escapeForLike, escapeForOr } from "@/lib/escape-helpers";
 import { createAdminClient } from "@/lib/supabase/admin";
 import type { Employee } from "@/lib/people/types";
 
@@ -30,10 +31,12 @@ export async function GET(req: NextRequest) {
     .order("workspace_id")
     .limit(10_000);
   if (q) {
-    const needle = q.replace(/[,%]/g, "");
-    query = query.or(
-      `full_name.ilike.%${needle}%,email.ilike.%${needle}%,job_title.ilike.%${needle}%`
-    );
+    const needle = escapeForOr(escapeForLike(q));
+    if (needle) {
+      query = query.or(
+        `full_name.ilike.%${needle}%,email.ilike.%${needle}%,job_title.ilike.%${needle}%`
+      );
+    }
   }
   if (status) query = query.eq("status", status);
   if (dept) query = query.eq("department", dept);
@@ -54,15 +57,15 @@ export async function GET(req: NextRequest) {
     "termination_date",
     "created_at",
   ];
-  const escape = (v: unknown): string => {
-    if (v === null || v === undefined) return "";
-    const s = String(v);
-    if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-    return s;
-  };
+  // escapeCsvCell handles formula-injection (=, @, +, -, leading tab)
+  // in addition to standard CSV quoting.
   const lines = [
-    header.join(","),
-    ...rows.map((r) => header.map((h) => escape((r as Record<string, unknown>)[h])).join(",")),
+    header.map((h) => escapeCsvCell(h)).join(","),
+    ...rows.map((r) =>
+      header
+        .map((h) => escapeCsvCell((r as Record<string, unknown>)[h]))
+        .join(",")
+    ),
   ];
 
   return new NextResponse(lines.join("\n"), {

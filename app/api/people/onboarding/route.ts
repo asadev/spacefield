@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -9,6 +10,30 @@ import {
   startOnboardingRun,
   toggleOnboardingTask,
 } from "@/lib/people/actions";
+
+const uuid = z.string().uuid();
+
+const StartRunBody = z
+  .object({
+    workspace_id: uuid,
+    employee_id: uuid,
+    template_id: uuid,
+  })
+  .strict();
+
+const ToggleTaskBody = z
+  .object({
+    run_id: uuid,
+    index: z.number().int().min(0).max(500),
+    done: z.boolean(),
+  })
+  .strict();
+
+async function requireUser() {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  return data.user ?? null;
+}
 
 /**
  * GET /api/people/onboarding
@@ -22,9 +47,8 @@ import {
  *   body: { run_id, index, done }
  */
 export async function GET(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: u } = await supabase.auth.getUser();
-  if (!u.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const user = await requireUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const url = new URL(req.url);
   const workspace_id = url.searchParams.get("workspace_id");
@@ -44,43 +68,45 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  let body: Record<string, unknown>;
+  const user = await requireUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  let raw: unknown;
   try {
-    body = (await req.json()) as Record<string, unknown>;
+    raw = await req.json();
   } catch {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
-  const { workspace_id, employee_id, template_id } = body as Record<string, string>;
-  if (!workspace_id || !employee_id || !template_id) {
+  const parsed = StartRunBody.safeParse(raw);
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: "workspace_id, employee_id, template_id required" },
+      { error: "invalid_body", details: parsed.error.flatten() },
       { status: 400 }
     );
   }
-  const res = await startOnboardingRun({ workspace_id, employee_id, template_id });
+  const res = await startOnboardingRun(parsed.data);
   if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
   return NextResponse.json({ ok: true });
 }
 
 export async function PATCH(req: NextRequest) {
-  let body: Record<string, unknown>;
+  const user = await requireUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  let raw: unknown;
   try {
-    body = (await req.json()) as Record<string, unknown>;
+    raw = await req.json();
   } catch {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
-  const { run_id, index, done } = body as {
-    run_id?: string;
-    index?: number;
-    done?: boolean;
-  };
-  if (!run_id || typeof index !== "number" || typeof done !== "boolean") {
+  const parsed = ToggleTaskBody.safeParse(raw);
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: "run_id, index (number), done (boolean) required" },
+      { error: "invalid_body", details: parsed.error.flatten() },
       { status: 400 }
     );
   }
-  const res = await toggleOnboardingTask({ run_id, index, done });
+  const res = await toggleOnboardingTask(parsed.data);
   if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
   return NextResponse.json({ ok: true });
 }

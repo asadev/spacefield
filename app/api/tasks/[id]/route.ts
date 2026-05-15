@@ -21,6 +21,10 @@ type Params = { params: Promise<{ id: string }> };
 
 export const GET = withApiHandler<Params>(
   async (_req, ctx) => {
+    const userId = await getAuthUserId();
+    if (!userId) {
+      return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
+    }
     const { id } = await ctx.params;
     const row = await getTaskById(id);
     if (!row) {
