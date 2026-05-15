@@ -166,7 +166,22 @@ export default async function PageViewer({ params, searchParams }: Props) {
             case "video":
               return <video key={i} src={block.src} controls className="w-full rounded-xl" />;
             case "embed":
-              return <div key={i} dangerouslySetInnerHTML={{ __html: block.html }} />;
+              // SB-002: refuse to render raw HTML from `block.html` —
+              // toshare payloads are minted from a public server action
+              // with no sanitiser, so any caller could ship arbitrary
+              // markup (script tags, event handlers, javascript: URIs).
+              // No UI currently authors embed blocks, so we render a
+              // safe placeholder. If you need embeds, route them through
+              // a server-side sanitiser (e.g. DOMPurify on the writer)
+              // first and replace this branch.
+              return (
+                <div
+                  key={i}
+                  className="rounded-lg border border-dashed border-slate-300 bg-slate-50 px-4 py-3 text-xs text-slate-500"
+                >
+                  [embed removed for safety]
+                </div>
+              );
             case "spacer":
               return (
                 <div

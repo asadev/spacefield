@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from "react";
 import ToolShell from "../../_components/ToolShell";
 import ToolCard, { inputCls } from "../../_components/ToolCard";
+import { safeHref } from "@/lib/safe-href";
 
 const STORAGE_KEY = "aiq:md-preview:draft";
 const MODE_LS_KEY = "aiq:md-preview:mode:v1";
@@ -45,14 +46,23 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
+// SB-012: only allow http(s)/mailto/tel/path/fragment URLs into href/src.
+// Escaping alone doesn't stop `javascript:` self-XSS — even though the
+// preview lives in the user's own browser, an exported HTML doc with
+// `<a href="javascript:...">` would fire for anyone who opens it.
+function safeUrlAttr(raw: string): string {
+  const safe = safeHref(raw);
+  return safe ? escapeHtml(safe) : "#";
+}
+
 function inlineMd(s: string): string {
   // images first so ![x](y) doesn't get eaten by link regex
   s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_m, alt, src) => {
-    return `<img alt="${escapeHtml(alt)}" src="${escapeHtml(src)}" class="max-w-full rounded-lg" />`;
+    return `<img alt="${escapeHtml(alt)}" src="${safeUrlAttr(src)}" class="max-w-full rounded-lg" />`;
   });
   // links
   s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_m, txt, href) => {
-    return `<a href="${escapeHtml(href)}" class="text-tool-accent underline hover:opacity-80" target="_blank" rel="noreferrer">${txt}</a>`;
+    return `<a href="${safeUrlAttr(href)}" class="text-tool-accent underline hover:opacity-80" target="_blank" rel="noreferrer">${txt}</a>`;
   });
   // inline code
   s = s.replace(/`([^`]+)`/g, (_m, code) => {

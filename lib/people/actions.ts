@@ -298,6 +298,18 @@ export async function createEmployeeDocument(input: {
   if (!userId) return { ok: false, error: "not_authenticated" };
   if (!input.name?.trim()) return { ok: false, error: "name_required" };
 
+  // SB-011: only accept absolute http(s) URLs (uploaded files, signed
+  // Supabase storage links, etc). Block javascript:/data:/vbscript: and
+  // any other scheme that could XSS people viewing the document later.
+  let safeFileUrl: string | null = null;
+  if (input.file_url != null && input.file_url !== "") {
+    const trimmed = String(input.file_url).trim();
+    if (!/^https?:\/\//i.test(trimmed)) {
+      return { ok: false, error: "file_url_must_be_http_or_https" };
+    }
+    safeFileUrl = trimmed;
+  }
+
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("employee_documents")
@@ -309,7 +321,7 @@ export async function createEmployeeDocument(input: {
       number: input.number ?? null,
       issued_at: input.issued_at ?? null,
       expires_at: input.expires_at ?? null,
-      file_url: input.file_url ?? null,
+      file_url: safeFileUrl,
       notes: input.notes ?? null,
       uploaded_by: userId,
     })
