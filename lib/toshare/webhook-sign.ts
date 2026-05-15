@@ -19,6 +19,8 @@
 
 import "server-only";
 import { createClient } from "@/lib/supabase/server";
+import { safeFetch, SafeFetchError } from "@/lib/safe-fetch";
+import { log } from "@/lib/log";
 
 const TIMEOUT_MS = 5_000;
 
@@ -128,15 +130,12 @@ export async function deliverSignedWebhook(input: SignedDeliveryInput): Promise<
   const startedAt = Date.now();
 
   try {
-    const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
-    const res = await fetch(input.webhookUrl, {
+    const res = await safeFetch(input.webhookUrl, {
       method: "POST",
       headers,
       body,
-      signal: ac.signal,
+      timeoutMs: TIMEOUT_MS,
     });
-    clearTimeout(timer);
     httpStatus = res.status;
     if (res.ok) {
       status = "success";
@@ -150,13 +149,33 @@ export async function deliverSignedWebhook(input: SignedDeliveryInput): Promise<
       // ignore — body might already be consumed or not readable
     }
   } catch (err) {
-    if (err instanceof DOMException && err.name === "AbortError") {
+    if (err instanceof SafeFetchError) {
+      // SSRF guard fired — record a failed delivery rather than throwing.
+      status = "network_error";
+      responseExcerpt = `safe-fetch blocked: ${err.reason}`;
+      log.warn("toshare.webhook_blocked", {
+        event: input.event,
+        link_id: input.linkId,
+        reason: err.reason,
+      });
+    } else if (err instanceof DOMException && err.name === "AbortError") {
+      status = "timeout";
+    } else if (
+      err instanceof Error &&
+      (err.name === "TimeoutError" || err.name === "AbortError")
+    ) {
       status = "timeout";
     } else {
       status = "network_error";
       responseExcerpt = err instanceof Error ? err.message.slice(0, 500) : null;
     }
-    console.warn(`[toshare] webhook ${input.event} failed:`, err instanceof Error ? err.message : err);
+    if (!(err instanceof SafeFetchError)) {
+      log.warn("toshare.webhook_failed", {
+        event: input.event,
+        link_id: input.linkId,
+        message: err instanceof Error ? err.message : String(err),
+      });
+    }
   } finally {
     const durationMs = Date.now() - startedAt;
     // Don't await — log async so the caller doesn't wait

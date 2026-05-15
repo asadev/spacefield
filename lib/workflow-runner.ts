@@ -1,6 +1,8 @@
 import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { safeFetch, SafeFetchError } from "@/lib/safe-fetch";
+import { log } from "@/lib/log";
 import type {
   AgentWorkflowRow,
   AiSkillRow,
@@ -424,16 +426,28 @@ async function invokeTool(
     if (!/^https?:\/\//i.test(url)) {
       throw new Error("handler_target is not an http(s) URL");
     }
-    const res = await fetch(url, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        tool: tool.name,
-        input,
-        handler_params: tool.handler_params ?? null,
-      }),
-      cache: "no-store",
-    });
+    let res: Response;
+    try {
+      res = await safeFetch(url, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({
+          tool: tool.name,
+          input,
+          handler_params: tool.handler_params ?? null,
+        }),
+        cache: "no-store",
+      });
+    } catch (err) {
+      if (err instanceof SafeFetchError) {
+        log.warn("workflow.http_handler_blocked", {
+          tool: tool.name,
+          reason: err.reason,
+        });
+        throw new Error(`http handler blocked by SSRF guard: ${err.reason}`);
+      }
+      throw err;
+    }
     const text = await res.text();
     if (!res.ok) throw new Error(`http ${res.status}: ${text.slice(0, 300)}`);
     try {
