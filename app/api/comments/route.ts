@@ -7,6 +7,7 @@ import {
   softDeleteComment,
   updateCommentBody,
 } from "@/lib/collab/comments";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createClient } from "@/lib/supabase/server";
 
 /* /api/comments — polymorphic thread API.
@@ -40,6 +41,9 @@ async function requireUser() {
   return data.user;
 }
 
+// Resolved 2026-05-15: keep V-3's withApiHandler wrapper (rate-limit
+// + error-log via lib/api-wrap) and layer V-5's safeErrorMessage so
+// production responses don't leak raw DB error strings.
 export const GET = withApiHandler(
   async (req: NextRequest) => {
     const user = await requireUser();
@@ -59,7 +63,13 @@ export const GET = withApiHandler(
       return NextResponse.json({ items });
     } catch (e) {
       return NextResponse.json(
-        { error: e instanceof Error ? e.message : "list_failed" },
+        {
+          error: safeErrorMessage(e, {
+            source: "comments.list",
+            userId: user.id,
+            fallback: "list_failed",
+          }),
+        },
         { status: 400 }
       );
     }
@@ -121,7 +131,13 @@ export const POST = withApiHandler(
       return NextResponse.json({ item });
     } catch (e) {
       return NextResponse.json(
-        { error: e instanceof Error ? e.message : "create_failed" },
+        {
+          error: safeErrorMessage(e, {
+            source: "comments.create",
+            userId: user.id,
+            fallback: "create_failed",
+          }),
+        },
         { status: 400 }
       );
     }
@@ -172,7 +188,13 @@ export const PATCH = withApiHandler(
       return NextResponse.json({ item });
     } catch (e) {
       return NextResponse.json(
-        { error: e instanceof Error ? e.message : "update_failed" },
+        {
+          error: safeErrorMessage(e, {
+            source: "comments.update",
+            userId: user.id,
+            fallback: "update_failed",
+          }),
+        },
         { status: 400 }
       );
     }
@@ -198,7 +220,13 @@ export const DELETE = withApiHandler(
       return NextResponse.json({ ok: true });
     } catch (e) {
       return NextResponse.json(
-        { error: e instanceof Error ? e.message : "delete_failed" },
+        {
+          error: safeErrorMessage(e, {
+            source: "comments.delete",
+            userId: user.id,
+            fallback: "delete_failed",
+          }),
+        },
         { status: 400 }
       );
     }

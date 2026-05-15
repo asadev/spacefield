@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { withApiHandler } from "@/lib/api-wrap";
+import { safeErrorMessage } from "@/lib/safe-error";
 import {
   getAuthUserId,
   getProjectById,
@@ -58,7 +59,13 @@ export const PATCH = withApiHandler<Params>(
       return NextResponse.json({ project });
     } catch (e) {
       return NextResponse.json(
-        { error: (e as Error).message },
+        {
+          error: safeErrorMessage(e, {
+            source: "projects.update",
+            userId,
+            fallback: "update_failed",
+          }),
+        },
         { status: 400 }
       );
     }
@@ -78,7 +85,13 @@ export const DELETE = withApiHandler<Params>(
       return NextResponse.json({ ok: true });
     } catch (e) {
       return NextResponse.json(
-        { error: (e as Error).message },
+        {
+          error: safeErrorMessage(e, {
+            source: "projects.delete",
+            userId,
+            fallback: "delete_failed",
+          }),
+        },
         { status: 400 }
       );
     }

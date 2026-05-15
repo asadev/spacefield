@@ -28,13 +28,29 @@ interface SupabaseEnv {
   serviceKey: string;
 }
 
+// SC-001 — Edge middleware previously fell back to the anon key when
+// the service role secret was missing. Edge code is best-effort
+// (failures degrade to "no rate-limit / no IP rules / no log") so a
+// silent downgrade hid misconfigured deploys from us. We now refuse
+// the anon-key fallback and log a single warn so it surfaces in
+// Vercel logs without spamming.
+let warnedMissingServiceKey = false;
+
 function getSupabaseEnv(): SupabaseEnv | null {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const serviceKey =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.SUPABASE_SERVICE_ROLE ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
-  if (!url || !serviceKey) return null;
+    process.env.SUPABASE_SERVICE_ROLE;
+  if (!url || !serviceKey) {
+    if (!warnedMissingServiceKey) {
+      warnedMissingServiceKey = true;
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[middleware-helpers] missing NEXT_PUBLIC_SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY — edge helpers (rate-limit, ip-rules, error-log) will no-op",
+      );
+    }
+    return null;
+  }
   return { url, serviceKey };
 }
 

@@ -2,6 +2,12 @@
 # Pre-push hook: run the same build Vercel runs.
 # Blocks pushes that would fail deploy.
 # Bypass with `git push --no-verify` (only in emergencies).
+#
+# SE-012 — Migrated from `npm run build` to `pnpm build` so the hook
+# matches the package manager actually used by CI + Vercel (pnpm).
+# `npm install` would have happily regenerated `package-lock.json`
+# alongside the real `pnpm-lock.yaml`, which then caused Vercel to
+# rebuild against the wrong dependency tree.
 
 set -e
 
@@ -9,13 +15,13 @@ echo ""
 echo "▲ Running pre-push build check (matches Vercel) ..."
 echo ""
 
-if ! command -v npm >/dev/null 2>&1; then
-  echo "✗ npm not found — install Node.js"
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "✗ pnpm not found — install with: corepack enable && corepack prepare pnpm@latest --activate"
   exit 1
 fi
 
 # Run the same build Vercel runs
-if npm run build --silent 2>&1 | tail -40; then
+if pnpm build --silent 2>&1 | tail -40; then
   echo ""
   echo "✓ Build passed — push allowed"
   echo ""
