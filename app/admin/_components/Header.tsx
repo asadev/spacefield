@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import NotificationBell from "@/components/NotificationBell";
 import ThemeToggle from "@/components/ThemeToggle";
 
 import { NAV, SECTIONS, currentSection, isHrefActive } from "./_nav";
@@ -55,10 +56,11 @@ export default function Header({ email }: { email?: string | null }) {
           })}
         </nav>
 
-        {/* Identity + theme + exit */}
+        {/* Identity + theme + notifications + exit */}
         <div className="hidden items-center gap-3 text-xs text-muted md:flex">
           <ThemeToggle />
           <span className="font-mono tabular-nums">{email ?? "—"}</span>
+          {email ? <NotificationBell /> : null}
           <Link href="/" className="text-secondary hover:text-tool-accent">
             Exit
           </Link>
