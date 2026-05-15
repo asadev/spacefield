@@ -3,15 +3,90 @@
 import { revalidatePath } from "next/cache";
 
 import { createClient } from "@/lib/supabase/server";
+import { log } from "@/lib/log";
+import { indexDocument, unindexDocument } from "@/lib/search/indexer";
 
 import type {
   Employee,
+  EmployeeDocument,
   EmployeeDocumentKind,
   EmploymentType,
   OnboardingTaskState,
   OnboardingTaskTemplate,
   TimeOffKind,
 } from "./types";
+
+/* ──────────────────── search-index helpers (private) ────────────────────
+ *
+ * Re-indexing helpers wrapped in try/catch so a failed search write never
+ * blocks the source mutation. See lib/search/indexer.ts for contract.
+ */
+
+async function _indexEmployee(emp: Employee): Promise<void> {
+  try {
+    const subtitle =
+      [emp.job_title, emp.department].filter(Boolean).join(" · ") || null;
+    await indexDocument({
+      workspaceId: emp.workspace_id,
+      entityType: "employee",
+      entityId: emp.id,
+      title: emp.full_name,
+      subtitle,
+      body: emp.email,
+      href: `/people/${emp.id}`,
+      icon: "user",
+    });
+  } catch (err) {
+    log.warn("search.index.employee_failed", {
+      employee_id: emp.id,
+      error: (err as Error)?.message ?? String(err),
+    });
+  }
+}
+
+async function _unindexEmployee(employeeId: string): Promise<void> {
+  try {
+    await unindexDocument({ entityType: "employee", entityId: employeeId });
+  } catch (err) {
+    log.warn("search.unindex.employee_failed", {
+      employee_id: employeeId,
+      error: (err as Error)?.message ?? String(err),
+    });
+  }
+}
+
+async function _indexEmployeeDocument(doc: EmployeeDocument): Promise<void> {
+  try {
+    const expiresBit = doc.expires_at ? `expires ${doc.expires_at}` : null;
+    const subtitle = [doc.kind, expiresBit].filter(Boolean).join(" · ") || null;
+    await indexDocument({
+      workspaceId: doc.workspace_id,
+      entityType: "employee_document",
+      entityId: doc.id,
+      title: doc.name,
+      subtitle,
+      body: doc.notes,
+      href: `/people/${doc.employee_id}?tab=documents`,
+      icon: "file-text",
+    });
+  } catch (err) {
+    log.warn("search.index.employee_document_failed", {
+      doc_id: doc.id,
+      error: (err as Error)?.message ?? String(err),
+    });
+  }
+}
+
+async function _unindexEmployeeDocument(docId: string): Promise<void> {
+  try {
+    await unindexDocument({ entityType: "employee_document", entityId: docId });
+  } catch (err) {
+    log.warn("search.unindex.employee_document_failed", {
+      doc_id: docId,
+      error: (err as Error)?.message ?? String(err),
+    });
+  }
+}
 
 /**
  * Server actions for the People module. All writes go through the
@@ -67,6 +142,7 @@ export async function createEmployee(input: {
     .single();
   if (error || !data) return { ok: false, error: error?.message ?? "insert_failed" };
 
+  await _indexEmployee(data as Employee);
   revalidatePath("/people");
   revalidatePath("/admin/people");
   return { ok: true, data: data as Employee };
@@ -85,6 +161,15 @@ export async function updateEmployee(
     .select("*")
     .maybeSingle();
   if (error) return { ok: false, error: error.message };
+  if (data) {
+    // If the patch flipped the archive flag, drop the search row;
+    // otherwise re-index so subtitle/body reflect the new state.
+    if ((data as Employee).archived_at) {
+      await _unindexEmployee(id);
+    } else {
+      await _indexEmployee(data as Employee);
+    }
+  }
   revalidatePath(`/people/${id}`);
   revalidatePath("/people");
   revalidatePath("/admin/people");
@@ -99,6 +184,7 @@ export async function archiveEmployee(id: string): Promise<ActionResult> {
     .update({ archived_at: new Date().toISOString(), status: "terminated" })
     .eq("id", id);
   if (error) return { ok: false, error: error.message };
+  await _unindexEmployee(id);
   revalidatePath("/people");
   revalidatePath("/admin/people");
   return { ok: true };
@@ -213,19 +299,24 @@ export async function createEmployeeDocument(input: {
   if (!input.name?.trim()) return { ok: false, error: "name_required" };
 
   const supabase = await createClient();
-  const { error } = await supabase.from("employee_documents").insert({
-    workspace_id: input.workspace_id,
-    employee_id: input.employee_id,
-    kind: input.kind,
-    name: input.name.trim(),
-    number: input.number ?? null,
-    issued_at: input.issued_at ?? null,
-    expires_at: input.expires_at ?? null,
-    file_url: input.file_url ?? null,
-    notes: input.notes ?? null,
-    uploaded_by: userId,
-  });
+  const { data, error } = await supabase
+    .from("employee_documents")
+    .insert({
+      workspace_id: input.workspace_id,
+      employee_id: input.employee_id,
+      kind: input.kind,
+      name: input.name.trim(),
+      number: input.number ?? null,
+      issued_at: input.issued_at ?? null,
+      expires_at: input.expires_at ?? null,
+      file_url: input.file_url ?? null,
+      notes: input.notes ?? null,
+      uploaded_by: userId,
+    })
+    .select("*")
+    .maybeSingle();
   if (error) return { ok: false, error: error.message };
+  if (data) await _indexEmployeeDocument(data as EmployeeDocument);
   revalidatePath(`/people/${input.employee_id}`);
   return { ok: true };
 }
@@ -234,6 +325,7 @@ export async function deleteEmployeeDocument(id: string, employee_id: string): P
   const supabase = await createClient();
   const { error } = await supabase.from("employee_documents").delete().eq("id", id);
   if (error) return { ok: false, error: error.message };
+  await _unindexEmployeeDocument(id);
   revalidatePath(`/people/${employee_id}`);
   return { ok: true };
 }

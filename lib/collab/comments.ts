@@ -17,6 +17,30 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { log } from "@/lib/log";
+import { indexDocument, unindexDocument } from "@/lib/search/indexer";
+
+/**
+ * Map a comment's parent entity to a user-facing href. Returns null
+ * for entity types that aren't worth surfacing in /search results
+ * (so the comment is simply skipped from the index — not indexed
+ * with a bogus link).
+ */
+function commentParentHref(
+  entityType: string,
+  entityId: string
+): string | null {
+  switch (entityType) {
+    case "task":
+      return `/tasks/${entityId}`;
+    case "project":
+      return `/projects/${entityId}`;
+    case "contact":
+      return `/admin/users/${entityId}`;
+    default:
+      return null;
+  }
+}
 
 export interface Comment {
   id: string;
@@ -178,6 +202,33 @@ export async function createComment(opts: {
     console.error("[collab.comments] activity_emit failed:", err);
   }
 
+  // Index into search_documents. We surface the comment under the
+  // PARENT entity's URL so clicking the result lands the user where
+  // they can actually read context. Parents we can't map (eg. some
+  // niche entity_type) are simply not indexed — better than a dead
+  // link. Errors are swallowed so a failing search write never bricks
+  // commenting.
+  try {
+    const href = commentParentHref(row.entity_type, row.entity_id);
+    if (href) {
+      await indexDocument({
+        workspaceId: row.workspace_id,
+        entityType: "comment",
+        entityId: row.id,
+        title: row.body.slice(0, 120) || "(comment)",
+        subtitle: `comment on ${row.entity_type}`,
+        body: row.body,
+        href,
+        icon: "message-square",
+      });
+    }
+  } catch (err) {
+    log.warn("search.index.comment_failed", {
+      comment_id: row.id,
+      error: (err as Error)?.message ?? String(err),
+    });
+  }
+
   return row;
 }
 
@@ -194,6 +245,15 @@ export async function softDeleteComment(
     .eq("id", commentId)
     .eq("author_user_id", byUserId);
   if (error) throw new Error(error.message);
+
+  try {
+    await unindexDocument({ entityType: "comment", entityId: commentId });
+  } catch (err) {
+    log.warn("search.unindex.comment_failed", {
+      comment_id: commentId,
+      error: (err as Error)?.message ?? String(err),
+    });
+  }
 }
 
 export async function updateCommentBody(opts: {
@@ -220,5 +280,29 @@ export async function updateCommentBody(opts: {
     )
     .single();
   if (error) throw new Error(error.message);
-  return data as Comment;
+  const row = data as Comment;
+
+  // Re-index so the search row reflects the edited body.
+  try {
+    const href = commentParentHref(row.entity_type, row.entity_id);
+    if (href) {
+      await indexDocument({
+        workspaceId: row.workspace_id,
+        entityType: "comment",
+        entityId: row.id,
+        title: row.body.slice(0, 120) || "(comment)",
+        subtitle: `comment on ${row.entity_type}`,
+        body: row.body,
+        href,
+        icon: "message-square",
+      });
+    }
+  } catch (err) {
+    log.warn("search.reindex.comment_failed", {
+      comment_id: row.id,
+      error: (err as Error)?.message ?? String(err),
+    });
+  }
+
+  return row;
 }
