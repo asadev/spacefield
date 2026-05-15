@@ -26,6 +26,11 @@ Available skill ids and what they cover:
 - boards: notion-like database boards
 - apps: Spacefield desktop apps, Tool Store, installed apps, app descriptions, Market Pulse dashboard/tool data
 - meta: help, balance, "what can you do"
+- tasks: tasks + projects — list/create/update/complete, kanban, "what's overdue", "summarise this task"
+- people: HR — employees, org chart, time-off (request + balance + approve), document expiry tracker, onboarding
+- collab: comments, @mentions, in-app notifications + inbox, activity feed, summarise-thread
+- search: global search across all entities, saved views, "find anything called X"
+- extras: tags, favorites/pins, recycle bin, demo-data seeder
 `.trim();
 
 const SYSTEM = `You are a pre-classifier for the Spacefield workspace AI assistant.

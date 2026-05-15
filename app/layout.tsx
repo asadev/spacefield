@@ -4,6 +4,7 @@ import { Analytics } from "@vercel/analytics/next";
 import { SpeedInsights } from "@vercel/speed-insights/next";
 import "./globals.css";
 import { ThemeProvider, themeInitScript } from "@/components/ThemeProvider";
+import CommandPaletteProvider from "@/components/CommandPaletteProvider";
 import TabVisibility from "./_components/TabVisibility";
 import SiteBanner from "./_components/SiteBanner";
 import { getActiveBrand, brandCssVarsBlock } from "@/lib/runtime-brand";
@@ -87,7 +88,9 @@ export default async function RootLayout({
       <body className="relative">
         <SiteBanner />
         <TabVisibility />
-        <ThemeProvider>{children}</ThemeProvider>
+        <ThemeProvider>
+          <CommandPaletteProvider>{children}</CommandPaletteProvider>
+        </ThemeProvider>
         <Analytics />
         <SpeedInsights />
       </body>

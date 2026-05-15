@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { withApiHandler } from "@/lib/api-wrap";
-import { createClient } from "@/lib/supabase/server";
 import {
+  createTask,
   getAuthUserId,
   listTasks,
   resolveWorkspaceId,
@@ -64,30 +64,23 @@ export const POST = withApiHandler(
       );
     }
     const body = parsed.data;
-    const supabase = await createClient();
-    const insertPayload = {
-      workspace_id: body.workspace_id,
-      title: body.title,
-      description: body.description ?? null,
-      project_id: body.project_id ?? null,
-      parent_task_id: body.parent_task_id ?? null,
-      status: body.status ?? "Todo",
-      priority: body.priority ?? "normal",
-      assignee_ids: body.assignee_ids ?? [],
-      due_at: body.due_at ?? null,
-      start_at: body.start_at ?? null,
-      estimate_min: body.estimate_min ?? null,
-      created_by: userId,
-    };
-    const { data, error } = await supabase
-      .from("tasks")
-      .insert(insertPayload)
-      .select("*")
-      .single();
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    // Use the lib helper so the row gets indexed into search_documents.
+    try {
+      // Zod parses priority as a string; createTask's signature expects
+      // the narrow TaskPriority union. The schema constrains the value
+      // server-side, so an `as` cast here is safe.
+      const task = await createTask({
+        ...body,
+        priority: body.priority as TaskPriority | undefined,
+        created_by: userId,
+      });
+      return NextResponse.json({ task }, { status: 201 });
+    } catch (e) {
+      return NextResponse.json(
+        { error: (e as Error).message },
+        { status: 400 }
+      );
     }
-    return NextResponse.json({ task: data }, { status: 201 });
   },
   { source: "tasks.create", rateLimit: { count: 60, window_sec: 60 } }
 );

@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 
 import { withApiHandler } from "@/lib/api-wrap";
-import { createClient } from "@/lib/supabase/server";
-import { getAuthUserId, getProjectById } from "@/lib/tasks/server";
+import {
+  getAuthUserId,
+  getProjectById,
+  softDeleteProject,
+  updateProject,
+} from "@/lib/tasks/server";
 import { ProjectUpdateSchema } from "@/lib/tasks/validation";
 
 export const dynamic = "force-dynamic";
@@ -42,17 +46,18 @@ export const PATCH = withApiHandler<Params>(
         { status: 400 }
       );
     }
-    const supabase = await createClient();
-    const { data, error } = await supabase
-      .from("projects")
-      .update(parsed.data)
-      .eq("id", id)
-      .select("*")
-      .single();
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    try {
+      // Zod's enum widens to string; updateProject's signature is the
+      // narrow ProjectStatus. The schema validates the value, cast is safe.
+      const patch = parsed.data as Parameters<typeof updateProject>[1];
+      const project = await updateProject(id, patch);
+      return NextResponse.json({ project });
+    } catch (e) {
+      return NextResponse.json(
+        { error: (e as Error).message },
+        { status: 400 }
+      );
     }
-    return NextResponse.json({ project: data });
   },
   { source: "projects.update", rateLimit: { count: 60, window_sec: 60 } }
 );
@@ -64,15 +69,15 @@ export const DELETE = withApiHandler<Params>(
       return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
     }
     const { id } = await ctx.params;
-    const supabase = await createClient();
-    const { error } = await supabase
-      .from("projects")
-      .update({ deleted_at: new Date().toISOString() })
-      .eq("id", id);
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    try {
+      await softDeleteProject(id);
+      return NextResponse.json({ ok: true });
+    } catch (e) {
+      return NextResponse.json(
+        { error: (e as Error).message },
+        { status: 400 }
+      );
     }
-    return NextResponse.json({ ok: true });
   },
   { source: "projects.delete", rateLimit: { count: 30, window_sec: 60 } }
 );

@@ -1,8 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { withApiHandler } from "@/lib/api-wrap";
-import { createClient } from "@/lib/supabase/server";
-import { getAuthUserId, getTaskById } from "@/lib/tasks/server";
+import {
+  getAuthUserId,
+  getTaskById,
+  softDeleteTask,
+  updateTask,
+} from "@/lib/tasks/server";
 import { TaskUpdateSchema } from "@/lib/tasks/validation";
 
 export const dynamic = "force-dynamic";
@@ -42,8 +46,9 @@ export const PATCH = withApiHandler<Params>(
         { status: 400 }
       );
     }
-    const supabase = await createClient();
     const updates = parsed.data as Record<string, unknown>;
+    // Mirror the prior completion-side-effect: Done sets completed_at, anything
+    // else clears it. updateTask() handles search re-indexing.
     if (
       typeof updates.status === "string" &&
       updates.status === "Done" &&
@@ -58,16 +63,16 @@ export const PATCH = withApiHandler<Params>(
     ) {
       updates.completed_at = null;
     }
-    const { data, error } = await supabase
-      .from("tasks")
-      .update(updates)
-      .eq("id", id)
-      .select("*")
-      .single();
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const task = await updateTask(id, updates as any);
+      return NextResponse.json({ task });
+    } catch (e) {
+      return NextResponse.json(
+        { error: (e as Error).message },
+        { status: 400 }
+      );
     }
-    return NextResponse.json({ task: data });
   },
   { source: "tasks.update", rateLimit: { count: 120, window_sec: 60 } }
 );
@@ -79,15 +84,15 @@ export const DELETE = withApiHandler<Params>(
       return NextResponse.json({ error: "not_signed_in" }, { status: 401 });
     }
     const { id } = await ctx.params;
-    const supabase = await createClient();
-    const { error } = await supabase
-      .from("tasks")
-      .update({ deleted_at: new Date().toISOString() })
-      .eq("id", id);
-    if (error) {
-      return NextResponse.json({ error: error.message }, { status: 400 });
+    try {
+      await softDeleteTask(id);
+      return NextResponse.json({ ok: true });
+    } catch (e) {
+      return NextResponse.json(
+        { error: (e as Error).message },
+        { status: 400 }
+      );
     }
-    return NextResponse.json({ ok: true });
   },
   { source: "tasks.delete", rateLimit: { count: 60, window_sec: 60 } }
 );
