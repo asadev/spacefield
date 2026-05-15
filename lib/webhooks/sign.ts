@@ -17,6 +17,9 @@
 
 import "server-only";
 
+import { safeFetch, SafeFetchError } from "@/lib/safe-fetch";
+import { log } from "@/lib/log";
+
 const TIMEOUT_MS = 5_000;
 
 export type WebhookSignStatus =
@@ -103,15 +106,12 @@ export async function sendSigned(
   let responseExcerpt: string | null = null;
 
   try {
-    const ac = new AbortController();
-    const timer = setTimeout(() => ac.abort(), TIMEOUT_MS);
-    const res = await fetch(input.url, {
+    const res = await safeFetch(input.url, {
       method: "POST",
       headers,
       body: bodyText,
-      signal: ac.signal,
+      timeoutMs: TIMEOUT_MS,
     });
-    clearTimeout(timer);
     httpStatus = res.status;
     status = res.ok ? "success" : "non_2xx";
     try {
@@ -121,7 +121,20 @@ export async function sendSigned(
       // Body might already be consumed or unreadable; non-fatal.
     }
   } catch (err) {
-    if (err instanceof DOMException && err.name === "AbortError") {
+    if (err instanceof SafeFetchError) {
+      // SSRF guard tripped — record a failed delivery rather than throwing.
+      status = "network_error";
+      responseExcerpt = `safe-fetch blocked: ${err.reason}`;
+      log.warn("webhook.sendSigned_blocked", {
+        event: input.event,
+        reason: err.reason,
+      });
+    } else if (err instanceof DOMException && err.name === "AbortError") {
+      status = "timeout";
+    } else if (
+      err instanceof Error &&
+      (err.name === "TimeoutError" || err.name === "AbortError")
+    ) {
       status = "timeout";
     } else {
       status = "network_error";
