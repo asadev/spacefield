@@ -77,12 +77,15 @@ export const NAV: NavItem[] = [
   { href: "/admin/people",         label: "Employees (HR)",           section: "People" },
   { href: "/admin/people/policies", label: "Time-off policies",       section: "People" },
   { href: "/admin/people/onboarding", label: "Onboarding templates",  section: "People" },
+  { href: "/admin/waitlist",       label: "Waitlist signups",         section: "People" },
 
   // ── Data & Ops ── observability + infra
   { href: "/admin/logs",           label: "Logs",                     section: "Data & Ops" },
   { href: "/admin/audit",          label: "Audit log",                section: "Data & Ops" },
   { href: "/admin/errors",         label: "Errors",                   section: "Data & Ops" },
   { href: "/admin/insights",       label: "Cost & insights",          section: "Data & Ops" },
+  { href: "/admin/insights/latency", label: "API latency",            section: "Data & Ops" },
+  { href: "/admin/insights/slow-queries", label: "Slow queries",      section: "Data & Ops" },
   { href: "/admin/analytics",      label: "toShare analytics",        section: "Data & Ops" },
   { href: "/admin/funnels",        label: "Funnels",                  section: "Data & Ops" },
   { href: "/admin/jobs",           label: "Jobs & cron",              section: "Data & Ops" },
