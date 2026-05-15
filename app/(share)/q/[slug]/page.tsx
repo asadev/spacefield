@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 import { resolveLink, recordView } from "@/lib/share/server";
 import type { QuotePayload } from "@/lib/share/types";
 import { hashClientFingerprint } from "@/lib/share/fingerprint";
+import { sanitiseTermsHtml } from "@/lib/safe-html";
 import QuoteAccept from "../../_components/QuoteAccept";
 
 interface Props {
@@ -121,7 +122,10 @@ export default async function QuoteViewer({ params, searchParams }: Props) {
           <summary className="cursor-pointer text-sm font-medium">Terms</summary>
           <div
             className="prose prose-sm mt-2 max-w-none"
-            dangerouslySetInnerHTML={{ __html: payload.termsHtml }}
+            // SB-001: re-sanitise on the read path. Even if the source
+            // tool was bypassed (custom API caller, legacy data), the
+            // viewer always escapes and re-wraps before innerHTML.
+            dangerouslySetInnerHTML={{ __html: sanitiseTermsHtml(payload.termsHtml) }}
           />
         </details>
       ) : null}

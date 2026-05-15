@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import ToolShell from "../../_components/ToolShell";
 import ToolCard, { Field, inputCls } from "../../_components/ToolCard";
 import MintShareButton from "@/app/(share)/_components/MintShareButton";
+import { sanitiseTermsHtml } from "@/lib/safe-html";
 
 type Line = {
   id: string;
@@ -807,8 +808,11 @@ export default function QuoteBuilderPage() {
                     }),
                     currency: quote.currency || "USD",
                     notes: quote.notes || undefined,
+                    // SB-001: escape the raw textarea text before wrapping
+                    // into <p> blocks. Prevents stored XSS in the public
+                    // quote viewer at /q/[slug].
                     termsHtml: quote.terms
-                      ? `<p>${quote.terms.replace(/\n/g, "</p><p>")}</p>`
+                      ? sanitiseTermsHtml(quote.terms) || undefined
                       : undefined,
                     notifyEmail: quote.notifyEmail || undefined,
                     webhookUrl: quote.webhookUrl || undefined,
