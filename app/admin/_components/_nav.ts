@@ -74,6 +74,9 @@ export const NAV: NavItem[] = [
   { href: "/admin/api-tokens",     label: "API tokens",               section: "People" },
   { href: "/admin/coupons",        label: "Coupons & referrals",      section: "People" },
   { href: "/admin/cohorts",        label: "Cohorts",                  section: "People" },
+  { href: "/admin/people",         label: "Employees (HR)",           section: "People" },
+  { href: "/admin/people/policies", label: "Time-off policies",       section: "People" },
+  { href: "/admin/people/onboarding", label: "Onboarding templates",  section: "People" },
 
   // ── Data & Ops ── observability + infra
   { href: "/admin/logs",           label: "Logs",                     section: "Data & Ops" },
