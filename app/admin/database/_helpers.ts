@@ -1,5 +1,7 @@
 import "server-only";
 
+import { escapeCsvCell } from "@/lib/escape-helpers";
+
 /**
  * Shared helpers for the admin database browser + SQL runner.
  *
@@ -278,10 +280,10 @@ export function rowsToCsv(
 }
 
 function csvCell(v: string): string {
-  if (/[",\n\r]/.test(v)) {
-    return `"${v.replace(/"/g, '""')}"`;
-  }
-  return v;
+  // Delegate to the shared helper so formula-injection (`=`, `@`, `+`,
+  // `-`, leading tab) gets defanged with an apostrophe prefix before
+  // standard CSV quoting.
+  return escapeCsvCell(v);
 }
 
 function formatCellForCsv(v: unknown): string {

@@ -1,6 +1,7 @@
 /* CRM companies skill — same shape as contacts. */
 
 import { clampList, runQuery, toolError, toolOk } from "../_helpers";
+import { escapeForLike, escapeForOr } from "@/lib/escape-helpers";
 import type { SkillDefinition, ToolDefinition } from "@/lib/agent/runtime/types";
 
 const SELECT =
@@ -42,11 +43,15 @@ const search_companies: ToolDefinition = {
     const { query } = input as { query: string };
     const q = query.trim();
     if (!q) return toolOk([]);
+    // Same defang as crm-contacts: strip .or() structural chars then
+    // escape LIKE wildcards on the value half of each clause.
+    const safe = escapeForOr(escapeForLike(q));
+    if (!safe) return toolOk([]);
     const { data, error } = await ctx.supabase
       .from("crm_companies")
       .select(SELECT)
       .eq("workspace_id", ctx.workspaceId)
-      .or(`name.ilike.%${q}%,domain.ilike.%${q}%`)
+      .or(`name.ilike.%${safe}%,domain.ilike.%${safe}%`)
       .limit(25);
     if (error) return toolError(error.message);
     return toolOk(clampList(data ?? []));

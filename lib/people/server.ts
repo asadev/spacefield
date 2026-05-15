@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { escapeForLike, escapeForOr } from "@/lib/escape-helpers";
 import { getUserWorkspaces } from "@/lib/workspaces/server";
 import type {
   Employee,
@@ -69,10 +70,12 @@ export async function listEmployees(
       }
     }
     if (filter.query && filter.query.trim()) {
-      const needle = filter.query.trim().replace(/[,%]/g, "");
-      q = q.or(
-        `full_name.ilike.%${needle}%,email.ilike.%${needle}%,job_title.ilike.%${needle}%,department.ilike.%${needle}%`
-      );
+      const needle = escapeForOr(escapeForLike(filter.query.trim()));
+      if (needle) {
+        q = q.or(
+          `full_name.ilike.%${needle}%,email.ilike.%${needle}%,job_title.ilike.%${needle}%,department.ilike.%${needle}%`
+        );
+      }
     }
 
     const { data, error } = await q;

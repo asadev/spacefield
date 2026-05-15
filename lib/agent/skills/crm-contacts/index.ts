@@ -1,6 +1,7 @@
 /* CRM contacts skill. */
 
 import { clampList, runQuery, toolError, toolOk } from "../_helpers";
+import { escapeForLike, escapeForOr } from "@/lib/escape-helpers";
 import type { SkillDefinition, ToolDefinition } from "@/lib/agent/runtime/types";
 
 const SELECT =
@@ -47,12 +48,18 @@ const search_contacts: ToolDefinition = {
     const { query } = input as { query: string };
     const q = query.trim();
     if (!q) return toolOk([]);
+    // Sanitise for PostgREST .or() value half: strip the structural
+    // characters (`,()*`) that would break out of the filter, then
+    // escape SQL LIKE wildcards so a user query like "100%" doesn't
+    // match every row.
+    const safe = escapeForOr(escapeForLike(q));
+    if (!safe) return toolOk([]);
     const { data, error } = await ctx.supabase
       .from("crm_contacts")
       .select(SELECT)
       .eq("workspace_id", ctx.workspaceId)
       .or(
-        `first_name.ilike.%${q}%,last_name.ilike.%${q}%,email.ilike.%${q}%`
+        `first_name.ilike.%${safe}%,last_name.ilike.%${safe}%,email.ilike.%${safe}%`
       )
       .limit(25);
     if (error) return toolError(error.message);
