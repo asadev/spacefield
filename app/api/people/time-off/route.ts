@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { z } from "zod";
 
 import { createClient } from "@/lib/supabase/server";
 import {
@@ -10,6 +11,38 @@ import {
   getEmployeeForCallerInWorkspace,
   listMyTimeOffRequests,
 } from "@/lib/people/server";
+
+const uuid = z.string().uuid();
+const isoDate = z
+  .string()
+  .min(1)
+  .max(40)
+  .refine((v) => !Number.isNaN(new Date(v).getTime()), {
+    message: "invalid date",
+  });
+
+const SubmitBody = z
+  .object({
+    policy_id: uuid,
+    start_date: isoDate,
+    end_date: isoDate,
+    reason: z.string().max(2000).optional(),
+  })
+  .strict();
+
+const DecideBody = z
+  .object({
+    request_id: uuid,
+    decision: z.enum(["approved", "denied", "cancelled"]),
+    notes: z.string().max(2000).optional(),
+  })
+  .strict();
+
+async function requireUser() {
+  const supabase = await createClient();
+  const { data } = await supabase.auth.getUser();
+  return data.user ?? null;
+}
 
 /**
  * GET /api/people/time-off
@@ -23,9 +56,8 @@ import {
  *   body: { request_id, decision, notes? }
  */
 export async function GET(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: u } = await supabase.auth.getUser();
-  if (!u.user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  const user = await requireUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
   const url = new URL(req.url);
   const workspace_id =
@@ -46,53 +78,45 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
-  let body: Record<string, unknown>;
+  const user = await requireUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  let raw: unknown;
   try {
-    body = (await req.json()) as Record<string, unknown>;
+    raw = await req.json();
   } catch {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
-  const { policy_id, start_date, end_date, reason } = body as {
-    policy_id?: string;
-    start_date?: string;
-    end_date?: string;
-    reason?: string;
-  };
-  if (!policy_id || !start_date || !end_date) {
+  const parsed = SubmitBody.safeParse(raw);
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: "policy_id, start_date, end_date required" },
+      { error: "invalid_body", details: parsed.error.flatten() },
       { status: 400 }
     );
   }
-  const res = await submitTimeOffRequest({
-    policy_id,
-    start_date,
-    end_date,
-    reason,
-  });
+  const res = await submitTimeOffRequest(parsed.data);
   if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
   return NextResponse.json({ request: res.data });
 }
 
 export async function PATCH(req: NextRequest) {
-  let body: Record<string, unknown>;
+  const user = await requireUser();
+  if (!user) return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+
+  let raw: unknown;
   try {
-    body = (await req.json()) as Record<string, unknown>;
+    raw = await req.json();
   } catch {
     return NextResponse.json({ error: "invalid_json" }, { status: 400 });
   }
-  const { request_id, decision, notes } = body as {
-    request_id?: string;
-    decision?: "approved" | "denied" | "cancelled";
-    notes?: string;
-  };
-  if (!request_id || !decision) {
+  const parsed = DecideBody.safeParse(raw);
+  if (!parsed.success) {
     return NextResponse.json(
-      { error: "request_id and decision required" },
+      { error: "invalid_body", details: parsed.error.flatten() },
       { status: 400 }
     );
   }
-  const res = await decideTimeOffRequest({ request_id, decision, notes });
+  const res = await decideTimeOffRequest(parsed.data);
   if (!res.ok) return NextResponse.json({ error: res.error }, { status: 400 });
   return NextResponse.json({ ok: true });
 }

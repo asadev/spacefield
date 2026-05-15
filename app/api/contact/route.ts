@@ -1,21 +1,25 @@
 import { NextResponse, type NextRequest } from "next/server";
+
+import { withApiHandler } from "@/lib/api-wrap";
 import { createClient } from "@/lib/supabase/server";
-import { sendEmail, notifyTeam } from "@/lib/email";
 import {
   contactReceivedEmail,
+  notifyTeam,
+  sendEmail,
 } from "@/lib/email";
 import { senderForContactTopic } from "@/lib/email-senders";
 
 /* POST /api/contact
- *   body: { name, email, topic, message }
+ *   body: { name, email, topic, message, _hp_company? }
  *
  * Replaces the old inline-from-the-page Supabase insert. Now:
- *   1. inserts the row into public.contact_messages (anon-insert RLS)
- *   2. sends a branded auto-reply to the user from the topic-matched
- *      sender (info / support / sales)
- *   3. notifies the team inbox so we actually see the submission
+ *   1. honeypot check (`_hp_company` must be empty)
+ *   2. rate-limit per IP (5 / 10min) to kill mail-bombing
+ *   3. inserts the row into public.contact_messages (anon-insert RLS)
+ *   4. sends a branded auto-reply from the topic-matched sender
+ *   5. notifies the team inbox
  *
- * Errors in step 2 or 3 don't fail the request — the row is saved
+ * Errors in step 4 or 5 don't fail the request — the row is saved
  * either way and the team can pick it up from the admin panel.
  */
 
@@ -24,80 +28,98 @@ interface Body {
   email?: string;
   topic?: string;
   message?: string;
+  _hp_company?: string;
 }
 
-export async function POST(req: NextRequest) {
-  let body: Body;
-  try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: "invalid json" }, { status: 400 });
-  }
-  const { name, email, topic, message } = body;
-  if (!email || !message) {
-    return NextResponse.json({ error: "missing email or message" }, { status: 400 });
-  }
-  const safeTopic = (topic || "general").toLowerCase();
-  const safeName = (name ?? "").toString().trim() || null;
+export const POST = withApiHandler(
+  async (req: NextRequest) => {
+    let body: Body;
+    try {
+      body = await req.json();
+    } catch {
+      return NextResponse.json({ error: "invalid json" }, { status: 400 });
+    }
 
-  // 1. Insert the row (anon-insert allowed by RLS)
-  const supabase = await createClient();
-  const { data: row, error: insertErr } = await supabase
-    .from("contact_messages")
-    .insert({
-      name: safeName,
-      email: email.trim(),
-      topic: safeTopic,
-      message: message.toString().trim(),
-    })
-    .select("id")
-    .single();
-  if (insertErr) {
-    return NextResponse.json({ error: insertErr.message }, { status: 400 });
-  }
+    // Honeypot — silently 200 so bots can't tell we noticed.
+    if (typeof body._hp_company === "string" && body._hp_company.length > 0) {
+      return NextResponse.json({ ok: true });
+    }
 
-  // 2. Auto-reply to the user from the right sender role
-  const senderRole = senderForContactTopic(safeTopic);
-  try {
-    const tpl = contactReceivedEmail({ name: safeName, topic: safeTopic });
-    await sendEmail({
-      from: senderRole,
-      to: email.trim(),
-      subject: tpl.subject,
-      html: tpl.html,
-    });
-  } catch (err) {
-    console.warn("[contact] auto-reply failed:", err);
-  }
+    const { name, email, topic, message } = body;
+    if (!email || !message) {
+      return NextResponse.json(
+        { error: "missing email or message" },
+        { status: 400 }
+      );
+    }
+    const safeTopic = (topic || "general").toLowerCase();
+    const safeName = (name ?? "").toString().trim() || null;
 
-  // 3. Notify the team
-  try {
-    await notifyTeam({
-      role: senderRole,
-      subject: `[${safeTopic}] ${safeName ?? email}`,
-      html: `
-        <p><strong>From:</strong> ${escapeHtml(safeName ?? "(no name)")} &lt;${escapeHtml(
-          email
-        )}&gt;</p>
-        <p><strong>Topic:</strong> ${escapeHtml(safeTopic)}</p>
-        <hr>
-        <pre style="white-space:pre-wrap;font-family:inherit;font-size:14px;line-height:1.5;">${escapeHtml(
-          (message ?? "").toString()
-        )}</pre>
-        <hr>
-        <p style="color:#888;font-size:12px;">
-          Submission ID: ${row?.id ?? "-"} · See more in the admin panel
-          at https://spacefield.co/admin/messages
-        </p>
-      `,
-      replyTo: email.trim(),
-    });
-  } catch (err) {
-    console.warn("[contact] team notify failed:", err);
-  }
+    // 1. Insert the row (anon-insert allowed by RLS)
+    const supabase = await createClient();
+    const { data: row, error: insertErr } = await supabase
+      .from("contact_messages")
+      .insert({
+        name: safeName,
+        email: email.trim(),
+        topic: safeTopic,
+        message: message.toString().trim(),
+      })
+      .select("id")
+      .single();
+    if (insertErr) {
+      return NextResponse.json({ error: insertErr.message }, { status: 400 });
+    }
 
-  return NextResponse.json({ ok: true });
-}
+    // 2. Auto-reply to the user from the right sender role
+    const senderRole = senderForContactTopic(safeTopic);
+    try {
+      const tpl = contactReceivedEmail({ name: safeName, topic: safeTopic });
+      await sendEmail({
+        from: senderRole,
+        to: email.trim(),
+        subject: tpl.subject,
+        html: tpl.html,
+      });
+    } catch (err) {
+      console.warn("[contact] auto-reply failed:", err);
+    }
+
+    // 3. Notify the team
+    try {
+      await notifyTeam({
+        role: senderRole,
+        subject: `[${safeTopic}] ${safeName ?? email}`,
+        html: `
+          <p><strong>From:</strong> ${escapeHtml(safeName ?? "(no name)")} &lt;${escapeHtml(
+            email
+          )}&gt;</p>
+          <p><strong>Topic:</strong> ${escapeHtml(safeTopic)}</p>
+          <hr>
+          <pre style="white-space:pre-wrap;font-family:inherit;font-size:14px;line-height:1.5;">${escapeHtml(
+            (message ?? "").toString()
+          )}</pre>
+          <hr>
+          <p style="color:#888;font-size:12px;">
+            Submission ID: ${row?.id ?? "-"} · See more in the admin panel
+            at https://spacefield.co/admin/messages
+          </p>
+        `,
+        replyTo: email.trim(),
+      });
+    } catch (err) {
+      console.warn("[contact] team notify failed:", err);
+    }
+
+    return NextResponse.json({ ok: true });
+  },
+  {
+    source: "contact.submit",
+    // 5 submissions per 10 minutes per IP — generous for legit forms,
+    // kills mail-bomb attempts cold.
+    rateLimit: { count: 5, window_sec: 600 },
+  }
+);
 
 function escapeHtml(s: string): string {
   return s

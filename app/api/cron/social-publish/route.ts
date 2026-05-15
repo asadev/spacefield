@@ -1,3 +1,4 @@
+import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -77,11 +78,28 @@ function isAuthorizedCronCall(req: NextRequest): boolean {
   const secret = process.env.CRON_SECRET;
   if (secret) {
     const auth = req.headers.get("authorization");
-    if (auth === `Bearer ${secret}`) return true;
+    if (auth && safeEqualHeader(auth, `Bearer ${secret}`)) return true;
   }
   const ua = req.headers.get("user-agent") ?? "";
   if (ua.toLowerCase().includes("vercel-cron")) return true;
   // Allow the special header Vercel sets on scheduled invocations.
   if (req.headers.get("x-vercel-cron")) return true;
   return false;
+}
+
+/**
+ * Constant-time string compare. Buffer.byteLength must match for
+ * timingSafeEqual to even run, so we early-out on length mismatch
+ * with a known-good 0-byte compare to keep the timing flat.
+ */
+function safeEqualHeader(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) {
+    // Burn a fixed-cost compare so length-mismatched inputs don't
+    // observably short-circuit faster than mismatched-content inputs.
+    timingSafeEqual(Buffer.alloc(1), Buffer.alloc(1));
+    return false;
+  }
+  return timingSafeEqual(ab, bb);
 }

@@ -33,6 +33,32 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 // generous and matches the load-content cap so round-trip stays symmetric.
 const MAX_SAVE_BYTES = 25 * 1024 * 1024;
 
+/**
+ * Allowlist of MIME types this endpoint will write. The Documents and
+ * Sheets apps only ever round-trip these formats; anything else is
+ * presumed to be a malicious client trying to plant a hostile MIME on a
+ * workspace file (e.g. `text/html` so a future signed URL would render
+ * as a phishing page from our origin).
+ *
+ * Office Open XML types (docx/xlsx/pptx) are accepted under their
+ * canonical prefix; everything else is enumerated explicitly.
+ */
+const ALLOWED_CONTENT_TYPES: ReadonlyArray<string> = [
+  "application/json",
+  "text/plain",
+  "text/markdown",
+  "text/csv",
+];
+const ALLOWED_CONTENT_TYPE_PREFIXES: ReadonlyArray<string> = [
+  "application/vnd.openxmlformats-officedocument.",
+];
+
+function isAllowedContentType(ct: string): boolean {
+  const norm = ct.toLowerCase().split(";", 1)[0]!.trim();
+  if (ALLOWED_CONTENT_TYPES.includes(norm)) return true;
+  return ALLOWED_CONTENT_TYPE_PREFIXES.some((p) => norm.startsWith(p));
+}
+
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const {
@@ -61,6 +87,12 @@ export async function POST(req: NextRequest) {
     typeof contentBase64 !== "string"
   ) {
     return NextResponse.json({ error: "missing fields" }, { status: 400 });
+  }
+  if (!isAllowedContentType(contentType)) {
+    return NextResponse.json(
+      { error: "content_type_not_allowed", contentType },
+      { status: 400 }
+    );
   }
 
   // Decode the body up-front. If this fails we want to bail before we touch
