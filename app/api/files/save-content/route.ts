@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { buildR2Key, r2, R2_BUCKET } from "@/lib/r2";
@@ -241,8 +242,11 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     return NextResponse.json(
       {
-        error:
-          err instanceof Error ? err.message : "could not write to storage",
+        error: safeErrorMessage(err, {
+          source: "files.save_content.put",
+          userId: user.id,
+          fallback: "could not write to storage",
+        }),
       },
       { status: 500 }
     );

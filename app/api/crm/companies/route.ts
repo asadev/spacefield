@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { listCompanies } from "@/app/tools/crm/_data";
+import { safeErrorMessage } from "@/lib/safe-error";
 import {
   jsonError,
   readJson,
@@ -29,7 +30,14 @@ export async function GET(req: NextRequest) {
     });
     return NextResponse.json({ items });
   } catch (e) {
-    return jsonError((e as Error).message, 500);
+    return jsonError(
+      safeErrorMessage(e, {
+        source: "crm.companies.list",
+        userId: auth.user.id,
+        fallback: "list_failed",
+      }),
+      500
+    );
   }
 }
 

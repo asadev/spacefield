@@ -19,6 +19,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { timingSafeEqual } from "node:crypto";
+import { safeErrorMessage } from "@/lib/safe-error";
 import {
   ingestWebhookPayload,
   loadLeadSourceBySlug,
@@ -134,7 +135,13 @@ export async function POST(
     );
   } catch (e) {
     return jsonResponse(
-      { ok: false, error: (e as Error).message },
+      {
+        ok: false,
+        error: safeErrorMessage(e, {
+          source: "inbound.webhook.ingest",
+          fallback: "ingest_failed",
+        }),
+      },
       500
     );
   }

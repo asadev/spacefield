@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { safeErrorMessage } from "@/lib/safe-error";
 import { scanAndNotify } from "@/lib/security/suspicious-login";
 
 /* GET /api/cron/suspicious-login-scan
@@ -29,8 +30,16 @@ export async function GET(req: NextRequest) {
     const result = await scanAndNotify();
     return NextResponse.json({ ok: true, ...result });
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    return NextResponse.json({ ok: false, error: message }, { status: 500 });
+    return NextResponse.json(
+      {
+        ok: false,
+        error: safeErrorMessage(e, {
+          source: "cron.suspicious_login_scan",
+          fallback: "scan_failed",
+        }),
+      },
+      { status: 500 }
+    );
   }
 }
 

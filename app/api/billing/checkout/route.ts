@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createCheckout, type CheckoutInput } from "@/lib/billing";
 import { isValidAddonGb } from "@/app/_data/storage-addons";
+import { safeErrorMessage } from "@/lib/safe-error";
 import {
   PADDLE_ADDON_PRODUCTS,
   PADDLE_TIER_PRODUCTS,
@@ -167,7 +168,15 @@ export async function POST(req: NextRequest) {
     const result = await createCheckout(checkoutInput);
     return NextResponse.json(result);
   } catch (err) {
-    const message = err instanceof Error ? err.message : "checkout creation failed";
-    return NextResponse.json({ error: message }, { status: 502 });
+    return NextResponse.json(
+      {
+        error: safeErrorMessage(err, {
+          source: "billing.checkout.create",
+          userId: user.id,
+          fallback: "checkout creation failed",
+        }),
+      },
+      { status: 502 }
+    );
   }
 }

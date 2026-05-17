@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getPaddleWebhookSecret } from "@/lib/paddle";
 import { matchPaddleProduct } from "@/app/_data/paddle-products";
 import { withIdempotency } from "@/lib/idempotency";
+import { safeErrorMessage } from "@/lib/safe-error";
 
 /* /api/paddle/webhook
  *
@@ -197,7 +198,10 @@ export async function POST(req: NextRequest) {
     },
   ).catch((err: unknown): { ok: false; error: string } => ({
     ok: false,
-    error: err instanceof Error ? err.message : "dispatch failed",
+    error: safeErrorMessage(err, {
+      source: "paddle.webhook.dispatch",
+      fallback: "dispatch failed",
+    }),
   }));
 
   if ("ok" in result && result.ok === false) {

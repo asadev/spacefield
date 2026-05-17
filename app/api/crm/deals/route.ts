@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { getDefaultPipeline, listDeals } from "@/app/tools/crm/_data";
 import type { CrmDealStatus } from "@/app/tools/crm/types";
 import { DEAL_STATUS_VALUES } from "@/app/tools/crm/types";
+import { safeErrorMessage } from "@/lib/safe-error";
 import {
   jsonError,
   readJson,
@@ -40,7 +41,14 @@ export async function GET(req: NextRequest) {
     });
     return NextResponse.json({ items });
   } catch (e) {
-    return jsonError((e as Error).message, 500);
+    return jsonError(
+      safeErrorMessage(e, {
+        source: "crm.deals.list",
+        userId: auth.user.id,
+        fallback: "list_failed",
+      }),
+      500
+    );
   }
 }
 

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { listInventory } from "@/app/tools/crm/_data";
 import type { CrmInventoryStatus } from "@/app/tools/crm/types";
 import { INVENTORY_STATUS_VALUES } from "@/app/tools/crm/types";
+import { safeErrorMessage } from "@/lib/safe-error";
 import {
   jsonError,
   readJson,
@@ -39,7 +40,14 @@ export async function GET(req: NextRequest) {
     });
     return NextResponse.json({ items });
   } catch (e) {
-    return jsonError((e as Error).message, 500);
+    return jsonError(
+      safeErrorMessage(e, {
+        source: "crm.inventory.list",
+        userId: auth.user.id,
+        fallback: "list_failed",
+      }),
+      500
+    );
   }
 }
 
