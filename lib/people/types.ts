@@ -127,7 +127,14 @@ export interface EmployeeDocument {
   kind: EmployeeDocumentKind;
   name: string;
   file_url: string | null;
+  /**
+   * SC-005: the plaintext `number` column is wiped on write/migration.
+   * Read code MUST treat it as opaque/null and rely on `number_last4`
+   * for masked display, or call the reveal RPC for the full value
+   * after HR-role / owner gating.
+   */
   number: string | null;
+  number_last4: string | null;
   issued_at: string | null;
   expires_at: string | null;
   notes: string | null;
@@ -142,7 +149,14 @@ export interface ExpiringDocRow {
   employee_name: string;
   kind: string;
   name: string;
-  number: string | null;
+  /**
+   * SC-005: plaintext `number` is no longer returned by the
+   * expiring_docs RPC. Kept here only so old callers that reference
+   * the field compile against null; new code should use
+   * `number_last4` + `revealDocNumber` (HR-gated).
+   */
+  number?: string | null;
+  number_last4: string | null;
   expires_at: string;
   days_left: number;
 }
