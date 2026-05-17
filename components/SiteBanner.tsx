@@ -16,7 +16,7 @@ export default async function SiteBanner() {
   if (announcements.length === 0) return null;
 
   return (
-    <div className="fixed left-0 right-0 top-0 z-[60] flex flex-col gap-px">
+    <div className="fixed inset-x-0 top-0 z-[60] flex flex-col gap-px">
       {announcements.map((a) => (
         <div
           key={a.id}
@@ -25,7 +25,7 @@ export default async function SiteBanner() {
           }`}
         >
           <span className="font-semibold tracking-wide">{a.title}</span>
-          {a.body && <span className="ml-2 opacity-80">— {a.body}</span>}
+          {a.body && <span className="ms-2 opacity-80">— {a.body}</span>}
         </div>
       ))}
     </div>

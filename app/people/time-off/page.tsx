@@ -339,7 +339,7 @@ function TeamCalendar({
           })}
         </div>
         <div className="mt-3 text-[10px] text-faint">
-          <span className="mr-3 inline-flex items-center gap-1">
+          <span className="me-3 inline-flex items-center gap-1">
             <span className="rounded bg-tool-accent-soft px-1 py-px font-medium text-tool-accent">
               H
             </span>{" "}

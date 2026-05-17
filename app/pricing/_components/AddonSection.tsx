@@ -135,7 +135,7 @@ export default function AddonSection() {
           </p>
         </header>
 
-        <div className="mt-10 grid gap-4 sm:grid-cols-3">
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 md:grid-cols-3">
           {purchasable.map((opt) => {
             const submitting = submittingGb === opt.gb;
             const error = errorGb?.gb === opt.gb ? errorGb.text : null;

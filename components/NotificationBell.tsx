@@ -93,14 +93,14 @@ export default function NotificationBell() {
           <path d="M10 20a2 2 0 0 0 4 0" />
         </svg>
         {unread > 0 && (
-          <span className="absolute -right-1 -top-1 inline-flex min-w-[16px] items-center justify-center border border-black bg-teal-400 px-1 text-[9px] font-semibold leading-[14px] text-black">
+          <span className="absolute -end-1 -top-1 inline-flex min-w-[16px] items-center justify-center border border-black bg-teal-400 px-1 text-[9px] font-semibold leading-[14px] text-black">
             {unread > 9 ? "9+" : unread}
           </span>
         )}
       </button>
 
       {open && (
-        <div className="absolute right-0 top-[110%] z-50 w-80 border border-app bg-app-elevated shadow-xl">
+        <div className="absolute end-0 top-[110%] z-50 w-80 border border-app bg-app-elevated shadow-xl">
           <div className="flex items-center justify-between border-b border-app px-3 py-2">
             <span className="text-[0.6rem] uppercase tracking-[0.2em] text-muted">
               Notifications

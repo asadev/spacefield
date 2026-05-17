@@ -179,7 +179,7 @@ export default function DocumentUpload({ employeeId }: { employeeId: string }) {
           ref={fileRef}
           type="file"
           accept="application/pdf,image/jpeg,image/png,image/webp"
-          className="block w-full text-sm text-app file:mr-2 file:rounded-md file:border-0 file:bg-app-muted file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-app hover:file:bg-app-muted/80"
+          className="block w-full text-sm text-app file:me-2 file:rounded-md file:border-0 file:bg-app-muted file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-app hover:file:bg-app-muted/80"
           disabled={pending}
           required
         />

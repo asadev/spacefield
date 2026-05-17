@@ -68,7 +68,7 @@ export default function CookieConsent({
       role="dialog"
       aria-label="Cookie consent"
       aria-live="polite"
-      className="fixed bottom-4 right-4 z-[9999] w-[min(360px,calc(100vw-2rem))] rounded-xl border border-app bg-app-elevated p-4 shadow-2xl"
+      className="fixed bottom-4 end-4 z-[9999] w-[min(360px,calc(100vw-2rem))] rounded-xl border border-app bg-app-elevated p-4 shadow-2xl"
       style={{ backdropFilter: "saturate(140%)" }}
     >
       <p className="text-sm leading-relaxed text-app">
