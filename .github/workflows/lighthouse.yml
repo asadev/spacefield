@@ -1,0 +1,87 @@
+name: Lighthouse CI
+
+# Runs @lhci/cli against the four public landing surfaces on every PR
+# touching app/, lib/, or package metadata. Assertions are scored
+# against the thresholds in lighthouserc.json — perf>=80, a11y>=90,
+# best-practices>=90, seo>=90.
+#
+# Initial rollout: failures show up as warnings only (`assertMatrix`
+# preset = "lighthouse:recommended" + assertions are configured to
+# `warn` in lighthouserc.json). Flip them to `error` once the baseline
+# is stable for two PR cycles.
+#
+# @lhci/cli is NOT in the production dependency tree. The job installs
+# it on demand (mirrors the vitest pattern in test.yml) so the
+# lockfile stays lean.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "app/**"
+      - "lib/**"
+      - "components/**"
+      - "public/**"
+      - "next.config.ts"
+      - "package.json"
+      - "pnpm-lock.yaml"
+      - "lighthouserc.json"
+      - ".github/workflows/lighthouse.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: lighthouse-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lighthouse:
+    name: Lighthouse audit
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (next)
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+          NEXT_TELEMETRY_DISABLED: "1"
+
+      - name: Install Lighthouse CI (job-scoped, not committed to lockfile)
+        run: pnpm add -D --no-save @lhci/cli@^0.14
+
+      - name: Run Lighthouse CI
+        run: pnpm exec lhci autorun --config=./lighthouserc.json
+        env:
+          # If LHCI_GITHUB_APP_TOKEN is set in repo secrets, lhci will
+          # post a check-run summary. Optional; missing token is fine.
+          LHCI_GITHUB_APP_TOKEN: ${{ secrets.LHCI_GITHUB_APP_TOKEN }}
+          # Build envs the prod server boot needs.
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+          NEXT_TELEMETRY_DISABLED: "1"
+
+      - name: Upload lighthouse artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: lighthouse-reports
+          path: .lighthouseci/
+          retention-days: 14
+          if-no-files-found: ignore
