@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { safeErrorMessage } from "@/lib/safe-error";
 
 import { recordAdminAction } from "@/app/admin/_audit";
 import { assertAdmin } from "@/app/admin/_lib";
@@ -13,11 +14,17 @@ export const dynamic = "force-dynamic";
  * for `bulkImport`. Audited as `locale_string.export`.
  */
 export async function GET(req: Request): Promise<Response> {
+  let auth: { userId: string; email: string | null };
   try {
-    await assertAdmin();
+    auth = await assertAdmin();
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "not authorized" },
+      {
+        error: safeErrorMessage(e, {
+          source: "admin.locales.export.auth",
+          fallback: "not authorized",
+        }),
+      },
       { status: 403 }
     );
   }
@@ -52,7 +59,16 @@ export async function GET(req: Request): Promise<Response> {
       .order("string_key", { ascending: true })
       .range(from, from + PAGE - 1);
     if (error) {
-      return NextResponse.json({ error: error.message }, { status: 500 });
+      return NextResponse.json(
+        {
+          error: safeErrorMessage(error, {
+            source: "admin.locales.export.read",
+            userId: auth.userId,
+            fallback: "locale_export_read_failed",
+          }),
+        },
+        { status: 500 }
+      );
     }
     const rows = (data ?? []) as { string_key: string; value: string }[];
     for (const r of rows) out[r.string_key] = r.value;

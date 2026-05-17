@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { assertAdmin } from "@/app/admin/_lib";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -18,11 +19,17 @@ export const dynamic = "force-dynamic";
  *   { ok: true, rows: RefundRow[], count: number }
  */
 export async function GET(req: NextRequest) {
+  let auth: { userId: string; email: string | null };
   try {
-    await assertAdmin();
+    auth = await assertAdmin();
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "forbidden" },
+      {
+        error: safeErrorMessage(e, {
+          source: "admin.refunds.list.auth",
+          fallback: "forbidden",
+        }),
+      },
       { status: 403 }
     );
   }
@@ -47,7 +54,16 @@ export async function GET(req: NextRequest) {
 
   const { data, count, error } = await query;
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: safeErrorMessage(error, {
+          source: "admin.refunds.list",
+          userId: auth.userId,
+          fallback: "refunds_list_failed",
+        }),
+      },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ ok: true, rows: data ?? [], count: count ?? 0 });

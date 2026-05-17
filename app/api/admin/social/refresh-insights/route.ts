@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
 
 import { assertAdmin } from "@/app/admin/_lib";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPostInsights } from "@/lib/meta";
 
@@ -18,11 +19,17 @@ import { getPostInsights } from "@/lib/meta";
 type Channel = "facebook" | "instagram";
 
 export async function POST(req: NextRequest) {
+  let auth: { userId: string; email: string | null };
   try {
-    await assertAdmin();
+    auth = await assertAdmin();
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "forbidden" },
+      {
+        error: safeErrorMessage(e, {
+          source: "admin.social.refresh_insights.auth",
+          fallback: "forbidden",
+        }),
+      },
       { status: 403 }
     );
   }
@@ -44,7 +51,16 @@ export async function POST(req: NextRequest) {
     .eq("id", parsed.id)
     .maybeSingle();
   if (readErr) {
-    return NextResponse.json({ error: readErr.message }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: safeErrorMessage(readErr, {
+          source: "admin.social.refresh_insights.read",
+          userId: auth.userId,
+          fallback: "post_read_failed",
+        }),
+      },
+      { status: 500 }
+    );
   }
   if (!row) {
     return NextResponse.json({ error: "post_not_found" }, { status: 404 });
@@ -67,7 +83,13 @@ export async function POST(req: NextRequest) {
     insights = await getPostInsights(r.meta_post_id, r.channel);
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "meta error" },
+      {
+        error: safeErrorMessage(err, {
+          source: "admin.social.refresh_insights.meta",
+          userId: auth.userId,
+          fallback: "meta_error",
+        }),
+      },
       { status: 502 }
     );
   }
@@ -83,7 +105,13 @@ export async function POST(req: NextRequest) {
     .single();
   if (upErr || !updated) {
     return NextResponse.json(
-      { error: upErr?.message ?? "update failed" },
+      {
+        error: safeErrorMessage(upErr ?? new Error("update failed"), {
+          source: "admin.social.refresh_insights.update",
+          userId: auth.userId,
+          fallback: "update_failed",
+        }),
+      },
       { status: 500 }
     );
   }

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
 
 import { runBulk } from "@/lib/bulk";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { recordAdminAction } from "@/app/admin/_audit";
@@ -83,7 +84,13 @@ export async function POST(req: NextRequest): Promise<Response> {
     auth = await assertAdmin();
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "forbidden" },
+      {
+        ok: false,
+        error: safeErrorMessage(e, {
+          source: "admin.bulk.run.auth",
+          fallback: "forbidden",
+        }),
+      },
       { status: 401 }
     );
   }
@@ -171,7 +178,11 @@ export async function POST(req: NextRequest): Promise<Response> {
     return NextResponse.json(
       {
         ok: false,
-        error: e instanceof Error ? e.message : String(e),
+        error: safeErrorMessage(e, {
+          source: "admin.bulk.run",
+          userId: auth.userId,
+          fallback: "bulk_run_failed",
+        }),
       },
       { status: 500 }
     );

@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { assertAdmin } from "@/app/admin/_lib";
 import { recordAdminAction } from "@/app/admin/_audit";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createAdminClient } from "@/lib/supabase/admin";
 import {
   getProviderClient,
@@ -29,11 +30,18 @@ export async function GET(
   req: NextRequest,
   context: { params: Promise<{ id: string }> }
 ) {
+  let auth: { userId: string; email: string | null };
   try {
-    await assertAdmin();
+    auth = await assertAdmin();
   } catch (e) {
     return NextResponse.json(
-      { ok: false, error: e instanceof Error ? e.message : "forbidden" },
+      {
+        ok: false,
+        error: safeErrorMessage(e, {
+          source: "admin.providers.discover.auth",
+          fallback: "forbidden",
+        }),
+      },
       { status: 403 }
     );
   }
@@ -49,7 +57,14 @@ export async function GET(
     .maybeSingle();
   if (error) {
     return NextResponse.json(
-      { ok: false, error: error.message },
+      {
+        ok: false,
+        error: safeErrorMessage(error, {
+          source: "admin.providers.discover.read",
+          userId: auth.userId,
+          fallback: "provider_read_failed",
+        }),
+      },
       { status: 500 }
     );
   }

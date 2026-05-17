@@ -10,6 +10,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { DEFAULT_PERSONA, type AgentPersona } from "@/lib/agent/runtime/persona";
 
 const VALID_TONES: AgentPersona["voice_tone"][] = [
@@ -46,7 +47,16 @@ export async function GET(req: NextRequest) {
     .eq("workspace_id", workspaceId)
     .maybeSingle();
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: safeErrorMessage(error, {
+          source: "agent.persona.get",
+          userId: user.id,
+          fallback: "persona_read_failed",
+        }),
+      },
+      { status: 400 }
+    );
   }
   if (!data) {
     return NextResponse.json({ ...DEFAULT_PERSONA, updated_at: null });
@@ -128,7 +138,16 @@ export async function PUT(req: NextRequest) {
       { onConflict: "workspace_id" }
     );
   if (upsertErr) {
-    return NextResponse.json({ error: upsertErr.message }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: safeErrorMessage(upsertErr, {
+          source: "agent.persona.put",
+          userId: user.id,
+          fallback: "persona_update_failed",
+        }),
+      },
+      { status: 400 }
+    );
   }
   return NextResponse.json({
     bot_name: botName,
@@ -173,7 +192,16 @@ export async function DELETE(req: NextRequest) {
     .delete()
     .eq("workspace_id", workspaceId);
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: safeErrorMessage(error, {
+          source: "agent.persona.delete",
+          userId: user.id,
+          fallback: "persona_delete_failed",
+        }),
+      },
+      { status: 400 }
+    );
   }
   return NextResponse.json({ ok: true, ...DEFAULT_PERSONA });
 }
