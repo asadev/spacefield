@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { assertAdmin } from "@/app/admin/_lib";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { respondWithEtag } from "@/lib/etag";
 
 export const dynamic = "force-dynamic";
 
@@ -40,5 +41,7 @@ export async function GET(req: NextRequest) {
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ rows: data ?? [], count: count ?? 0 });
+  // Weak ETag + 304: integrations changes infrequently and the admin
+  // page polls it on tab focus. 304s here are nearly free.
+  return respondWithEtag(req, { rows: data ?? [], count: count ?? 0 });
 }

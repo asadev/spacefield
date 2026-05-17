@@ -17,6 +17,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { withIdempotency } from "@/lib/idempotency";
 import { dispatch } from "@/lib/agent/runtime/dispatcher";
 import type {
   AgentClientContext,
@@ -38,6 +39,16 @@ interface DispatchBody {
   scope?: DispatchScope;
   conversation_id?: string;
   client_context?: unknown;
+  /** Optional idempotency key from the client; takes precedence over the header. */
+  idempotency_key?: string;
+}
+
+interface DispatchResponse {
+  reply: unknown;
+  credit_used: { quick: number; deep: number };
+  requires_approval: unknown;
+  budget_exhausted: boolean;
+  conversation_id: string | null;
 }
 
 function stringList(value: unknown, max = 120): string[] | undefined {
@@ -162,26 +173,54 @@ export async function POST(req: NextRequest) {
     clientContext: sanitizeClientContext(body.client_context),
   };
 
+  // Idempotency: clients can pass `idempotency_key` in the body or an
+  // `Idempotency-Key` request header to safely retry a dispatch (e.g.
+  // network blip after a tool side-effect already fired). Namespaced as
+  // `agent-dispatch:<user>:<key>` so the same key from different users
+  // doesn't collide.
+  const rawIdempotencyKey =
+    (typeof body.idempotency_key === "string" && body.idempotency_key) ||
+    req.headers.get("idempotency-key") ||
+    "";
+  const idempotencyKey = rawIdempotencyKey
+    ? `agent-dispatch:${user.id}:${rawIdempotencyKey}`
+    : "";
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const supabaseServiceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE ||
+    "";
+
   try {
-    const result = await dispatch(
+    const responseBody = await withIdempotency<DispatchResponse>(
       {
-        kind: "text",
-        channel: "in_app",
-        text: messageText,
-        from: user.id,
-        receivedAt: new Date().toISOString(),
+        key: idempotencyKey,
+        supabase: { url: supabaseUrl, serviceRoleKey: supabaseServiceRoleKey },
       },
-      ctx,
-      { scope }
+      async () => {
+        const result = await dispatch(
+          {
+            kind: "text",
+            channel: "in_app",
+            text: messageText,
+            from: user.id,
+            receivedAt: new Date().toISOString(),
+          },
+          ctx,
+          { scope }
+        );
+
+        return {
+          reply: result.reply,
+          credit_used: result.creditUsed ?? { quick: 0, deep: 0 },
+          requires_approval: result.requiresApproval ?? null,
+          budget_exhausted: result.budgetExhausted ?? false,
+          conversation_id: body.conversation_id ?? null,
+        };
+      }
     );
 
-    return NextResponse.json({
-      reply: result.reply,
-      credit_used: result.creditUsed ?? { quick: 0, deep: 0 },
-      requires_approval: result.requiresApproval ?? null,
-      budget_exhausted: result.budgetExhausted ?? false,
-      conversation_id: body.conversation_id ?? null,
-    });
+    return NextResponse.json(responseBody);
   } catch (e) {
     return NextResponse.json(
       {
