@@ -15,6 +15,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+import { pushUndo } from "@/lib/undo";
+import { toast } from "@/lib/toast";
+
 import MentionInput, { type MentionMember } from "./MentionInput";
 
 interface Author {
@@ -180,7 +183,13 @@ export default function CommentsThread({
   }
 
   async function deleteComment(commentId: string) {
-    if (!confirm("Delete this comment?")) return;
+    // No native confirm here — the Undo snackbar gives the user a 5-second
+    // window to recover from an accidental click, which is friendlier
+    // than a modal interrupting flow for an ordinary edit.
+    const target = items.find((c) => c.id === commentId);
+    if (!target) return;
+    // Optimistic remove
+    setItems((prev) => prev.filter((c) => c.id !== commentId));
     try {
       const res = await fetch(
         `/api/comments?comment_id=${encodeURIComponent(commentId)}`,
@@ -190,8 +199,34 @@ export default function CommentsThread({
         const json = (await res.json()) as { error?: string };
         throw new Error(json.error ?? "delete_failed");
       }
-      setItems((prev) => prev.filter((c) => c.id !== commentId));
+      pushUndo("Comment deleted.", async () => {
+        try {
+          const restoreRes = await fetch("/api/trash", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              action: "restore",
+              entity_type: "comment",
+              entity_id: commentId,
+              workspace_id: workspaceId,
+            }),
+          });
+          if (!restoreRes.ok) throw new Error("restore_failed");
+          // Re-insert the comment in its original slot.
+          setItems((prev) => {
+            if (prev.some((c) => c.id === commentId)) return prev;
+            return [...prev, { ...target, deleted_at: null }];
+          });
+          toast.success("Comment restored.");
+        } catch {
+          toast.error("Couldn't restore the comment.");
+        }
+      });
     } catch (e) {
+      // Roll back the optimistic remove on a network/API failure.
+      setItems((prev) =>
+        prev.some((c) => c.id === commentId) ? prev : [...prev, target]
+      );
       setError(e instanceof Error ? e.message : "delete_failed");
     }
   }

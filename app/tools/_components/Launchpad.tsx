@@ -1581,6 +1581,12 @@ export default function Launchpad({
                 showToast(nowStarred ? "Added to Favorites" : "Removed from Favorites");
               }}
               onDelete={async () => {
+                if (
+                  typeof window !== "undefined" &&
+                  !window.confirm(`Move "${menu.file.name}" to Trash?`)
+                ) {
+                  return;
+                }
                 try {
                   await fetch(
                     `/api/files/delete?id=${encodeURIComponent(menu.file.id)}`,
@@ -1646,6 +1652,14 @@ export default function Launchpad({
                 }
               }}
               onRevoke={async () => {
+                if (
+                  typeof window !== "undefined" &&
+                  !window.confirm(
+                    "Revoke this share? Recipients will lose access."
+                  )
+                ) {
+                  return;
+                }
                 try {
                   await fetch(
                     `/api/files/shares/${encodeURIComponent(menu.share.id)}`,

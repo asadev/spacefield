@@ -100,6 +100,13 @@ export default function LaunchpadTrashView({
 
   const onPermanentDelete = useCallback(
     async (id: string) => {
+      // Permanent delete bypasses the recycle bin — always confirm.
+      if (
+        typeof window !== "undefined" &&
+        !window.confirm("Permanently delete this file? This cannot be undone.")
+      ) {
+        return;
+      }
       setBusyId(id);
       setRows((prev) => (prev ?? []).filter((r) => r.id !== id));
       try {
