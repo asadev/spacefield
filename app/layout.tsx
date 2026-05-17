@@ -6,10 +6,14 @@ import "./globals.css";
 import { ThemeProvider, themeInitScript } from "@/components/ThemeProvider";
 import CommandPaletteProvider from "@/components/CommandPaletteProvider";
 import CookieConsent from "@/components/CookieConsent";
+import Toaster from "@/components/Toaster";
+import ShortcutHelp from "@/components/ShortcutHelp";
+import WhatsNew from "@/components/WhatsNew";
 import TabVisibility from "./_components/TabVisibility";
 import SiteBanner from "./_components/SiteBanner";
 import { getActiveBrand, brandCssVarsBlock } from "@/lib/runtime-brand";
 import { getConsentCookie } from "@/lib/cookie-consent";
+import { getLastSeenVersion } from "@/lib/changelog/last-seen";
 
 const inter = Inter({
   variable: "--font-inter",
@@ -74,6 +78,7 @@ export default async function RootLayout({
   const brandCss = brandCssVarsBlock(brand);
   const faviconUrl = brand?.favicon_url ?? null;
   const consent = await getConsentCookie();
+  const lastSeenWhatsNew = await getLastSeenVersion();
 
   return (
     <html
@@ -94,6 +99,9 @@ export default async function RootLayout({
         <ThemeProvider>
           <CommandPaletteProvider>{children}</CommandPaletteProvider>
           <CookieConsent initialAccepted={consent !== null} />
+          <Toaster />
+          <ShortcutHelp />
+          <WhatsNew lastSeen={lastSeenWhatsNew} />
         </ThemeProvider>
         <Analytics />
         <SpeedInsights />
