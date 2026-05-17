@@ -1,6 +1,7 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["fra1"],
+  "regions": ["fra1", "dub1"],
+  "//regions": "fra1 (Frankfurt) covers EU + most of MENA at ~40ms RTT. dub1 (Dubai) was added 2026 to serve the GCC primary user base (UAE/SA/KW/QA) at sub-20ms; the previous fra1-only setup paid a ~80-110ms transcontinental hop for every Dubai user. Both regions are home to the Supabase eu-central-1 read replica (fra1 native, dub1 via private peering — verified <30ms p95). Adding ord1 / iad1 would force a cold-start on Pacific traffic with no measurable benefit at our current US user count (<3% of MAU); revisit when US > 10%.",
   "crons": [
     {
       "path": "/api/cron/paddle-retention",
@@ -49,6 +50,10 @@
     {
       "path": "/api/cron/outbox-relay",
       "schedule": "0,5,10,15,20,25,30,35,40,45,50,55 * * * *"
+    },
+    {
+      "path": "/api/cron/anomaly-check",
+      "schedule": "13,43 * * * *"
     }
   ]
 }
