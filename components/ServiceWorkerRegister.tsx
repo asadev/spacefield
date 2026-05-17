@@ -25,6 +25,16 @@ export default function ServiceWorkerRegister() {
     const register = () => {
       navigator.serviceWorker
         .register("/sw.js", { scope: "/" })
+        .then((reg) => {
+          /* Mobile-perf (Wave 4 Z2): the SW was bumped from v1 → v2
+           * (page-cache layer added). Existing installs ship the old
+           * worker; ping the SW for an update on each fresh load so
+           * users transition without needing to close every tab. The
+           * `skipWaiting()` inside the new SW completes the swap on
+           * the next navigation. Update checks are cheap (HEAD-ish)
+           * and the failure is silent. */
+          reg.update().catch(() => {});
+        })
         .catch(() => {
           /* swallow — fall back to no SW */
         });
