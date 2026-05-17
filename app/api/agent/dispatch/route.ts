@@ -18,6 +18,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { enforceRateLimit } from "@/lib/rate-limit";
 import { withIdempotency } from "@/lib/idempotency";
+import { timeQuery } from "@/lib/observability/query-timing";
 import { dispatch } from "@/lib/agent/runtime/dispatcher";
 import type {
   AgentClientContext,
@@ -125,12 +126,17 @@ export async function POST(req: NextRequest) {
   // sessions, which falsely returns "not_a_member" for legitimate
   // workspace owners.
   const admin = createAdminClient();
-  const { data: mem } = await admin
-    .from("workspace_members")
-    .select("role")
-    .eq("workspace_id", workspaceId)
-    .eq("user_id", user.id)
-    .maybeSingle();
+  const { data: mem } = await timeQuery(
+    "workspace_members.role_lookup",
+    async () =>
+      await admin
+        .from("workspace_members")
+        .select("role")
+        .eq("workspace_id", workspaceId)
+        .eq("user_id", user.id)
+        .maybeSingle(),
+    { source: "agent.dispatch" }
+  );
   if (!mem) {
     return NextResponse.json({ error: "not_a_member" }, { status: 403 });
   }

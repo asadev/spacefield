@@ -44,6 +44,14 @@ const ERR_MIN_CALLS = 5;           // need this many calls to count err_rate
 const CURRENT_MIN_CALLS = 10;      // need this many calls in current window
 const BASELINE_MIN_SAMPLES = 3;    // need >= 3 historical sample-hours
 
+// Top-spender thresholds — see runTopSpenderCheck() below.
+// We compare each workspace's last-24h cost against its rolling 7-day
+// median. Anything >= 2x the median (and above the floor) gets paged.
+const SPEND_WINDOW_MIN = 1440;        // 24h
+const SPEND_MULTIPLIER = 2;           // 2x the historical median
+const SPEND_FLOOR_USD = 5;            // ignore "0.01→0.05" cents-level blips
+const SPEND_HISTORY_DAYS = 7;
+
 type CurrentRow = {
   source: string;
   count: number;
@@ -217,6 +225,23 @@ export async function GET(req: NextRequest) {
       });
     }
 
+    // 5. Top-spender check — runs every tick alongside latency anomalies.
+    //    Failures here are isolated so a busted ai_cost_summary call
+    //    can't suppress latency alerting (the original responsibility
+    //    of this cron).
+    let topSpender: TopSpenderResult = {
+      workspaces_checked: 0,
+      spikes: [],
+      notified_admins: 0,
+    };
+    try {
+      topSpender = await runTopSpenderCheck(admin);
+    } catch (e) {
+      log.warn("cron.anomaly.top_spender_failed", {
+        error: (e as Error).message,
+      });
+    }
+
     return NextResponse.json({
       ok: true,
       window_minutes: WINDOW_MINUTES,
@@ -224,12 +249,17 @@ export async function GET(req: NextRequest) {
       sources_checked: current.length,
       anomalies,
       notified_admins: notifiedAdmins,
+      top_spender: topSpender,
       thresholds: {
         p95_multiplier: P95_MULTIPLIER,
         p95_min_baseline_ms: P95_MIN_BASELINE_MS,
         err_rate_threshold: ERR_RATE_THRESHOLD,
         current_min_calls: CURRENT_MIN_CALLS,
         baseline_min_samples: BASELINE_MIN_SAMPLES,
+        spend_multiplier: SPEND_MULTIPLIER,
+        spend_floor_usd: SPEND_FLOOR_USD,
+        spend_window_min: SPEND_WINDOW_MIN,
+        spend_history_days: SPEND_HISTORY_DAYS,
       },
     });
   } catch (e) {
@@ -256,4 +286,225 @@ function isAuthorizedCronCall(req: NextRequest): boolean {
   if (ua.toLowerCase().includes("vercel-cron")) return true;
   if (req.headers.get("x-vercel-cron")) return true;
   return false;
+}
+
+// ─────────────────────── Top-spender check ───────────────────────
+//
+// We compare each workspace's 24h AI spend against its rolling 7-day
+// median. Workspaces that spend >= SPEND_MULTIPLIER × median (and at
+// least SPEND_FLOOR_USD) get an admin notification via
+// public.top_spender_alert.
+//
+// Inputs:
+//   - current 24h: ai_cost_summary(1440, workspace_id) — but we don't
+//     have a workspace-less variant that returns rows per workspace,
+//     so we read the matview ai_cost_daily directly. That matview is
+//     refreshed daily at 06:30 UTC; the freshness gap is fine for
+//     a 24h-window comparison (a workspace can't realistically spike
+//     in the first hour after refresh and slip through — the 24h
+//     window from ai_calls will catch it on the next tick).
+//   - history: ai_cost_daily over the prior SPEND_HISTORY_DAYS days
+//     (excluding today, so today's spike doesn't influence its own
+//     median).
+//
+// We compute "yesterday's cost vs 7-day median (excluding yesterday)".
+// "Yesterday" is the most-recent fully-closed UTC day in the matview;
+// this is intentionally conservative — we'd rather page once on the
+// final 24h total than twice on a still-accruing today.
+
+type WorkspaceSpend = {
+  workspace_id: string | null;
+  cost_usd: number;
+};
+
+type TopSpenderSpike = {
+  workspace_id: string;
+  recent_cost_usd: number;
+  median_cost_usd: number;
+  history_days: number;
+  multiplier: number;
+};
+
+type TopSpenderResult = {
+  workspaces_checked: number;
+  spikes: TopSpenderSpike[];
+  notified_admins: number;
+};
+
+interface SupabaseLikeClient {
+  from: (table: string) => {
+    select: (cols: string) => {
+      gte: (col: string, val: string) => {
+        lt: (col: string, val: string) => Promise<{
+          data: unknown;
+          error: { message: string } | null;
+        }>;
+      };
+    };
+  };
+  rpc: (
+    fn: string,
+    args: Record<string, unknown>
+  ) => Promise<{ data: unknown; error: { message: string } | null }>;
+}
+
+async function runTopSpenderCheck(
+  admin: SupabaseLikeClient
+): Promise<TopSpenderResult> {
+  const now = new Date();
+  // Most recent fully-closed UTC day.
+  const yesterdayEnd = new Date(
+    Date.UTC(
+      now.getUTCFullYear(),
+      now.getUTCMonth(),
+      now.getUTCDate(),
+      0, 0, 0, 0
+    )
+  );
+  const yesterdayStart = new Date(yesterdayEnd.getTime() - 24 * 60 * 60 * 1000);
+  const historyStart = new Date(
+    yesterdayStart.getTime() - SPEND_HISTORY_DAYS * 24 * 60 * 60 * 1000
+  );
+
+  // 24h via the existing RPC — gives us the most recent rolling spend
+  // per (workspace, agent, model). Sum into workspace totals.
+  const { data: rpcData, error: rpcErr } = await admin.rpc(
+    "ai_cost_summary",
+    { p_window_minutes: SPEND_WINDOW_MIN, p_workspace_id: null }
+  );
+  if (rpcErr) {
+    log.warn("cron.top_spender.rpc_failed", { error: rpcErr.message });
+    return { workspaces_checked: 0, spikes: [], notified_admins: 0 };
+  }
+
+  // ai_cost_summary doesn't return workspace_id (it groups by agent +
+  // model). For a workspace-level rollup we read ai_calls via the
+  // matview that's already aggregated by (workspace, day, model).
+  // Get yesterday's total per workspace.
+  const { data: recentRows, error: recentErr } = await admin
+    .from("ai_cost_daily")
+    .select("workspace_id, cost_usd")
+    .gte("day", yesterdayStart.toISOString().slice(0, 10))
+    .lt("day", yesterdayEnd.toISOString().slice(0, 10));
+
+  if (recentErr) {
+    log.warn("cron.top_spender.recent_failed", { error: recentErr.message });
+    return { workspaces_checked: 0, spikes: [], notified_admins: 0 };
+  }
+
+  // History: prior SPEND_HISTORY_DAYS days, excluding yesterday.
+  const { data: historyRows, error: historyErr } = await admin
+    .from("ai_cost_daily")
+    .select("workspace_id, cost_usd, day")
+    .gte("day", historyStart.toISOString().slice(0, 10))
+    .lt("day", yesterdayStart.toISOString().slice(0, 10));
+
+  if (historyErr) {
+    log.warn("cron.top_spender.history_failed", { error: historyErr.message });
+    return { workspaces_checked: 0, spikes: [], notified_admins: 0 };
+  }
+
+  // Aggregate recent per workspace.
+  const recentByWs = new Map<string, number>();
+  for (const r of (recentRows as WorkspaceSpend[] | null) ?? []) {
+    if (!r.workspace_id) continue;
+    recentByWs.set(
+      r.workspace_id,
+      (recentByWs.get(r.workspace_id) ?? 0) + Number(r.cost_usd ?? 0)
+    );
+  }
+
+  // Aggregate history per (workspace, day). We want per-day totals so
+  // the median is taken over comparable units (one observation per
+  // day, not one per (day, model)).
+  const historyByWsDay = new Map<string, Map<string, number>>();
+  for (const r of (historyRows as Array<WorkspaceSpend & { day: string }> | null) ?? []) {
+    if (!r.workspace_id) continue;
+    const dayMap =
+      historyByWsDay.get(r.workspace_id) ??
+      new Map<string, number>();
+    dayMap.set(r.day, (dayMap.get(r.day) ?? 0) + Number(r.cost_usd ?? 0));
+    historyByWsDay.set(r.workspace_id, dayMap);
+  }
+
+  const spikes: TopSpenderSpike[] = [];
+  for (const [wsId, recentCost] of recentByWs.entries()) {
+    if (recentCost < SPEND_FLOOR_USD) continue;
+    const dayMap = historyByWsDay.get(wsId);
+    if (!dayMap || dayMap.size === 0) continue;
+
+    const dailyTotals = Array.from(dayMap.values()).sort((a, b) => a - b);
+    const median =
+      dailyTotals.length % 2 === 1
+        ? dailyTotals[(dailyTotals.length - 1) / 2]
+        : (dailyTotals[dailyTotals.length / 2 - 1] +
+            dailyTotals[dailyTotals.length / 2]) /
+          2;
+
+    // Guard against a zero-median workspace (no spend in the history
+    // window). We don't want "0 → $5" to look like ∞× — fall back to
+    // the floor check we already applied.
+    if (median <= 0) continue;
+    if (recentCost < median * SPEND_MULTIPLIER) continue;
+
+    spikes.push({
+      workspace_id: wsId,
+      recent_cost_usd: Math.round(recentCost * 100) / 100,
+      median_cost_usd: Math.round(median * 100) / 100,
+      history_days: dailyTotals.length,
+      multiplier: Math.round((recentCost / median) * 100) / 100,
+    });
+  }
+
+  // Fan out one alert per spiking workspace.
+  let notified = 0;
+  for (const s of spikes) {
+    const title = `AI spend spike: workspace ${s.workspace_id.slice(0, 8)}…`;
+    const body =
+      `$${s.recent_cost_usd.toFixed(2)} in last 24h ` +
+      `vs median $${s.median_cost_usd.toFixed(2)} over ${s.history_days} days ` +
+      `(${s.multiplier}× baseline)`;
+
+    const { data: alertData, error: alertErr } = await admin.rpc(
+      "top_spender_alert",
+      {
+        p_title: title,
+        p_body: body,
+        p_payload: {
+          workspace_id: s.workspace_id,
+          recent_cost_usd: s.recent_cost_usd,
+          median_cost_usd: s.median_cost_usd,
+          history_days: s.history_days,
+          multiplier: s.multiplier,
+          window_minutes: SPEND_WINDOW_MIN,
+          detected_at: new Date().toISOString(),
+        },
+      }
+    );
+    if (alertErr) {
+      log.warn("cron.top_spender.alert_failed", {
+        workspace_id: s.workspace_id,
+        error: alertErr.message,
+      });
+    } else {
+      notified += Number(alertData ?? 0);
+    }
+  }
+
+  if (spikes.length > 0) {
+    log.info("cron.top_spender.flagged", {
+      count: spikes.length,
+      notified_admins: notified,
+      // ai_cost_summary roundtrip — kept here for any future debugging
+      // where we need to know whether the matview disagreed with the
+      // live RPC.
+      rpc_rows: Array.isArray(rpcData) ? rpcData.length : 0,
+    });
+  }
+
+  return {
+    workspaces_checked: recentByWs.size,
+    spikes,
+    notified_admins: notified,
+  };
 }

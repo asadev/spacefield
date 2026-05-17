@@ -21,6 +21,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { log } from "@/lib/log";
+import { histogram, METRIC_NAMES } from "@/lib/metrics";
 import { safeErrorMessage } from "@/lib/safe-error";
 
 export const runtime = "nodejs";
@@ -66,6 +67,67 @@ export async function GET(req: NextRequest) {
     const workflowStuck = Number(row?.workflow_stuck ?? 0);
     const batchStuck = Number(row?.batch_stuck ?? 0);
     const totalStuck = workflowStuck + batchStuck;
+
+    // Emit queue-depth metrics for each queue, regardless of whether
+    // anything was flipped this tick. Depth = rows currently waiting
+    // in `queued` OR actively running. We split into two observations
+    // (queued vs running) so the dashboard can render "backlog" and
+    // "in-flight" independently — the same total can mean very
+    // different things ("nothing started" vs "lots in progress").
+    // Failure is non-fatal; we just skip the metric on that table.
+    try {
+      const { count: wfQueued } = await admin
+        .from("workflow_runs")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "queued");
+      const { count: wfRunning } = await admin
+        .from("workflow_runs")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "running");
+      histogram(
+        METRIC_NAMES.queueDepthWorkflowRuns,
+        (wfQueued ?? 0) + (wfRunning ?? 0),
+        { state: "active" }
+      );
+      histogram(METRIC_NAMES.queueDepthWorkflowRuns, wfQueued ?? 0, {
+        state: "queued",
+      });
+      histogram(METRIC_NAMES.queueDepthWorkflowRuns, wfRunning ?? 0, {
+        state: "running",
+      });
+    } catch (e) {
+      log.warn("cron.stuck_jobs.queue_depth_failed", {
+        queue: "workflow_runs",
+        error: (e as Error).message,
+      });
+    }
+
+    try {
+      const { count: aiQueued } = await admin
+        .from("ai_batch_jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "queued");
+      const { count: aiRunning } = await admin
+        .from("ai_batch_jobs")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "running");
+      histogram(
+        METRIC_NAMES.queueDepthAiBatchJobs,
+        (aiQueued ?? 0) + (aiRunning ?? 0),
+        { state: "active" }
+      );
+      histogram(METRIC_NAMES.queueDepthAiBatchJobs, aiQueued ?? 0, {
+        state: "queued",
+      });
+      histogram(METRIC_NAMES.queueDepthAiBatchJobs, aiRunning ?? 0, {
+        state: "running",
+      });
+    } catch (e) {
+      log.warn("cron.stuck_jobs.queue_depth_failed", {
+        queue: "ai_batch_jobs",
+        error: (e as Error).message,
+      });
+    }
 
     let notifiedAdmins = 0;
     if (totalStuck > 0) {
