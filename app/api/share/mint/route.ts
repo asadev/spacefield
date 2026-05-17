@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { withApiHandler } from "@/lib/api-wrap";
+import { withIdempotency } from "@/lib/idempotency";
 import { mintLink } from "@/lib/share/server";
 import type { ShareType } from "@/lib/share/types";
 
@@ -58,26 +59,61 @@ export const POST = withApiHandler(
         );
       }
 
-      const result = await mintLink({
-        type: body.type as ShareType,
-        payload: body.payload,
-        sourceTool:
-          typeof body.sourceTool === "string" ? body.sourceTool : "unknown",
-        workspaceId:
-          typeof body.workspaceId === "string" ? body.workspaceId : undefined,
-        customSlug,
-      });
-      if (!result.ok) {
+      // Idempotency-Key support: a client retrying after a network blip
+      // can pass the same key and receive the previously-minted link
+      // instead of creating a duplicate share. We namespace as
+      // `share:<key>` so keys from other call sites can't collide.
+      const idempotencyKey = req.headers.get("idempotency-key") ?? "";
+      const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+      const supabaseServiceRoleKey =
+        process.env.SUPABASE_SERVICE_ROLE_KEY ||
+        process.env.SUPABASE_SERVICE_ROLE ||
+        "";
+
+      type MintResponse =
+        | { ok: true; url?: string; linkId?: string; slug?: string }
+        | { ok: false; error: string; status: number };
+
+      const wrapped = await withIdempotency<MintResponse>(
+        {
+          key: idempotencyKey ? `share:${idempotencyKey}` : "",
+          supabase: { url: supabaseUrl, serviceRoleKey: supabaseServiceRoleKey },
+        },
+        async () => {
+          const result = await mintLink({
+            type: body.type as ShareType,
+            payload: body.payload,
+            sourceTool:
+              typeof body.sourceTool === "string" ? body.sourceTool : "unknown",
+            workspaceId:
+              typeof body.workspaceId === "string"
+                ? body.workspaceId
+                : undefined,
+            customSlug,
+          });
+          if (!result.ok) {
+            return { ok: false, error: result.error ?? "mint_failed", status: 400 };
+          }
+          return {
+            ok: true,
+            url: result.url,
+            linkId: result.link?.id,
+            slug: result.link?.slug,
+          };
+        },
+      );
+
+      if (!wrapped.ok) {
         return NextResponse.json(
-          { ok: false, error: result.error },
-          { status: 400 }
+          { ok: false, error: wrapped.error },
+          { status: wrapped.status }
         );
       }
       return NextResponse.json({
         ok: true,
-        url: result.url,
-        linkId: result.link?.id,
-        slug: result.link?.slug,
+        url: wrapped.url,
+        linkId: wrapped.linkId,
+        slug: wrapped.slug,
       });
     } catch (err) {
       return NextResponse.json(

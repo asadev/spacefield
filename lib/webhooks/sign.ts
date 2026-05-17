@@ -19,6 +19,7 @@ import "server-only";
 
 import { safeFetch, SafeFetchError } from "@/lib/safe-fetch";
 import { log } from "@/lib/log";
+import { signHmacSha256 } from "@/lib/hmac";
 
 const TIMEOUT_MS = 5_000;
 
@@ -47,23 +48,18 @@ export interface SignedSendResult {
   bodyText: string;
 }
 
-/** Compute hex HMAC-SHA256 using Web Crypto (Edge & Node both support it). */
+/**
+ * Compute hex HMAC-SHA256 using Web Crypto (Edge & Node both support it).
+ *
+ * Thin wrapper over `signHmacSha256` in `@/lib/hmac` so the primitive
+ * lives in one place. Kept exported for any external callers — internal
+ * usage should prefer `signHmacSha256` directly.
+ */
 export async function hmacSha256Hex(
   secret: string,
   body: string
 ): Promise<string> {
-  const enc = new TextEncoder();
-  const key = await crypto.subtle.importKey(
-    "raw",
-    enc.encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign"]
-  );
-  const sig = await crypto.subtle.sign("HMAC", key, enc.encode(body));
-  return Array.from(new Uint8Array(sig))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
+  return signHmacSha256(secret, body);
 }
 
 /** Generate a 48-char hex secret (matches the DB default shape). */
@@ -96,7 +92,7 @@ export async function sendSigned(
     "X-Timestamp": timestamp,
   };
   if (signed && input.secret) {
-    const signature = await hmacSha256Hex(input.secret, bodyText);
+    const signature = await signHmacSha256(input.secret, bodyText);
     headers["X-Signature"] = `sha256=${signature}`;
   }
 

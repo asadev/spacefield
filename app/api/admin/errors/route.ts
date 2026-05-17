@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withApiHandler } from "@/lib/api-wrap";
+import { respondWithEtag } from "@/lib/etag";
 
 export const dynamic = "force-dynamic";
 
@@ -41,7 +42,10 @@ export const GET = withApiHandler(
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-    return NextResponse.json({ rows: data ?? [], count: count ?? 0 });
+    // Weak ETag + 304 short-circuit: error_events is heavy and admins
+    // re-poll the same filters frequently. A 304 saves the JSON
+    // round-trip and the React re-render downstream.
+    return respondWithEtag(req, { rows: data ?? [], count: count ?? 0 });
   },
   {
     requireAdmin: true,
