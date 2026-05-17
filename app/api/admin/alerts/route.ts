@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withApiHandler } from "@/lib/api-wrap";
+import { respondWithEtag } from "@/lib/etag";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,9 @@ export const GET = withApiHandler(
     if (error) {
       return NextResponse.json({ error: error.message }, { status: 500 });
     }
-    return NextResponse.json({ rows: data ?? [] });
+    // Weak ETag + 304: alerts list is stable between rare edits and the
+    // future evaluator cron will hit this on a tight schedule.
+    return respondWithEtag(req, { rows: data ?? [] });
   },
   {
     requireAdmin: true,

@@ -3,6 +3,7 @@ import crypto from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPaddleWebhookSecret } from "@/lib/paddle";
 import { matchPaddleProduct } from "@/app/_data/paddle-products";
+import { withIdempotency } from "@/lib/idempotency";
 
 /* /api/paddle/webhook
  *
@@ -145,36 +146,64 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "missing event_id" }, { status: 400 });
   }
 
-  const supabase = createAdminClient();
+  // Defence-in-depth idempotency layer (in addition to the
+  // paddle_webhook_events unique-row dedup below). If Paddle retries a
+  // delivery between the time we INSERT the event row and the time we
+  // mark `processed_at`, we want the same JSON ack returned without
+  // re-running the dispatcher. Keyed by `paddle:<event_id>` so it can't
+  // collide with idempotency keys from other call sites.
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const supabaseServiceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE ||
+    "";
 
-  // Idempotency: insert first; duplicate = 200 ack immediately.
-  const { error: insertErr } = await supabase
-    .from("paddle_webhook_events")
-    .insert({
-      event_id: eventId,
-      type: eventType,
-      payload: payload as unknown as Record<string, unknown>,
-    });
-  if (insertErr) {
-    if (insertErr.code === "23505") {
-      return NextResponse.json({ ok: true, duplicate: true });
-    }
-    return NextResponse.json({ error: insertErr.message }, { status: 500 });
-  }
+  const result = await withIdempotency<{ ok: true; duplicate?: true; processed?: false }>(
+    {
+      key: `paddle:${eventId}`,
+      supabase: { url: supabaseUrl, serviceRoleKey: supabaseServiceRoleKey },
+    },
+    async () => {
+      const supabase = createAdminClient();
 
-  try {
-    await dispatch(eventType, payload);
-    await supabase
-      .from("paddle_webhook_events")
-      .update({ processed_at: new Date().toISOString() })
-      .eq("event_id", eventId);
-    return NextResponse.json({ ok: true });
-  } catch (err) {
-    // Don't 500 — Paddle will retry forever. Log + ack so the operator
-    // can replay manually after fixing root cause.
-    console.error("[paddle webhook] dispatch failed", err);
-    return NextResponse.json({ ok: true, processed: false });
+      // Primary idempotency: insert first; duplicate = 200 ack immediately.
+      const { error: insertErr } = await supabase
+        .from("paddle_webhook_events")
+        .insert({
+          event_id: eventId,
+          type: eventType,
+          payload: payload as unknown as Record<string, unknown>,
+        });
+      if (insertErr) {
+        if (insertErr.code === "23505") {
+          return { ok: true, duplicate: true } as const;
+        }
+        throw new Error(insertErr.message);
+      }
+
+      try {
+        await dispatch(eventType, payload);
+        await supabase
+          .from("paddle_webhook_events")
+          .update({ processed_at: new Date().toISOString() })
+          .eq("event_id", eventId);
+        return { ok: true } as const;
+      } catch (err) {
+        // Don't 500 — Paddle will retry forever. Log + ack so the
+        // operator can replay manually after fixing root cause.
+        console.error("[paddle webhook] dispatch failed", err);
+        return { ok: true, processed: false } as const;
+      }
+    },
+  ).catch((err: unknown): { ok: false; error: string } => ({
+    ok: false,
+    error: err instanceof Error ? err.message : "dispatch failed",
+  }));
+
+  if ("ok" in result && result.ok === false) {
+    return NextResponse.json(result, { status: 500 });
   }
+  return NextResponse.json(result);
 }
 
 /* ───────── dispatch ───────── */
