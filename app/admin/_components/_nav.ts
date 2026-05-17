@@ -84,6 +84,7 @@ export const NAV: NavItem[] = [
   { href: "/admin/audit",          label: "Audit log",                section: "Data & Ops" },
   { href: "/admin/errors",         label: "Errors",                   section: "Data & Ops" },
   { href: "/admin/insights",       label: "Cost & insights",          section: "Data & Ops" },
+  { href: "/admin/insights/ai-costs", label: "AI costs",              section: "Data & Ops" },
   { href: "/admin/insights/latency", label: "API latency",            section: "Data & Ops" },
   { href: "/admin/insights/slow-queries", label: "Slow queries",      section: "Data & Ops" },
   { href: "/admin/analytics",      label: "toShare analytics",        section: "Data & Ops" },

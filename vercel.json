@@ -29,6 +29,10 @@
     {
       "path": "/api/cron/suspicious-login-scan",
       "schedule": "*/15 * * * *"
+    },
+    {
+      "path": "/api/cron/ai-batch-runner",
+      "schedule": "* * * * *"
     }
   ]
 }
