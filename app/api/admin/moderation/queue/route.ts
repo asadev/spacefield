@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { assertAdmin } from "@/app/admin/_lib";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -12,11 +13,17 @@ export const dynamic = "force-dynamic";
  * `/admin/moderation/queue` page.
  */
 export async function GET(req: NextRequest) {
+  let auth: { userId: string; email: string | null };
   try {
-    await assertAdmin();
+    auth = await assertAdmin();
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "forbidden" },
+      {
+        error: safeErrorMessage(e, {
+          source: "admin.moderation.queue.list.auth",
+          fallback: "forbidden",
+        }),
+      },
       { status: 401 }
     );
   }
@@ -48,7 +55,16 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await query;
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: safeErrorMessage(error, {
+          source: "admin.moderation.queue.list",
+          userId: auth.userId,
+          fallback: "moderation_queue_list_failed",
+        }),
+      },
+      { status: 500 }
+    );
   }
   return NextResponse.json({ rows: data ?? [] });
 }

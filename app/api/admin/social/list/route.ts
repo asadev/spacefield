@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { assertAdmin } from "@/app/admin/_lib";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /* GET /api/admin/social/list
@@ -17,11 +18,17 @@ const MAX_LIMIT = 500;
 const DEFAULT_LIMIT = 200;
 
 export async function GET(req: NextRequest) {
+  let auth: { userId: string; email: string | null };
   try {
-    await assertAdmin();
+    auth = await assertAdmin();
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "forbidden" },
+      {
+        error: safeErrorMessage(e, {
+          source: "admin.social.list.auth",
+          fallback: "forbidden",
+        }),
+      },
       { status: 403 }
     );
   }
@@ -45,7 +52,16 @@ export async function GET(req: NextRequest) {
 
   const { data, error } = await q;
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: safeErrorMessage(error, {
+          source: "admin.social.list",
+          userId: auth.userId,
+          fallback: "social_list_failed",
+        }),
+      },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ posts: data ?? [] });

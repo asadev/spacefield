@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { assertAdmin } from "@/app/admin/_lib";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { readCodeSkillTools, readSkillSource } from "@/lib/agent/skills/_inspector";
 
@@ -18,11 +19,17 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let auth: { userId: string; email: string | null };
   try {
-    await assertAdmin();
+    auth = await assertAdmin();
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "forbidden" },
+      {
+        error: safeErrorMessage(e, {
+          source: "admin.skills.source.auth",
+          fallback: "forbidden",
+        }),
+      },
       { status: 401 }
     );
   }
@@ -37,7 +44,16 @@ export async function GET(
     .eq("id", skillId)
     .maybeSingle();
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: safeErrorMessage(error, {
+          source: "admin.skills.source.read",
+          userId: auth.userId,
+          fallback: "skill_read_failed",
+        }),
+      },
+      { status: 500 }
+    );
   }
   if (!row) {
     return NextResponse.json({ error: "skill not found" }, { status: 404 });
