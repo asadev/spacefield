@@ -1,0 +1,133 @@
+name: Test
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bundle-budget:
+    name: Bundle budget
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build (next)
+        run: pnpm build
+        env:
+          # Build needs valid envs for some modules; provide harmless
+          # placeholders so the build doesn't crash on missing keys.
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+          # Don't ping out to analytics during CI build.
+          NEXT_TELEMETRY_DISABLED: "1"
+
+      - name: Check bundle budget
+        run: node scripts/check-bundle-budget.js
+        env:
+          # Override here when we want to tighten or loosen the budget.
+          # Default lives in scripts/check-bundle-budget.js.
+          SPACEFIELD_BUNDLE_BUDGET_KB: "550"
+
+  vitest:
+    name: Vitest (unit)
+    runs-on: ubuntu-latest
+    # Vitest isn't a project dependency. The job installs it on top of
+    # the lockfile so the suite can run without bloating production
+    # installs. If you'd rather skip this job, add `if: false` here.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Vitest (job-scoped, not committed to lockfile)
+        run: pnpm add -D --no-save vitest@^2 @vitest/coverage-v8@^2
+
+      - name: Run unit tests
+        run: pnpm exec vitest run --reporter=default
+        env:
+          NODE_ENV: test
+
+  playwright:
+    name: Playwright (smoke)
+    runs-on: ubuntu-latest
+    # Smoke tests are opt-in — they need a built app + browser. Set
+    # repository variable `RUN_PLAYWRIGHT` to "1" to enable.
+    if: ${{ vars.RUN_PLAYWRIGHT == '1' }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Playwright
+        run: |
+          pnpm add -D --no-save @playwright/test@^1
+          pnpm exec playwright install --with-deps chromium
+
+      - name: Build
+        run: pnpm build
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+          NEXT_TELEMETRY_DISABLED: "1"
+
+      - name: Start app and run smoke pack
+        run: pnpm exec playwright test --reporter=list
+        env:
+          NEXT_PUBLIC_SUPABASE_URL: https://example.supabase.co
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: placeholder
+          NEXT_TELEMETRY_DISABLED: "1"
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
