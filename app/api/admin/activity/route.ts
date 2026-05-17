@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { timeQuery } from "@/lib/observability/query-timing";
 
 import { checkIsAdmin } from "@/app/admin/_lib";
 import type { ActivityFeedRow } from "@/app/admin/_types";
@@ -67,7 +68,11 @@ export async function GET(request: Request): Promise<Response> {
   if (since) q = q.gte("created_at", since);
   if (until) q = q.lte("created_at", until);
 
-  const { data, error } = await q;
+  const { data, error } = await timeQuery(
+    "activity_feed.list",
+    async () => await q,
+    { source: "admin.activity" }
+  );
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }

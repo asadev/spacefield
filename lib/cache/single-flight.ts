@@ -1,5 +1,7 @@
 import "server-only";
 
+import { incr, METRIC_NAMES } from "@/lib/metrics";
+
 /**
  * Single-flight wrapper — coalesces concurrent callers for the same
  * cache key into one in-flight Promise.
@@ -61,8 +63,13 @@ export async function singleFlight<T>(
 ): Promise<T> {
   const existing = inFlight.get(key) as InFlightEntry<T> | undefined;
   if (existing) {
+    // Coalesced onto an existing in-flight producer — count it as a
+    // "hit" from the single-flight layer's perspective (we saved the
+    // duplicate backend call).
+    incr(METRIC_NAMES.cacheHit, { layer: "single-flight" });
     return existing.promise;
   }
+  incr(METRIC_NAMES.cacheMiss, { layer: "single-flight" });
   const promise = (async () => {
     try {
       return await producer();
