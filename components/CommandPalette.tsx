@@ -11,6 +11,7 @@ import {
 } from "react";
 
 import { labelForEntity, type SearchResponse } from "@/lib/search/types";
+import { listRecent, recordView } from "@/lib/recents";
 
 /* Cmd-K command palette UI.
  *
@@ -88,7 +89,11 @@ export default function CommandPalette({
   const [results, setResults] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
 
-  // Hydrate recent from localStorage on first open.
+  // Hydrate recent from localStorage on first open (fast, available
+  // offline), then fan out to a server-side listRecent() call. If the
+  // server returns rows, they replace the local cache — they're the
+  // source of truth across devices. If the server is unavailable or
+  // the migration hasn't landed yet, we keep the localStorage view.
   useEffect(() => {
     if (!open) return;
     try {
@@ -100,6 +105,26 @@ export default function CommandPalette({
     } catch {
       // ignore — recents are best-effort
     }
+    let cancelled = false;
+    void (async () => {
+      const rows = await listRecent(RECENT_LIMIT * 2);
+      if (cancelled || !rows || rows.length === 0) return;
+      const mapped = rows
+        .map((r) => recentRowToBase(r))
+        .filter((x): x is BaseItem => x != null)
+        .slice(0, RECENT_LIMIT);
+      if (mapped.length > 0) {
+        setRecent(mapped);
+        try {
+          window.localStorage.setItem(RECENT_KEY, JSON.stringify(mapped));
+        } catch {
+          // ignore
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
   }, [open]);
 
   // Focus input when opening, reset highlight to 0.
@@ -207,6 +232,11 @@ export default function CommandPalette({
   const activate = useCallback(
     (item: BaseItem) => {
       pushRecent(item);
+      // Best-effort server-side recording. Item id encodes either a
+      // "kind:uuid" search result or a static jump action; we only call
+      // record_view for the search-results case (where we have an
+      // entity_type + uuid).
+      void recordEntityViewFromItem(item);
       onOpenChange(false);
       router.push(item.href);
     },
@@ -480,5 +510,73 @@ function pushRecent(item: BaseItem) {
     );
   } catch {
     // ignore — best-effort
+  }
+}
+
+/* The Cmd-K palette encodes search-result items as `${kind}:${uuid}`
+ * (see searchSections above). When the user activates one we mirror the
+ * view into the server-side recent_items table so it shows up on other
+ * devices. Static "jump:" / "create:" items don't have entity IDs, so
+ * they stay localStorage-only.
+ */
+async function recordEntityViewFromItem(item: BaseItem) {
+  const idx = item.id.indexOf(":");
+  if (idx <= 0) return;
+  const kind = item.id.slice(0, idx);
+  const rest = item.id.slice(idx + 1);
+  if (kind === "jump" || kind === "create" || kind === "recent") return;
+  if (!isUuid(rest)) return;
+  await recordView(kind, rest);
+}
+
+function isUuid(s: string): boolean {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(
+    s
+  );
+}
+
+/* Rehydrate a recent_items row back into a palette BaseItem. We don't
+ * have the original title/subtitle/href here (those came from the
+ * search index), so we fabricate a sensible label + route. The href
+ * pattern matches what /api/search emits for the same entity types.
+ */
+function recentRowToBase(row: {
+  entity_type: string;
+  entity_id: string;
+  viewed_at: string;
+}): BaseItem | null {
+  const href = hrefForEntity(row.entity_type, row.entity_id);
+  if (!href) return null;
+  return {
+    id: `${row.entity_type}:${row.entity_id}`,
+    title: labelForEntity(row.entity_type),
+    subtitle: row.entity_id.slice(0, 8),
+    href,
+    trailing: labelForEntity(row.entity_type),
+  };
+}
+
+function hrefForEntity(kind: string, id: string): string | null {
+  switch (kind) {
+    case "task":
+      return `/tasks/${id}`;
+    case "crm_contact":
+      return `/apps/crm/contacts/${id}`;
+    case "crm_company":
+      return `/apps/crm/companies/${id}`;
+    case "crm_deal":
+      return `/apps/crm/deals/${id}`;
+    case "crm_lead":
+      return `/apps/crm/leads/${id}`;
+    case "employee":
+      return `/people/${id}`;
+    case "comment":
+      // Comments don't have their own canonical URL — resolve to the
+      // host entity once we know it. Skip for now.
+      return null;
+    case "workspace_file":
+      return `/tools?file=${encodeURIComponent(id)}`;
+    default:
+      return null;
   }
 }
