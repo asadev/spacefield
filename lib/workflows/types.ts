@@ -38,7 +38,14 @@ export interface WorkflowCondition {
 
 /** Step variants. Discriminated on `kind` so callers can switch
  *  exhaustively. We keep payload bodies typed loosely on purpose —
- *  builder + runtime stay in sync via runtime-side validation. */
+ *  builder + runtime stay in sync via runtime-side validation.
+ *
+ *  `custom_code` is the admin-gated escape hatch: it runs an arbitrary
+ *  JS expression via `new Function("trigger, ctx", userCode)`. There's
+ *  NO real sandbox — globals are nulled out but a determined caller
+ *  could reach for `(function(){return this})()` etc. Treat it as
+ *  untrusted code and only expose the editor to admins. See
+ *  `lib/workflows/run-custom-code.ts` for the runner + caveats. */
 export type WorkflowStep =
   | {
       kind: "create_task";
@@ -62,6 +69,18 @@ export type WorkflowStep =
   | {
       kind: "wait";
       seconds: number;
+    }
+  | {
+      kind: "custom_code";
+      /** Free-form JS body. Receives `(trigger, ctx)` and may return a
+       *  JSON-serialisable value, which becomes the step's output. */
+      code: string;
+      /** Optional output variable name. If set, later steps can read the
+       *  return value via the runtime's accumulated state map. */
+      output_var?: string;
+      /** Per-step timeout cap in ms. Defaults to 5000. Cannot exceed
+       *  30_000 — the runner clamps it. */
+      timeout_ms?: number;
     };
 
 export type WorkflowStepKind = WorkflowStep["kind"];
@@ -121,7 +140,9 @@ export function validateWorkflowDefinition(def: unknown): string[] {
         return;
       }
       const k = (s as WorkflowStep).kind;
-      if (!["create_task", "send_webhook", "post_comment", "wait"].includes(k)) {
+      if (
+        !["create_task", "send_webhook", "post_comment", "wait", "custom_code"].includes(k)
+      ) {
         errors.push(`step ${i}: unknown kind "${String(k)}"`);
       }
       if (k === "create_task") {
@@ -145,6 +166,16 @@ export function validateWorkflowDefinition(def: unknown): string[] {
           errors.push(`step ${i}: post_comment requires entity.type + entity.id`);
         }
         if (!c.body) errors.push(`step ${i}: post_comment requires body`);
+      } else if (k === "custom_code") {
+        const c = s as { code?: string; timeout_ms?: number };
+        if (!c.code || typeof c.code !== "string" || !c.code.trim()) {
+          errors.push(`step ${i}: custom_code requires non-empty code`);
+        }
+        if (c.timeout_ms != null) {
+          if (typeof c.timeout_ms !== "number" || c.timeout_ms <= 0) {
+            errors.push(`step ${i}: custom_code.timeout_ms must be a positive number`);
+          }
+        }
       }
     });
   }
