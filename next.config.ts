@@ -38,6 +38,12 @@ const nextConfig: NextConfig = {
   // walking up the directory tree and treating a parent folder as the
   // workspace.
   outputFileTracingRoot: projectRoot,
+  // A2 — emit browser source maps in the prod bundle so Vercel-served
+  // errors land on the original TypeScript line numbers in dev-tools.
+  // No third-party upload (no Sentry release wiring here); the maps
+  // ship alongside the JS chunks and are loaded by the browser on
+  // demand when the dev-tools panel is open.
+  productionBrowserSourceMaps: true,
   experimental: {
     optimizePackageImports: ['framer-motion'],
     // Cap server-action / inbound JSON bodies so attackers can't pin a
