@@ -19,9 +19,20 @@
 
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import dynamic from "next/dynamic";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
-import Desktop from "../tools/_components/Desktop";
 import Landing from "./Landing";
+
+/* Mobile-perf (Wave 4 Z2): the Desktop tree pulls in 50+ components for
+ * the OS shell. Signed-out visitors — the long tail of mobile cold-load
+ * traffic — never see it. Gating the import behind `dynamic` keeps the
+ * OS-shell chunk out of the initial bundle for `/`. The loader is a
+ * solid background so the visual is identical to the "loading" state
+ * below (a 1-frame flash either way). */
+const Desktop = dynamic(() => import("../tools/_components/Desktop"), {
+  ssr: false,
+  loading: () => <div className="fixed inset-0 bg-app" aria-hidden="true" />,
+});
 
 type Mode = "loading" | "desktop" | "landing";
 

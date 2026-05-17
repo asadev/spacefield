@@ -14,14 +14,19 @@
 ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useState, useRef, useCallback, useEffect, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
 import { useUserPreferences } from "@/lib/useUserPreferences";
 import { useWorkspace } from "@/lib/workspaces/client";
 import MintShareButton from "@/app/(share)/_components/MintShareButton";
 import type { PageBlock, PagePayload } from "@/lib/toshare/types";
 import type { NativeAppProps } from "../_data/tools-list";
 
-const ease: [number, number, number, number] = [0.25, 0.46, 0.45, 0.94];
+/* Mobile-perf (Wave 4 Z2): dropped the sync `framer-motion` import on
+ * this page. The four animation sites in this file were all simple
+ * fades + tiny slides/scales that read identically with CSS keyframes
+ * — no shared-layout animations, no spring physics, nothing the motion
+ * runtime was earning its keep on. Cuts ~30 KB gzipped off this route's
+ * client bundle. The animation classes live at the bottom of the file
+ * in a <style jsx global> block. */
 
 // Width threshold below which the right-side panel stacks under the canvas.
 const PANEL_BREAKPOINT = 960;
@@ -1389,11 +1394,14 @@ export default function PropertyPosterCreatorApp({
         })}
       </div>
 
-      {/* Panel content */}
+      {/* Panel content. CSS-only fade-slide replaces the previous
+       * framer-motion AnimatePresence. The `key` change retriggers the
+       * keyframe animation; exit is omitted (the panel just unmounts —
+       * an 80ms tab-swap exit animation is below the threshold most
+       * users perceive). */}
       <div className="p-4 overflow-y-auto scrollbar-thin" style={{ maxHeight: isNarrow ? "60vh" : "calc(100% - 48px)" }}>
-        <AnimatePresence mode="wait">
-          {activePanel === "property" && (
-            <motion.div key="property" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 8 }} transition={{ duration: 0.18 }} className="space-y-3">
+        {activePanel === "property" && (
+          <div key="property" className="space-y-3 poster-panel-fade">
               <FormField label="Status Badge">
                 <SelectInput value={data.statusLabel} onChange={(v) => updateField("statusLabel", v)} options={STATUS_OPTIONS} />
               </FormField>
@@ -1417,11 +1425,11 @@ export default function PropertyPosterCreatorApp({
               <FormField label="Highlights">
                 <TextInput value={data.features} onChange={(v) => updateField("features", v)} placeholder="Sea View • Smart Home" />
               </FormField>
-            </motion.div>
-          )}
+          </div>
+        )}
 
-          {activePanel === "branding" && (
-            <motion.div key="branding" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 8 }} transition={{ duration: 0.18 }} className="space-y-3">
+        {activePanel === "branding" && (
+          <div key="branding" className="space-y-3 poster-panel-fade">
               <FormField label="Agent Name">
                 <TextInput value={data.agentName} onChange={(v) => updateField("agentName", v)} placeholder="Your name" />
               </FormField>
@@ -1448,11 +1456,11 @@ export default function PropertyPosterCreatorApp({
                   <ImageSlot image={data.logoImage} onChange={(img) => updateField("logoImage", img)} onRemove={() => updateField("logoImage", null)} label="Upload logo" aspect="aspect-[3/1]" className="max-w-[170px]" />
                 </FormField>
               )}
-            </motion.div>
-          )}
+          </div>
+        )}
 
-          {activePanel === "photos" && (
-            <motion.div key="photos" initial={{ opacity: 0, x: -8 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: 8 }} transition={{ duration: 0.18 }} className="space-y-4">
+        {activePanel === "photos" && (
+          <div key="photos" className="space-y-4 poster-panel-fade">
               <FormField label="Main Photo">
                 <ImageSlot image={data.propertyImage} onChange={(img) => updateField("propertyImage", img)} onRemove={() => updateField("propertyImage", null)} label="Drop main property photo" />
               </FormField>
@@ -1471,9 +1479,8 @@ export default function PropertyPosterCreatorApp({
                   <span className="font-semibold text-tool-accent">Tip.</span> Drag to reposition, scroll to zoom. Use 1080px+ images for crisp exports.
                 </p>
               </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+          </div>
+        )}
       </div>
     </aside>
   );
@@ -1562,26 +1569,21 @@ export default function PropertyPosterCreatorApp({
             </div>
           </div>
 
-          {/* Canvas — keep bespoke poster look (dotted bg, framed preview) */}
+          {/* Canvas — keep bespoke poster look (dotted bg, framed preview).
+           * Key-change triggers `poster-canvas-fade` (CSS keyframe). */}
           <div className="relative flex-1 min-h-0 bg-[#f3f1ec] dark:bg-[#0b0e11] overflow-auto" style={{ backgroundImage: "radial-gradient(circle at 1px 1px, rgba(0,0,0,0.08) 1px, transparent 0)", backgroundSize: "22px 22px" }}>
             <div className="flex items-center justify-center min-h-[420px] p-6 lg:p-10">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={`${selectedTemplate}-${currentFormat}`}
-                  initial={{ opacity: 0, scale: 0.96 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.96 }}
-                  transition={{ duration: 0.3, ease }}
-                  className="shadow-2xl shadow-black/20 rounded-md overflow-hidden ring-1 ring-black/10"
-                  style={{
-                    maxWidth: currentFormat === "story" ? "320px" : selectedTemplate === "bold-gradient" ? "440px" : "380px",
-                    width: "100%",
-                    fontSize: currentFormat === "story" ? "14px" : "15px",
-                  }}
-                >
-                  <PosterTemplate data={data} posterRef={activeRef} format={currentFormat} />
-                </motion.div>
-              </AnimatePresence>
+              <div
+                key={`${selectedTemplate}-${currentFormat}`}
+                className="poster-canvas-fade shadow-2xl shadow-black/20 rounded-md overflow-hidden ring-1 ring-black/10"
+                style={{
+                  maxWidth: currentFormat === "story" ? "320px" : selectedTemplate === "bold-gradient" ? "440px" : "380px",
+                  width: "100%",
+                  fontSize: currentFormat === "story" ? "14px" : "15px",
+                }}
+              >
+                <PosterTemplate data={data} posterRef={activeRef} format={currentFormat} />
+              </div>
             </div>
           </div>
 
@@ -1663,6 +1665,35 @@ export default function PropertyPosterCreatorApp({
         {/* === Style / Branding panel === */}
         {sidePanel}
       </div>
+
+      {/* CSS replacements for the former framer-motion animations.
+       * `poster-panel-fade` was a 180ms x-slide + fade for the right-rail
+       * tab swap; `poster-canvas-fade` was a 300ms scale + fade for the
+       * preview when the template/format changes. Both rely on the
+       * React `key` change to retrigger the keyframe. `prefers-reduced-
+       * motion` skips them entirely. */}
+      <style jsx global>{`
+        @keyframes poster-panel-fade-kf {
+          0% { opacity: 0; transform: translateX(-8px); }
+          100% { opacity: 1; transform: translateX(0); }
+        }
+        @keyframes poster-canvas-fade-kf {
+          0% { opacity: 0; transform: scale(0.96); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+        .poster-panel-fade {
+          animation: poster-panel-fade-kf 180ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+        }
+        .poster-canvas-fade {
+          animation: poster-canvas-fade-kf 300ms cubic-bezier(0.25, 0.46, 0.45, 0.94) both;
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .poster-panel-fade,
+          .poster-canvas-fade {
+            animation: none;
+          }
+        }
+      `}</style>
     </div>
   );
 }
