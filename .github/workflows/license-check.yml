@@ -1,0 +1,26 @@
+name: License audit
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: License summary
+        run: pnpm dlx license-checker --summary --excludePrivatePackages
+      - name: Forbid copyleft
+        run: |
+          if pnpm dlx license-checker --excludePrivatePackages --json | jq -e 'to_entries | map(select(.value.licenses | tostring | test("GPL-2.0|GPL-3.0|AGPL-3.0"; "i"))) | length > 0' > /dev/null; then
+            echo "::error::Forbidden license detected"; exit 1
+          fi
