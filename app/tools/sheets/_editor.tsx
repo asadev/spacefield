@@ -89,6 +89,10 @@ import "@univerjs/sheets-sort-ui/lib/index.css";
 import "@univerjs/sheets-filter-ui/lib/index.css";
 import "@univerjs/sheets-conditional-formatting-ui/lib/index.css";
 
+// TODO(SE-002): port to exceljs — bidirectional xlsx<->Univer conversion
+// (sheetjsToUniver, univerToSheetjs, csvToUniver, getXlsxBuffer, encode_col/encode_cell
+// helpers) is ~200 lines of cell/style/merge/formula round-tripping; needs its own
+// focused round so we don't regress the Sheets editor. Keep `xlsx` in deps until then.
 import * as XLSX from "xlsx";
 
 // ---------------------------------------------------------------------------
