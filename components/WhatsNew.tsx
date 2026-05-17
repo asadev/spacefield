@@ -10,7 +10,7 @@ import {
 import {
   WHATS_NEW_COOKIE,
   WHATS_NEW_MAX_AGE_SECONDS,
-} from "@/lib/changelog/last-seen";
+} from "@/lib/changelog/cookie";
 
 /**
  * "What's new" modal.

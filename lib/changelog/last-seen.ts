@@ -16,15 +16,16 @@
  * a separate Server Action could also be added later.
  */
 
+import "server-only";
 import { cookies } from "next/headers";
 
-const COOKIE = "spacefield-whatsnew-seen";
+import { WHATS_NEW_COOKIE } from "./cookie";
 
 /** Read the cookie. Returns `null` if absent. */
 export async function getLastSeenVersion(): Promise<string | null> {
   try {
     const store = await cookies();
-    const value = store.get(COOKIE)?.value;
+    const value = store.get(WHATS_NEW_COOKIE)?.value;
     return value ?? null;
   } catch {
     // `cookies()` can throw in static-prerender contexts.
@@ -32,11 +33,6 @@ export async function getLastSeenVersion(): Promise<string | null> {
   }
 }
 
-/**
- * Cookie name + a year-long max-age + lax + path=/ — exposed as a
- * single string the client can set via `document.cookie`. Server-only
- * helpers can't write cookies from RSC, so we keep this as a constant
- * the client can use.
- */
-export const WHATS_NEW_COOKIE = COOKIE;
-export const WHATS_NEW_MAX_AGE_SECONDS = 60 * 60 * 24 * 365;
+// Re-export for callers that previously imported these from this file.
+// New client-side imports should target `./cookie` directly.
+export { WHATS_NEW_COOKIE, WHATS_NEW_MAX_AGE_SECONDS } from "./cookie";
