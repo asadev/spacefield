@@ -10,6 +10,7 @@ import {
   createEmployeeDocument,
   deleteEmployeeDocument,
 } from "@/lib/people/actions";
+import { maskDocNumber } from "@/lib/people/encryption";
 
 const uuid = z.string().uuid();
 const isoDate = z
@@ -66,14 +67,30 @@ export async function GET(req: NextRequest) {
   if (expiring !== null) {
     const within = Math.min(Math.max(Number(expiring) || 30, 1), 365);
     const rows = await listExpiringDocs(within);
-    return NextResponse.json({ rows });
+    // SC-005: expiring_docs RPC still selects d.number, but post-
+    // migration that column is always null at rest. Force-null + emit
+    // a masked hint to keep clients on the safe contract.
+    const masked = rows.map((r) => ({
+      ...r,
+      number: null,
+      number_masked: maskDocNumber(r.number_last4),
+    }));
+    return NextResponse.json({ rows: masked });
   }
   const employee_id = url.searchParams.get("employee_id");
   if (!employee_id) {
     return NextResponse.json({ error: "employee_id required" }, { status: 400 });
   }
-  const rows = await listEmployeeDocuments(employee_id);
-  return NextResponse.json({ rows });
+  // SC-005: `?reveal=1` requires HR-role / doc-owner; the server lib
+  // re-checks and returns masked rows if the caller doesn't qualify.
+  const reveal = url.searchParams.get("reveal") === "1";
+  const rows = await listEmployeeDocuments(employee_id, { reveal });
+  const shaped = rows.map((r) => ({
+    ...r,
+    number: reveal ? r.number : null,
+    number_masked: maskDocNumber(r.number_last4),
+  }));
+  return NextResponse.json({ rows: shaped });
 }
 
 export async function POST(req: NextRequest) {

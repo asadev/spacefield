@@ -273,8 +273,42 @@ export async function listTeamApprovedTimeOff(
 
 // ───────────────────────── Documents ────────────────────────
 
+/**
+ * Returns true if the current user is `owner` or `admin` of the given
+ * workspace. Used to gate `reveal=true` reads on document numbers.
+ * Goes through the user-scoped client so RLS on `workspace_members`
+ * enforces visibility. Returns false on any error.
+ */
+async function callerIsHrInWorkspace(
+  workspaceId: string
+): Promise<boolean> {
+  try {
+    const supabase = await createClient();
+    const { data: u } = await supabase.auth.getUser();
+    if (!u.user) return false;
+    const { data, error } = await supabase
+      .from("workspace_members")
+      .select("role")
+      .eq("workspace_id", workspaceId)
+      .eq("user_id", u.user.id)
+      .maybeSingle();
+    if (error || !data) return false;
+    return data.role === "owner" || data.role === "admin";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * SC-005: list employee documents. By default `number` is null (the
+ * plaintext column is wiped at rest); callers should display
+ * `number_last4` via `maskDocNumber`. Pass `{ reveal: true }` to fetch
+ * the decrypted full number — gated to HR (workspace owner/admin) or
+ * the underlying employee themself.
+ */
 export async function listEmployeeDocuments(
-  employeeId: string
+  employeeId: string,
+  opts: { reveal?: boolean } = {}
 ): Promise<EmployeeDocument[]> {
   try {
     const supabase = await createClient();
@@ -284,9 +318,88 @@ export async function listEmployeeDocuments(
       .eq("employee_id", employeeId)
       .order("expires_at", { ascending: true, nullsFirst: false });
     if (error || !data) return [];
-    return data as EmployeeDocument[];
+    const rows = data as EmployeeDocument[];
+
+    if (!opts.reveal || rows.length === 0) {
+      // Default path — number is always null at rest. Make doubly sure.
+      return rows.map((r) => ({ ...r, number: null }));
+    }
+
+    // reveal=true: gate on HR (owner/admin) OR doc owner. Look up the
+    // employee once to find workspace + user_id.
+    const { data: emp } = await supabase
+      .from("employees")
+      .select("workspace_id, user_id")
+      .eq("id", employeeId)
+      .maybeSingle();
+    if (!emp) return rows.map((r) => ({ ...r, number: null }));
+    const { data: who } = await supabase.auth.getUser();
+    const isSelf = !!who.user && emp.user_id === who.user.id;
+    const isHr = await callerIsHrInWorkspace(emp.workspace_id as string);
+    if (!isSelf && !isHr) {
+      return rows.map((r) => ({ ...r, number: null }));
+    }
+
+    // Authorised — decrypt one row at a time. The reveal RPC re-checks
+    // authz server-side; we still pre-check here so we can fall back to
+    // last4 on error without leaking which docs exist.
+    const { revealDocNumber } = await import("./encryption");
+    const decrypted = await Promise.all(
+      rows.map(async (r) => {
+        try {
+          const v = await revealDocNumber(r.id);
+          return { ...r, number: v };
+        } catch {
+          return { ...r, number: null };
+        }
+      })
+    );
+    return decrypted;
   } catch {
     return [];
+  }
+}
+
+/**
+ * Fetch a single employee document. Same masking contract as
+ * `listEmployeeDocuments` — pass `{ reveal: true }` to decrypt
+ * (HR-only / doc-owner).
+ */
+export async function getEmployeeDocument(
+  docId: string,
+  opts: { reveal?: boolean } = {}
+): Promise<EmployeeDocument | null> {
+  try {
+    const supabase = await createClient();
+    const { data, error } = await supabase
+      .from("employee_documents")
+      .select("*")
+      .eq("id", docId)
+      .maybeSingle();
+    if (error || !data) return null;
+    const doc = data as EmployeeDocument;
+    if (!opts.reveal) return { ...doc, number: null };
+
+    const { data: emp } = await supabase
+      .from("employees")
+      .select("workspace_id, user_id")
+      .eq("id", doc.employee_id)
+      .maybeSingle();
+    if (!emp) return { ...doc, number: null };
+    const { data: who } = await supabase.auth.getUser();
+    const isSelf = !!who.user && emp.user_id === who.user.id;
+    const isHr = await callerIsHrInWorkspace(emp.workspace_id as string);
+    if (!isSelf && !isHr) return { ...doc, number: null };
+
+    try {
+      const { revealDocNumber } = await import("./encryption");
+      const plain = await revealDocNumber(doc.id);
+      return { ...doc, number: plain };
+    } catch {
+      return { ...doc, number: null };
+    }
+  } catch {
+    return null;
   }
 }
 
