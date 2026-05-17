@@ -2,65 +2,20 @@
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "regions": ["fra1", "dub1"],
   "crons": [
-    {
-      "path": "/api/cron/paddle-retention",
-      "schedule": "3 5 * * *"
-    },
-    {
-      "path": "/api/cron/audit-purge",
-      "schedule": "21 6 * * 1"
-    },
-    {
-      "path": "/api/cron/refresh-matviews",
-      "schedule": "30 6 * * *"
-    },
-    {
-      "path": "/api/cron/slow-queries-snapshot",
-      "schedule": "43 6 * * 1"
-    },
-    {
-      "path": "/api/cron/partition-rotator",
-      "schedule": "50 6 * * *"
-    },
-    {
-      "path": "/api/cron/account-purge",
-      "schedule": "8 7 * * *"
-    },
-    {
-      "path": "/api/cron/workspace-purge",
-      "schedule": "33 7 * * *"
-    },
-    {
-      "path": "/api/cron/social-publish",
-      "schedule": "11 9 * * *"
-    },
-    {
-      "path": "/api/cron/suspicious-login-scan",
-      "schedule": "4,19,34,49 * * * *"
-    },
-    {
-      "path": "/api/cron/stuck-jobs-detect",
-      "schedule": "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
-    },
-    {
-      "path": "/api/cron/ai-batch-runner",
-      "schedule": "* * * * *"
-    },
-    {
-      "path": "/api/cron/outbox-relay",
-      "schedule": "0,5,10,15,20,25,30,35,40,45,50,55 * * * *"
-    },
-    {
-      "path": "/api/cron/anomaly-check",
-      "schedule": "13,43 * * * *"
-    },
-    {
-      "path": "/api/cron/log-retention",
-      "schedule": "0 4 * * *"
-    },
-    {
-      "path": "/api/cron/api-token-reminder",
-      "schedule": "27 8 * * *"
-    }
+    { "path": "/api/cron/paddle-retention",       "schedule": "3 5 * * *" },
+    { "path": "/api/cron/audit-purge",            "schedule": "21 6 * * 1" },
+    { "path": "/api/cron/refresh-matviews",       "schedule": "30 6 * * *" },
+    { "path": "/api/cron/slow-queries-snapshot",  "schedule": "43 6 * * 1" },
+    { "path": "/api/cron/partition-rotator",      "schedule": "50 6 * * *" },
+    { "path": "/api/cron/account-purge",          "schedule": "8 7 * * *" },
+    { "path": "/api/cron/workspace-purge",        "schedule": "33 7 * * *" },
+    { "path": "/api/cron/social-publish",         "schedule": "11 9 * * *" },
+    { "path": "/api/cron/suspicious-login-scan",  "schedule": "4 6 * * *" },
+    { "path": "/api/cron/stuck-jobs-detect",      "schedule": "9 6 * * *" },
+    { "path": "/api/cron/ai-batch-runner",        "schedule": "14 6 * * *" },
+    { "path": "/api/cron/outbox-relay",           "schedule": "19 6 * * *" },
+    { "path": "/api/cron/anomaly-check",          "schedule": "24 6 * * *" },
+    { "path": "/api/cron/log-retention",          "schedule": "0 4 * * *" },
+    { "path": "/api/cron/api-token-reminder",     "schedule": "27 8 * * *" }
   ]
 }
