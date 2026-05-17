@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
 
 import { assertAdmin } from "@/app/admin/_lib";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /* DELETE /api/admin/social/delete
@@ -15,11 +16,17 @@ import { createAdminClient } from "@/lib/supabase/admin";
  */
 
 export async function DELETE(req: NextRequest) {
+  let auth: { userId: string; email: string | null };
   try {
-    await assertAdmin();
+    auth = await assertAdmin();
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "forbidden" },
+      {
+        error: safeErrorMessage(e, {
+          source: "admin.social.delete.auth",
+          fallback: "forbidden",
+        }),
+      },
       { status: 403 }
     );
   }
@@ -40,7 +47,16 @@ export async function DELETE(req: NextRequest) {
     .delete()
     .eq("id", parsed.id);
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: safeErrorMessage(error, {
+          source: "admin.social.delete",
+          userId: auth.userId,
+          fallback: "social_delete_failed",
+        }),
+      },
+      { status: 500 }
+    );
   }
 
   revalidatePath("/admin/social");

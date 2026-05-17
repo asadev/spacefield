@@ -13,6 +13,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { randomInt } from "node:crypto";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { safeErrorMessage } from "@/lib/safe-error";
 
 function generateCode(): string {
   // 6 digits, leading zeros allowed. Cryptographically strong RNG —
@@ -76,7 +77,16 @@ export async function POST(req: NextRequest) {
     expires_at: expiresAt,
   });
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: safeErrorMessage(error, {
+          source: "agent.whatsapp.link_code.create",
+          userId: user.id,
+          fallback: "link_code_create_failed",
+        }),
+      },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({
@@ -110,7 +120,16 @@ export async function DELETE(req: NextRequest) {
     .eq("workspace_id", workspaceId)
     .eq("user_id", user.id);
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: safeErrorMessage(error, {
+          source: "agent.whatsapp.link_code.delete",
+          userId: user.id,
+          fallback: "link_code_delete_failed",
+        }),
+      },
+      { status: 500 }
+    );
   }
   return NextResponse.json({ ok: true });
 }
