@@ -55,6 +55,7 @@ export const NAV: NavItem[] = [
   { href: "/admin/models",         label: "Models",                   section: "AI" },
   { href: "/admin/providers",      label: "Providers (API keys)",     section: "AI" },
   { href: "/admin/workflows",      label: "Workflows",                section: "AI" },
+  { href: "/admin/workflows/builder", label: "Workflow builder (V2)", section: "AI" },
   { href: "/admin/prompts",        label: "Prompt library",           section: "AI" },
   { href: "/admin/eval",           label: "Eval suites",              section: "AI" },
   { href: "/admin/playground",     label: "Playground",               section: "AI" },
@@ -64,6 +65,7 @@ export const NAV: NavItem[] = [
   { href: "/admin/features",       label: "Feature flags",            section: "Apps" },
   { href: "/admin/integrations",   label: "Integrations",             section: "Apps" },
   { href: "/admin/pages",          label: "Custom pages",             section: "Apps" },
+  { href: "/admin/templates",      label: "Workspace templates",      section: "Apps" },
 
   // ── People ──
   { href: "/admin/users",          label: "Users",                    section: "People" },
@@ -87,6 +89,7 @@ export const NAV: NavItem[] = [
   { href: "/admin/insights/ai-costs", label: "AI costs",              section: "Data & Ops" },
   { href: "/admin/insights/latency", label: "API latency",            section: "Data & Ops" },
   { href: "/admin/insights/slow-queries", label: "Slow queries",      section: "Data & Ops" },
+  { href: "/admin/insights/reports", label: "Cross-tool reports",     section: "Data & Ops" },
   { href: "/admin/analytics",      label: "Share analytics",        section: "Data & Ops" },
   { href: "/admin/funnels",        label: "Funnels",                  section: "Data & Ops" },
   { href: "/admin/jobs",           label: "Jobs & cron",              section: "Data & Ops" },
