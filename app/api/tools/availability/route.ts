@@ -56,31 +56,103 @@ export async function POST(req: NextRequest) {
   // Cap to keep the round-trip bounded.
   const trimmed = Array.from(new Set(slugs)).slice(0, 500);
 
-  const results = await Promise.all(
-    trimmed.map(async (slug) => {
-      const { data, error } = await supabase.rpc("tool_availability", {
-        ws_id: workspaceId,
-        tool_slug: slug,
-      });
-      if (error) {
-        return [slug, "tier_locked"] as const;
-      }
-      const value =
-        typeof data === "string" &&
-        (data === "allowed" ||
-          data === "disabled" ||
-          data === "tier_locked" ||
-          data === "workspace_blocked")
-          ? data
-          : "tier_locked";
-      return [slug, value] as const;
-    })
-  );
-
+  // N+1 fix — was looping per-slug `rpc("tool_availability")` (one round
+  // trip per slug, ~80 slugs per Launchpad render). Now three parallel
+  // batch queries pull every input the SECURITY-DEFINER RPC reads, and
+  // we evaluate the same decision tree in JS.
   const availability: Record<string, ToolAvailability> = {};
-  for (const [slug, value] of results) {
-    availability[slug] = value as ToolAvailability;
+
+  if (trimmed.length > 0) {
+    type ToolSettingRow = { slug: string; disabled: boolean };
+    type GrantRow = { slug: string; granted: boolean };
+    type WorkspaceRow = {
+      id: string;
+      user_id: string;
+      subscriptions?: { tier_id: string | null }[] | null;
+    };
+    type TierRow = { tier_id: string; allowed_tool_slugs: unknown };
+
+    // Need an admin check separately. The original RPC short-circuits to
+    // "allowed" for admins; replicate that with a single profile read.
+    const [
+      { data: profileRow },
+      { data: settingsRows },
+      { data: grantRows },
+      { data: workspaceRow },
+    ] = await Promise.all([
+      supabase.from("profiles").select("is_admin").eq("id", user.id).maybeSingle(),
+      supabase
+        .from("tool_settings")
+        .select("slug, disabled")
+        .in("slug", trimmed),
+      supabase
+        .from("workspace_tool_grants")
+        .select("slug, granted")
+        .eq("workspace_id", workspaceId)
+        .in("slug", trimmed),
+      supabase
+        .from("workspaces")
+        .select("id, user_id, subscriptions(tier_id)")
+        .eq("id", workspaceId)
+        .maybeSingle(),
+    ]);
+
+    const isAdmin = Boolean(
+      (profileRow as { is_admin?: boolean } | null)?.is_admin
+    );
+    const disabledSlugs = new Set(
+      ((settingsRows ?? []) as ToolSettingRow[])
+        .filter((r) => r.disabled)
+        .map((r) => r.slug)
+    );
+    const grantBySlug = new Map<string, boolean>();
+    for (const g of (grantRows ?? []) as GrantRow[]) {
+      grantBySlug.set(g.slug, g.granted);
+    }
+
+    // Resolve tier allow-list once.
+    const ws = workspaceRow as WorkspaceRow | null;
+    const tierId =
+      (ws?.subscriptions && ws.subscriptions[0]?.tier_id) || "free";
+    const { data: tierRow } = await supabase
+      .from("subscription_tiers")
+      .select("tier_id, allowed_tool_slugs")
+      .eq("tier_id", tierId)
+      .maybeSingle();
+    const allowedSlugs = (() => {
+      const raw = (tierRow as TierRow | null)?.allowed_tool_slugs;
+      if (!Array.isArray(raw)) return null;
+      // Empty list = allow everything (compat default matching the RPC).
+      if (raw.length === 0) return null;
+      const out = new Set<string>();
+      for (const v of raw) {
+        if (typeof v === "string") out.add(v);
+      }
+      return out;
+    })();
+
+    for (const slug of trimmed) {
+      if (disabledSlugs.has(slug)) {
+        availability[slug] = "disabled";
+        continue;
+      }
+      if (isAdmin) {
+        availability[slug] = "allowed";
+        continue;
+      }
+      const override = grantBySlug.get(slug);
+      if (override !== undefined) {
+        availability[slug] = override ? "allowed" : "workspace_blocked";
+        continue;
+      }
+      if (allowedSlugs === null || allowedSlugs.has(slug)) {
+        availability[slug] = "allowed";
+      } else {
+        availability[slug] = "tier_locked";
+      }
+    }
   }
+
   return NextResponse.json({ availability });
 }
 

@@ -8,10 +8,14 @@
  * back to a friendly empty state instead of erroring.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useWorkspace } from "@/lib/workspaces/client";
 import TagChip from "@/components/TagChip";
+import { VirtualTableBody } from "@/components/VirtualList";
+
+const TAGS_ROW_HEIGHT = 40;
+const TAGS_VIEWPORT_HEIGHT = 540;
 
 interface TagRow {
   id: string;
@@ -255,37 +259,96 @@ export default function TagsPage() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-app bg-app-elevated">
-        <table className="w-full text-xs">
-          <thead className="bg-surface text-[10px] uppercase tracking-[0.15em] text-faint">
+      <TagsTable
+        sorted={sorted}
+        refreshing={refreshing}
+        editingId={editingId}
+        editName={editName}
+        editColor={editColor}
+        setEditName={setEditName}
+        setEditColor={setEditColor}
+        setEditingId={setEditingId}
+        saveEdit={saveEdit}
+        deleteTag={deleteTag}
+      />
+    </main>
+  );
+}
+
+/**
+ * Wraps the tag list in a fixed-height scroll container + windowed rows.
+ * Lifted out of the parent for VirtualTableBody to live cleanly above
+ * the JSX tree. All editing state stays in the parent — we pass setters
+ * through, so the row's edit UX is unchanged.
+ */
+function TagsTable({
+  sorted,
+  refreshing,
+  editingId,
+  editName,
+  editColor,
+  setEditName,
+  setEditColor,
+  setEditingId,
+  saveEdit,
+  deleteTag,
+}: {
+  sorted: TagRow[];
+  refreshing: boolean;
+  editingId: string | null;
+  editName: string;
+  editColor: string;
+  setEditName: (v: string) => void;
+  setEditColor: (v: string) => void;
+  setEditingId: (v: string | null) => void;
+  saveEdit: (id: string) => void;
+  deleteTag: (id: string) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  return (
+    <div
+      ref={scrollRef}
+      className="overflow-auto rounded-xl border border-app bg-app-elevated"
+      style={{ maxHeight: TAGS_VIEWPORT_HEIGHT }}
+    >
+      <table className="w-full text-xs">
+        <thead className="sticky top-0 z-10 bg-surface text-[10px] uppercase tracking-[0.15em] text-faint">
+          <tr>
+            <th className="px-3 py-2 text-left">Tag</th>
+            <th className="px-3 py-2 text-left">Slug</th>
+            <th className="px-3 py-2 text-right">Tagged</th>
+            <th className="px-3 py-2 text-right">Created</th>
+            <th className="px-3 py-2 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {refreshing && sorted.length === 0 && (
             <tr>
-              <th className="px-3 py-2 text-left">Tag</th>
-              <th className="px-3 py-2 text-left">Slug</th>
-              <th className="px-3 py-2 text-right">Tagged</th>
-              <th className="px-3 py-2 text-right">Created</th>
-              <th className="px-3 py-2 text-right">Actions</th>
+              <td colSpan={5} className="px-3 py-6 text-center text-muted">
+                Loading…
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {refreshing && tags.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-muted">
-                  Loading…
-                </td>
-              </tr>
-            )}
-            {!refreshing && sorted.length === 0 && (
-              <tr>
-                <td colSpan={5} className="px-3 py-6 text-center text-muted">
-                  No tags yet. Add your first one above.
-                </td>
-              </tr>
-            )}
-            {sorted.map((t) => {
-              const editing = editingId === t.id;
-              return (
-                <tr key={t.id} className="border-t border-app">
-                  <td className="px-3 py-2">
+          )}
+          {!refreshing && sorted.length === 0 && (
+            <tr>
+              <td colSpan={5} className="px-3 py-6 text-center text-muted">
+                No tags yet. Add your first one above.
+              </td>
+            </tr>
+          )}
+          {sorted.length > 0 && (
+            <VirtualTableBody<TagRow>
+              items={sorted}
+              rowHeight={TAGS_ROW_HEIGHT}
+              scrollRef={scrollRef}
+              columnCount={5}
+              getKey={(t) => t.id}
+              renderRow={(t) => {
+                const editing = editingId === t.id;
+                return (
+                  <>
+                  <td className="border-t border-app px-3 py-2">
                     {editing ? (
                       <div className="flex items-center gap-2">
                         <input
@@ -315,16 +378,16 @@ export default function TagsPage() {
                       <TagChip tag={t} />
                     )}
                   </td>
-                  <td className="px-3 py-2 font-mono text-[11px] text-muted">
+                  <td className="border-t border-app px-3 py-2 font-mono text-[11px] text-muted">
                     {t.slug}
                   </td>
-                  <td className="px-3 py-2 text-right text-muted">
+                  <td className="border-t border-app px-3 py-2 text-right text-muted">
                     {t.tagged_count ?? "—"}
                   </td>
-                  <td className="px-3 py-2 text-right text-faint">
+                  <td className="border-t border-app px-3 py-2 text-right text-faint">
                     {new Date(t.created_at).toLocaleDateString()}
                   </td>
-                  <td className="px-3 py-2 text-right">
+                  <td className="border-t border-app px-3 py-2 text-right">
                     {editing ? (
                       <div className="flex justify-end gap-1">
                         <button
@@ -365,12 +428,13 @@ export default function TagsPage() {
                       </div>
                     )}
                   </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </main>
+                  </>
+                );
+              }}
+            />
+          )}
+        </tbody>
+      </table>
+    </div>
   );
 }
