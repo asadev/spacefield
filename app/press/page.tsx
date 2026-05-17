@@ -43,10 +43,12 @@ export default function PressPage() {
         <section className="mt-10 space-y-3">
           <h2 className="text-lg font-semibold">About Space Field</h2>
           <p className="text-sm leading-relaxed text-secondary">
-            Space Field is an AI-powered platform of real-estate and business
-            tools built for the MENA market. It bundles 130+ purpose-built
-            tools — from property poster creation and market pulse to CRM
-            forms and AI assistants — into a single desktop-OS-style
+            Space Field is an AI-powered workspace platform built for
+            real-estate and business teams in the MENA region. It bundles a
+            native CRM, People (HR), Tasks, files, an AI Assistant that
+            spans the whole workspace, and 130+ purpose-built tools —
+            including property valuation, market pulse, sales-offer
+            generation, and poster creation — into a single desktop-OS-style
             workspace. Built in the UAE.
           </p>
           <ul className="ml-4 list-disc text-sm text-secondary">
@@ -91,10 +93,18 @@ export default function PressPage() {
           <h2 className="text-lg font-semibold">Boilerplate</h2>
           <p className="rounded-xl border border-app bg-app-elevated p-4 text-sm leading-relaxed text-secondary">
             Space Field is an AI-powered workspace for real-estate and
-            business professionals across the MENA region. The platform packs
-            130+ specialised tools — from property poster creation to market
-            analysis and CRM — alongside AI assistants, all behind a single
-            desktop-OS-style workspace. Founded in 2026 and built in the UAE.
+            business teams across the MENA region. The platform combines a
+            native CRM, People (HR), Tasks, files, and a workspace-wide AI
+            Assistant with 130+ purpose-built tools — from property
+            valuation and market pulse to sales-offer generation and poster
+            creation — all inside a single desktop-OS-style browser
+            workspace. Founded in 2026 and built in the UAE.
+          </p>
+          <p className="text-xs text-muted">
+            Short version (one sentence): Space Field is an AI-powered
+            workspace platform that bundles CRM, People, Tasks, an AI
+            Assistant, and 130+ business tools into one desktop-OS-style
+            browser experience for the MENA market.
           </p>
         </section>
 
@@ -105,9 +115,11 @@ export default function PressPage() {
               Is Spacefield only for real estate?
             </summary>
             <p className="mt-2 text-sm text-secondary">
-              No — the real-estate toolset is our anchor but the platform
-              hosts general business tools and AI assistants. We&apos;re
-              MENA-focused.
+              No — real estate is our anchor vertical, but the platform
+              ships a native CRM, People (HR), Tasks, files, and a
+              workspace-wide AI Assistant that work across any business.
+              Workspace templates today cover real estate, marketing, and
+              operations, with more on the way.
             </p>
           </details>
           <details className="rounded-xl border border-app bg-app-elevated p-4">
