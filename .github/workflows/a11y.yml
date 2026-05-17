@@ -1,0 +1,104 @@
+name: A11y (axe)
+
+# Runs @axe-core/cli against a small set of public marketing pages on
+# every PR. Soft-warn for now (`continue-on-error: true`) — we capture
+# signal as a workflow summary + artifact, but don't block merges
+# until the violation list is curated.
+#
+# Target URL resolution:
+#   1. Workflow input (manual dispatch).
+#   2. Repository variable `A11Y_TARGET_URL`.
+#   3. Fallback to https://spacefield.co.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'Base URL to scan (overrides defaults)'
+        required: false
+        default: ''
+
+concurrency:
+  group: a11y-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  axe:
+    name: axe-core scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Resolve base URL
+        id: target
+        run: |
+          if [ -n "${{ github.event.inputs.target_url }}" ]; then
+            echo "url=${{ github.event.inputs.target_url }}" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ vars.A11Y_TARGET_URL }}" ]; then
+            echo "url=${{ vars.A11Y_TARGET_URL }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "url=https://spacefield.co" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install axe + chrome
+        run: |
+          npm install --no-save @axe-core/cli@^4
+          # axe-core/cli drives headless chrome via puppeteer-core; the
+          # Ubuntu runner ships chrome at /usr/bin/google-chrome.
+          which google-chrome || sudo apt-get update && sudo apt-get install -y google-chrome-stable || true
+
+      - name: Run axe (soft-warn)
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          base="${{ steps.target.outputs.url }}"
+          mkdir -p a11y-results
+          paths=("/" "/pricing" "/compare" "/developers")
+          fail=0
+          for p in "${paths[@]}"; do
+            slug=$(echo "$p" | sed 's|/|_|g; s|^_||; s|^$|root|')
+            [ -z "$slug" ] && slug="root"
+            echo "::group::axe ${base}${p}"
+            npx --no-install @axe-core/cli "${base}${p}" \
+              --exit \
+              --save "a11y-results/${slug}.json" \
+              --tags wcag2a,wcag2aa \
+              || fail=1
+            echo "::endgroup::"
+          done
+          if [ "$fail" -ne 0 ]; then
+            echo "::warning::axe reported violations — see artifact."
+          fi
+          {
+            echo "## A11y (axe) summary"
+            echo ""
+            echo "Target: ${base}"
+            echo ""
+            for j in a11y-results/*.json; do
+              [ -e "$j" ] || continue
+              path=$(basename "$j" .json)
+              v=$(node -e "const j=require('./${j}'); const x=Array.isArray(j)?j[0]:j; console.log((x.violations||[]).length)")
+              echo "- \`${path}\`: ${v} violations"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload axe results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: axe-results
+          path: a11y-results/
+          retention-days: 14

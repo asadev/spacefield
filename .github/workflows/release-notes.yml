@@ -1,0 +1,151 @@
+name: Release notes
+
+# On tag push (`v*`), prepend a CHANGELOG.md entry generated from
+# commits between the previous tag and HEAD. Pure shell + git — no
+# external dependency install, runs in <30s.
+#
+# Output:
+#   - Commits to main with the updated CHANGELOG.md.
+#   - Creates a GitHub Release with the same body.
+#
+# Conventions assumed:
+#   - Tags are `v<semver>` (e.g. v1.4.0).
+#   - Commit subjects loosely follow Conventional Commits; categorised
+#     into Features / Fixes / Other based on prefix.
+#   - First-tag case: emits "Initial release" entry with no prior diff.
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to generate notes for (e.g. v1.2.3)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  notes:
+    name: Generate + publish notes
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout (full history)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve tag
+        id: tag
+        run: |
+          set -euo pipefail
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            tag="${{ github.event.inputs.tag }}"
+          else
+            tag="${GITHUB_REF#refs/tags/}"
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Resolve previous tag
+        id: prev
+        run: |
+          set -euo pipefail
+          cur="${{ steps.tag.outputs.tag }}"
+          prev=$(git tag --sort=-v:refname | awk -v c="${cur}" '$0 != c {print; exit}')
+          if [ -z "$prev" ]; then
+            echo "prev=" >> "$GITHUB_OUTPUT"
+            echo "range=" >> "$GITHUB_OUTPUT"
+          else
+            echo "prev=${prev}" >> "$GITHUB_OUTPUT"
+            echo "range=${prev}..${cur}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build release body
+        id: body
+        run: |
+          set -euo pipefail
+          cur="${{ steps.tag.outputs.tag }}"
+          range="${{ steps.prev.outputs.range }}"
+          date=$(date -u +%Y-%m-%d)
+
+          mkdir -p .release
+          body=".release/body.md"
+
+          {
+            echo "## ${cur} — ${date}"
+            echo ""
+          } > "${body}"
+
+          if [ -z "$range" ]; then
+            echo "Initial release." >> "${body}"
+          else
+            # Three buckets: feat / fix / other. Anything else goes to other.
+            feats=$(git log --pretty='format:- %s (%h)' "${range}" -- . | grep -Ei '^- (feat|feature)(\(|:)' || true)
+            fixes=$(git log --pretty='format:- %s (%h)' "${range}" -- . | grep -Ei '^- fix(\(|:)' || true)
+            others=$(git log --pretty='format:- %s (%h)' "${range}" -- . | grep -Eiv '^- (feat|feature|fix)(\(|:)' || true)
+
+            if [ -n "$feats" ]; then
+              echo "### Features" >> "${body}"
+              echo "" >> "${body}"
+              echo "$feats" >> "${body}"
+              echo "" >> "${body}"
+            fi
+            if [ -n "$fixes" ]; then
+              echo "### Fixes" >> "${body}"
+              echo "" >> "${body}"
+              echo "$fixes" >> "${body}"
+              echo "" >> "${body}"
+            fi
+            if [ -n "$others" ]; then
+              echo "### Other" >> "${body}"
+              echo "" >> "${body}"
+              echo "$others" >> "${body}"
+              echo "" >> "${body}"
+            fi
+            echo "" >> "${body}"
+            echo "Full diff: \`${range}\`" >> "${body}"
+          fi
+
+          echo "body_path=${body}" >> "$GITHUB_OUTPUT"
+
+      - name: Prepend to CHANGELOG.md
+        run: |
+          set -euo pipefail
+          tmp=$(mktemp)
+          if [ ! -f CHANGELOG.md ]; then
+            printf "# Changelog\n\n" > CHANGELOG.md
+          fi
+          # Keep the "# Changelog" header at the top, insert new body after it.
+          head -n 1 CHANGELOG.md > "$tmp"
+          echo "" >> "$tmp"
+          cat ".release/body.md" >> "$tmp"
+          tail -n +2 CHANGELOG.md >> "$tmp"
+          mv "$tmp" CHANGELOG.md
+
+      - name: Commit CHANGELOG
+        # Skip the auto-commit on manual dispatch; only commit when the
+        # tag push triggered the run.
+        if: github.event_name == 'push'
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet CHANGELOG.md; then
+            echo "No CHANGELOG change."
+            exit 0
+          fi
+          git checkout main || git checkout -b main
+          git add CHANGELOG.md
+          git commit -m "docs: update CHANGELOG for ${{ steps.tag.outputs.tag }} [skip ci]"
+          git push origin main || echo "::warning::push to main failed (branch protection?) — release will still publish."
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.tag.outputs.tag }}
+          name: ${{ steps.tag.outputs.tag }}
+          body_path: ${{ steps.body.outputs.body_path }}
+          draft: false
+          prerelease: false

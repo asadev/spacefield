@@ -1,0 +1,93 @@
+name: DAST (OWASP ZAP)
+
+# Dynamic Application Security Testing.
+#
+# Two modes:
+#   - PR / push: lightweight `baseline` scan against the deploy preview.
+#     Soft-gated (--exit-code 0) so we don't block merges on findings
+#     while we tune the rules file. Findings show up as a workflow
+#     summary + artifact.
+#   - Schedule (nightly at 03:30 UTC): full `full-scan` against
+#     production. Posts an issue on regressions.
+#
+# Target URL resolution order:
+#   1. Workflow input (manual dispatch).
+#   2. Repository variable `DAST_TARGET_URL` (e.g. https://staging.spacefield.co).
+#   3. Hard fallback to https://spacefield.co.
+#
+# Why ZAP baseline first: it's the fastest scan that doesn't actively
+# attack the target — safe to point at production without coordination.
+# Active/full scan runs only on schedule against a non-prod target if
+# `DAST_FULL_TARGET_URL` is set, otherwise it's skipped.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+  schedule:
+    - cron: '30 3 * * *'
+  workflow_dispatch:
+    inputs:
+      target_url:
+        description: 'URL to scan (overrides defaults)'
+        required: false
+        default: ''
+
+concurrency:
+  group: dast-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  baseline:
+    name: ZAP baseline (soft)
+    runs-on: ubuntu-latest
+    if: github.event_name != 'schedule'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve target URL
+        id: target
+        run: |
+          if [ -n "${{ github.event.inputs.target_url }}" ]; then
+            echo "url=${{ github.event.inputs.target_url }}" >> "$GITHUB_OUTPUT"
+          elif [ -n "${{ vars.DAST_TARGET_URL }}" ]; then
+            echo "url=${{ vars.DAST_TARGET_URL }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "url=https://spacefield.co" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: ZAP baseline scan
+        uses: zaproxy/action-baseline@v0.13.0
+        with:
+          target: ${{ steps.target.outputs.url }}
+          # Soft-gate: don't fail builds on findings while we tune the
+          # rules. Flip to non-zero once the findings list is curated.
+          cmd_options: '-a -j -T 10 --exit-code 0'
+          allow_issue_writing: false
+          fail_action: false
+          artifact_name: zap-baseline-report
+
+  full:
+    name: ZAP full (scheduled)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'schedule' && vars.DAST_FULL_TARGET_URL != ''
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: ZAP full scan
+        uses: zaproxy/action-full-scan@v0.12.0
+        with:
+          target: ${{ vars.DAST_FULL_TARGET_URL }}
+          # Full scan can take 30+ min. Soft-gated for the same reason
+          # as baseline; we want signal, not a tripwire, until tuned.
+          cmd_options: '-a -j -T 60 --exit-code 0'
+          allow_issue_writing: true
+          fail_action: false
+          artifact_name: zap-full-report

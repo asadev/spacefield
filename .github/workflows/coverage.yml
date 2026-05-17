@@ -1,0 +1,95 @@
+name: Coverage gate
+
+# Vitest line coverage gate, scoped to `lib/`.
+#
+# Initial threshold is 60% (soft-warn — the job uses `continue-on-error`
+# while we backfill). To enforce: remove `continue-on-error: true` from
+# the `Enforce threshold` step. To raise the bar: bump `COVERAGE_MIN`.
+#
+# Why scoped to lib/: most of the value is in shared modules. The Next
+# app/page tree is exercised by Playwright/Lighthouse; gating its line
+# coverage here would create noise.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+
+env:
+  COVERAGE_MIN: '60'
+
+jobs:
+  coverage:
+    name: Vitest coverage (lib/)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Install Vitest + coverage provider
+        # Job-scoped install — keeps the production lockfile lean.
+        run: pnpm add -D --no-save vitest@^2 @vitest/coverage-v8@^2
+
+      - name: Run tests with coverage
+        run: |
+          pnpm exec vitest run \
+            --coverage \
+            --coverage.provider=v8 \
+            --coverage.reporter=text \
+            --coverage.reporter=json-summary \
+            --coverage.reporter=lcov \
+            --coverage.include='lib/**' \
+            --coverage.exclude='lib/**/*.test.ts' \
+            --coverage.exclude='lib/**/__tests__/**'
+        env:
+          NODE_ENV: test
+
+      - name: Enforce threshold
+        # Soft-warn for now. Flip `continue-on-error` to `false` once
+        # lib/ tests stabilize above 60%.
+        continue-on-error: true
+        run: |
+          set -euo pipefail
+          if [ ! -f coverage/coverage-summary.json ]; then
+            echo "::warning::No coverage summary produced — skipping gate."
+            exit 0
+          fi
+          pct=$(node -e "const s=require('./coverage/coverage-summary.json'); console.log(s.total.lines.pct)")
+          min="${COVERAGE_MIN}"
+          echo "Line coverage: ${pct}% (min: ${min}%)"
+          echo "## Coverage" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Line coverage: **${pct}%**" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Threshold: ${min}%" >> "$GITHUB_STEP_SUMMARY"
+          awk -v p="${pct}" -v m="${min}" 'BEGIN { exit (p+0 < m+0) ? 1 : 0 }'
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 14
