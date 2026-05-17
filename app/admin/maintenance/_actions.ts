@@ -1,7 +1,8 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 
+import { CACHE_TAGS } from "@/lib/cache/single-flight";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { recordAdminAction } from "../_audit";
@@ -109,6 +110,7 @@ export async function updateMaintenance(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/admin/maintenance");
+  updateTag(CACHE_TAGS.maintenance);
 }
 
 /* ─────────────────────── quick toggles ─────────────────────── */
@@ -141,6 +143,7 @@ export async function enableMaintenance(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/admin/maintenance");
+  updateTag(CACHE_TAGS.maintenance);
 }
 
 export async function disableMaintenance(formData: FormData): Promise<void> {
@@ -171,4 +174,5 @@ export async function disableMaintenance(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/admin/maintenance");
+  updateTag(CACHE_TAGS.maintenance);
 }

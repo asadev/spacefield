@@ -1,8 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { CACHE_TAGS } from "@/lib/cache/single-flight";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { recordAdminAction } from "../_audit";
@@ -38,6 +39,18 @@ function parseWorkspaceId(raw: unknown): string | null {
   if (!s || s === "global" || s === "null") return null;
   if (!UUID_RE.test(s)) return null;
   return s;
+}
+
+/** Invalidate the right brand-cache tag for a given workspace scope.
+ *  null = global brand, anything else = workspace-scoped. We use
+ *  updateTag (not revalidateTag) for read-your-own-writes inside the
+ *  server action. */
+function revalidateBrandTag(workspaceId: string | null): void {
+  if (workspaceId) {
+    updateTag(`${CACHE_TAGS.brandWorkspace}:${workspaceId}`);
+  } else {
+    updateTag(CACHE_TAGS.brandGlobal);
+  }
 }
 
 async function fetchBrand(id: string): Promise<BrandConfigRow | null> {
@@ -90,6 +103,7 @@ export async function createBrand(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/admin/branding");
+  revalidateBrandTag(inserted.workspace_id ?? null);
   redirect(`/admin/branding/${inserted.id}`);
 }
 
@@ -135,6 +149,7 @@ export async function updateBrand(formData: FormData): Promise<void> {
 
   revalidatePath("/admin/branding");
   revalidatePath(`/admin/branding/${id}`);
+  revalidateBrandTag(before.workspace_id ?? null);
 }
 
 /* ────────────────── deleteBrand ────────────────── */
@@ -159,5 +174,6 @@ export async function deleteBrand(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/admin/branding");
+  revalidateBrandTag(before.workspace_id ?? null);
   redirect("/admin/branding");
 }

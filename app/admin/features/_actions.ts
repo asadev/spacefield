@@ -1,8 +1,9 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { redirect } from "next/navigation";
 
+import { CACHE_TAGS } from "@/lib/cache/single-flight";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { recordAdminAction } from "../_audit";
@@ -89,6 +90,7 @@ export async function createFlag(
   });
 
   revalidatePath("/admin/features");
+  updateTag(CACHE_TAGS.featureFlags);
   redirect(`/admin/features/${encodeURIComponent(key)}`);
 }
 
@@ -152,6 +154,7 @@ export async function updateFlag(
 
   revalidatePath("/admin/features");
   revalidatePath(`/admin/features/${encodeURIComponent(key)}`);
+  updateTag(CACHE_TAGS.featureFlags);
 }
 
 /* ────────────────── toggleFlag ────────────────── */
@@ -190,6 +193,7 @@ export async function toggleFlag(formData: FormData): Promise<void> {
 
   revalidatePath("/admin/features");
   revalidatePath(`/admin/features/${encodeURIComponent(key)}`);
+  updateTag(CACHE_TAGS.featureFlags);
 }
 
 /* ────────────────── deleteFlag ────────────────── */
@@ -223,6 +227,7 @@ export async function deleteFlag(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/admin/features");
+  updateTag(CACHE_TAGS.featureFlags);
   redirect("/admin/features");
 }
 

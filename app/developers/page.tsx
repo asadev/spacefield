@@ -8,6 +8,9 @@ export const metadata = {
     "Programmatic access to your Space Field workspace via the public v1 API.",
 };
 
+// API docs change with deploys; 5-minute ISR is fine.
+export const revalidate = 300;
+
 /**
  * /developers — public docs landing for the public v1 API.
  *

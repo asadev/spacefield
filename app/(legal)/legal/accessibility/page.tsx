@@ -5,6 +5,9 @@ export const metadata = {
   description: "How Space Field works toward WCAG 2.1 AA conformance.",
 };
 
+// Legal copy changes only on deploy. 1-hour ISR.
+export const revalidate = 3600;
+
 export default function AccessibilityPage() {
   return (
     <>

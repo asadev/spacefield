@@ -5,6 +5,10 @@ export const metadata = {
   description: "Recent updates and improvements to Space Field.",
 };
 
+// Entries are hard-coded in this file; the page only changes on deploy.
+// 5-minute ISR window is plenty.
+export const revalidate = 300;
+
 interface ChangelogEntry {
   date: string;
   title: string;
