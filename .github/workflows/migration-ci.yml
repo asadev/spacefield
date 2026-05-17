@@ -1,0 +1,157 @@
+name: Migration CI
+
+# Spins up a clean Postgres 16, applies every migration in
+# `supabase/migrations/` in lexicographic order, then re-applies the
+# whole set and asserts the second pass is a no-op (idempotency check).
+#
+# Why this exists:
+#   - Supabase CLI's `db push` rejects our timestamp-prefixed file names
+#     (a recurring tax — see MEMORY 2026-05-17), so we can't lean on it
+#     for CI. A raw psql pass against postgres:16 catches schema errors
+#     and non-idempotent migrations before they hit staging.
+#   - Idempotency matters because migrations get re-run during disaster
+#     recovery and on branch databases. A second `\i` must be safe.
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - '.github/workflows/migration-ci.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'supabase/migrations/**'
+      - '.github/workflows/migration-ci.yml'
+  workflow_dispatch:
+
+concurrency:
+  group: migration-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  migrate:
+    name: Apply + re-apply (idempotency)
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: postgres
+      PGPASSWORD: postgres
+      PGDATABASE: postgres
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install psql client
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends postgresql-client
+
+      - name: Wait for Postgres
+        run: |
+          for i in $(seq 1 30); do
+            if pg_isready -h "$PGHOST" -p "$PGPORT" -U "$PGUSER" > /dev/null 2>&1; then
+              echo "Postgres ready."
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Postgres never came up." >&2
+          exit 1
+
+      - name: Provision Supabase-like roles
+        # Migrations reference `service_role`, `authenticated`, etc.
+        # Create stubs so the SQL can grant against them.
+        run: |
+          psql -v ON_ERROR_STOP=1 <<'SQL'
+            do $$
+            begin
+              if not exists (select 1 from pg_roles where rolname = 'anon') then
+                create role anon nologin;
+              end if;
+              if not exists (select 1 from pg_roles where rolname = 'authenticated') then
+                create role authenticated nologin;
+              end if;
+              if not exists (select 1 from pg_roles where rolname = 'service_role') then
+                create role service_role nologin bypassrls;
+              end if;
+              if not exists (select 1 from pg_roles where rolname = 'authenticator') then
+                create role authenticator noinherit login password 'postgres';
+              end if;
+            end$$;
+
+            create schema if not exists auth;
+            create schema if not exists storage;
+            create schema if not exists extensions;
+
+            -- Minimal stubs so migrations that reference auth.uid() / auth.role()
+            -- compile. They return null in CI; that's fine for DDL validation.
+            create or replace function auth.uid() returns uuid language sql stable as $$ select null::uuid $$;
+            create or replace function auth.role() returns text language sql stable as $$ select 'service_role'::text $$;
+            create or replace function auth.jwt() returns jsonb language sql stable as $$ select '{}'::jsonb $$;
+          SQL
+
+      - name: First pass — apply all migrations
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          fail=0
+          for f in supabase/migrations/*.sql; do
+            echo "::group::apply $f"
+            if ! psql -v ON_ERROR_STOP=1 -f "$f"; then
+              echo "::error file=$f::Migration failed on first pass"
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+          exit "$fail"
+
+      - name: Second pass — re-apply (idempotency)
+        # Re-running every migration MUST succeed. If a migration is not
+        # idempotent (e.g. `create table foo` instead of `create table if
+        # not exists foo`), this step catches it.
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          fail=0
+          for f in supabase/migrations/*.sql; do
+            echo "::group::re-apply $f"
+            if ! psql -v ON_ERROR_STOP=1 -f "$f"; then
+              echo "::error file=$f::Migration is not idempotent — second pass failed"
+              fail=1
+            fi
+            echo "::endgroup::"
+          done
+          exit "$fail"
+
+      - name: Schema snapshot
+        if: always()
+        run: |
+          mkdir -p artifacts
+          pg_dump --schema-only --no-owner --no-privileges > artifacts/schema.sql || true
+
+      - name: Upload schema snapshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: postgres-schema
+          path: artifacts/schema.sql
+          retention-days: 14
