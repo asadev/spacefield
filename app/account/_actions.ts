@@ -2,9 +2,11 @@
 
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
 import { hashIp } from "@/lib/lifecycle";
+import { requireRecentAuth } from "@/lib/mfa/reauth";
 
 /* app/account/_actions.ts — Server actions called by the /account
  * page's client form components.
@@ -48,6 +50,11 @@ export async function requestEmailChange(
   if (next === (userData.user.email ?? "").toLowerCase()) {
     return { ok: false, error: "That's already your current email." };
   }
+
+  // S4 — sensitive action: require a recent reauth proof.
+  const reauthUrl = await requireRecentAuth("/account");
+  if (reauthUrl) redirect(reauthUrl);
+
   const { error } = await supabase.auth.updateUser({ email: next });
   if (error) {
     return { ok: false, error: error.message };
@@ -84,6 +91,10 @@ export async function requestAccountDeletion(
       error: "Type your current email exactly to confirm.",
     };
   }
+
+  // S4 — account deletion is the canonical sensitive action.
+  const reauthUrl = await requireRecentAuth("/account");
+  if (reauthUrl) redirect(reauthUrl);
 
   const h = await headers();
   const forwardedFor = h.get("x-forwarded-for");
