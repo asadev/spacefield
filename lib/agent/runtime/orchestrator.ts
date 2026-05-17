@@ -37,6 +37,12 @@ import {
   getWorkspaceBudgetStatus,
   upgradeMessageForTier,
 } from "@/lib/ai/budget-check";
+import {
+  AllProvidersUnavailableError,
+  callWithFallback,
+  providerForModel,
+} from "@/lib/ai/model-fallback";
+import { AI_UNAVAILABLE_MESSAGE } from "@/lib/ai/availability";
 import type {
   CallUsage,
   ConversationMessage,
@@ -163,6 +169,13 @@ export async function runOrchestrator(
   // runtime_model_assignments take effect without a server restart.
   const resolved = await getRuntimeModel("orchestrator");
   const MODEL = resolved.id;
+  const PROVIDER = providerForModel(MODEL);
+  // Same-provider tier fallback (e.g. Sonnet → Haiku). Both speak the
+  // same tool-use API so we can swap mid-flight without rewriting
+  // messages. fallbackId is admin-configurable per call_kind via the
+  // runtime_model_assignments table.
+  const FALLBACK_MODEL = resolved.fallbackId;
+  const FALLBACK_PROVIDER = FALLBACK_MODEL ? providerForModel(FALLBACK_MODEL) : null;
   // System prompt + tool catalog get cache_control: ephemeral markers
   // (via cachedSystem / cachedTools) so the heavy Sonnet prefix bills at
   // ~10% on repeated turns.
@@ -198,45 +211,85 @@ export async function runOrchestrator(
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     const cachedMsgs = cachedMessages(messages);
-    const startedAt = Date.now();
     let response: Anthropic.Messages.Message;
+    let actualModel: string;
     try {
-      response = await client().messages.create({
-        model: MODEL,
-        max_tokens: 2048,
-        system,
-        tools,
-        messages: cachedMsgs,
+      // Same wrapping as executor.ts. Sonnet → Haiku is the typical
+      // fallback chain here when the admin has set fallback_model_id
+      // in runtime_model_assignments. The breaker is provider-scoped,
+      // so both attempts can be short-circuited when Anthropic itself
+      // is down — at which point we return the friendly outage text.
+      const result = await callWithFallback<Anthropic.Messages.Message>({
+        primary: {
+          provider: PROVIDER,
+          model: MODEL,
+          run: () =>
+            client().messages.create({
+              model: MODEL,
+              max_tokens: 2048,
+              system,
+              tools,
+              messages: cachedMsgs,
+            }),
+        },
+        fallback:
+          FALLBACK_MODEL && FALLBACK_PROVIDER === PROVIDER
+            ? {
+                provider: FALLBACK_PROVIDER,
+                model: FALLBACK_MODEL,
+                run: () =>
+                  client().messages.create({
+                    model: FALLBACK_MODEL,
+                    max_tokens: 2048,
+                    system,
+                    tools,
+                    messages: cachedMsgs,
+                  }),
+              }
+            : null,
+        callKind: "orchestrator",
+        recordAttempt: (entry) => {
+          if (entry.status !== "ok") {
+            void recordAiCall({
+              workspace_id: ctx.workspaceId,
+              user_id: ctx.userId,
+              model: entry.model,
+              latency_ms: entry.latencyMs,
+              status: "error",
+              error: entry.error,
+            });
+          }
+        },
       });
+      response = result.value;
+      actualModel = result.modelUsed;
     } catch (e) {
-      void recordAiCall({
-        workspace_id: ctx.workspaceId,
-        user_id: ctx.userId,
-        model: MODEL,
-        latency_ms: Date.now() - startedAt,
-        status: "error",
-        error: e instanceof Error ? e.message : String(e),
-      });
+      if (e instanceof AllProvidersUnavailableError) {
+        return {
+          text: AI_UNAVAILABLE_MESSAGE,
+          usage,
+        };
+      }
       throw e;
     }
 
     // Per-call cost ledger. See executor.ts for the rationale —
     // identical pattern (cached + uncached tokens collapsed into one
-    // input_tokens count).
+    // input_tokens count). Only the success row is written here; error
+    // rows for failed attempts are written from the recordAttempt hook.
     void recordAiCall({
       workspace_id: ctx.workspaceId,
       user_id: ctx.userId,
-      model: MODEL,
+      model: actualModel,
       input_tokens: totalInputTokens(response.usage),
       output_tokens: response.usage.output_tokens,
-      latency_ms: Date.now() - startedAt,
       status: "ok",
     });
 
     usage.push({
       bucket: "deep",
       tokens: totalInputTokens(response.usage) + response.usage.output_tokens,
-      model: MODEL,
+      model: actualModel,
       callKind: "orchestrator",
     });
 
@@ -332,41 +385,76 @@ export async function runOrchestrator(
 
       if (pendingApproval) {
         const cachedMsgs2 = cachedMessages(messages);
-        const followupStartedAt = Date.now();
         let followup: Anthropic.Messages.Message;
+        let followupModel: string;
         try {
-          followup = await client().messages.create({
-            model: MODEL,
-            max_tokens: 256,
-            system,
-            tools,
-            messages: cachedMsgs2,
+          const result = await callWithFallback<Anthropic.Messages.Message>({
+            primary: {
+              provider: PROVIDER,
+              model: MODEL,
+              run: () =>
+                client().messages.create({
+                  model: MODEL,
+                  max_tokens: 256,
+                  system,
+                  tools,
+                  messages: cachedMsgs2,
+                }),
+            },
+            fallback:
+              FALLBACK_MODEL && FALLBACK_PROVIDER === PROVIDER
+                ? {
+                    provider: FALLBACK_PROVIDER,
+                    model: FALLBACK_MODEL,
+                    run: () =>
+                      client().messages.create({
+                        model: FALLBACK_MODEL,
+                        max_tokens: 256,
+                        system,
+                        tools,
+                        messages: cachedMsgs2,
+                      }),
+                  }
+                : null,
+            callKind: "orchestrator",
+            recordAttempt: (entry) => {
+              if (entry.status !== "ok") {
+                void recordAiCall({
+                  workspace_id: ctx.workspaceId,
+                  user_id: ctx.userId,
+                  model: entry.model,
+                  latency_ms: entry.latencyMs,
+                  status: "error",
+                  error: entry.error,
+                });
+              }
+            },
           });
+          followup = result.value;
+          followupModel = result.modelUsed;
         } catch (e) {
-          void recordAiCall({
-            workspace_id: ctx.workspaceId,
-            user_id: ctx.userId,
-            model: MODEL,
-            latency_ms: Date.now() - followupStartedAt,
-            status: "error",
-            error: e instanceof Error ? e.message : String(e),
-          });
+          if (e instanceof AllProvidersUnavailableError) {
+            return {
+              text: `I'd like to ${pendingApproval.summary}. Reply YES to confirm.`,
+              usage,
+              pendingApproval,
+            };
+          }
           throw e;
         }
         void recordAiCall({
           workspace_id: ctx.workspaceId,
           user_id: ctx.userId,
-          model: MODEL,
+          model: followupModel,
           input_tokens: totalInputTokens(followup.usage),
           output_tokens: followup.usage.output_tokens,
-          latency_ms: Date.now() - followupStartedAt,
           status: "ok",
         });
         usage.push({
           bucket: "deep",
           tokens:
             totalInputTokens(followup.usage) + followup.usage.output_tokens,
-          model: MODEL,
+          model: followupModel,
           callKind: "orchestrator",
         });
         finalText =

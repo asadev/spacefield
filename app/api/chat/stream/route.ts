@@ -68,6 +68,19 @@ import {
   getWorkspaceBudgetStatus,
   upgradeMessageForTier,
 } from "@/lib/ai/budget-check";
+import {
+  canCall,
+  recordFailure,
+  recordSuccess,
+} from "@/lib/ai/circuit-breaker";
+import {
+  AI_UNAVAILABLE_MESSAGE,
+  isAIAvailable,
+} from "@/lib/ai/availability";
+import {
+  isRetryableError,
+  providerForModel,
+} from "@/lib/ai/model-fallback";
 
 export const runtime = "nodejs";
 // 60s ceiling — same as /api/agent/dispatch. Long-running streams can
@@ -278,6 +291,23 @@ async function* streamAnthropicText(opts: {
     { role: "user" as const, content: buildUserContent(opts.message, opts.images) },
   ];
 
+  // Circuit-breaker check before opening the stream. The outer route
+  // already gated via isAIAvailable() — this is a per-provider re-check
+  // in case the model id resolves to a provider whose circuit opened
+  // between the availability gate and here. (The two checks are not
+  // redundant: isAIAvailable() looks at the union of all providers; this
+  // one is provider-scoped.)
+  const provider = providerForModel(opts.model);
+  const decision = canCall(provider);
+  if (!decision.allow) {
+    // Yield the friendly outage text so the client sees a normal delta
+    // sequence. Cost ledger gets a "skipped" row via the caller.
+    opts.usageRef.errorMessage =
+      decision.lastError ?? "ai_circuit_open";
+    yield AI_UNAVAILABLE_MESSAGE;
+    return;
+  }
+
   const stream = anthropic().messages.stream(
     {
       model: opts.model,
@@ -319,10 +349,27 @@ async function* streamAnthropicText(opts: {
       // finalMessage() rejects after a controller abort — that's fine,
       // we just won't have token counts for an aborted call.
     }
+    // Tell the breaker the provider is healthy. Aborts don't count
+    // (the call did reach the provider but we cut it short — that's
+    // neither a success nor a provider-health signal).
+    if (completed) {
+      recordSuccess(provider);
+    }
   } catch (err) {
     opts.usageRef.errorMessage =
       err instanceof Error ? err.message : String(err ?? "stream_error");
-    throw err;
+    // Feed the breaker so a series of upstream failures opens the
+    // circuit. Non-retryable errors (4xx, user abort) don't poison
+    // the breaker.
+    if (isRetryableError(err)) {
+      recordFailure(provider, opts.usageRef.errorMessage);
+    }
+    // Swallow the error and yield the friendly outage message. The
+    // client sees a clean delta+done sequence rather than an SSE error
+    // event + 500. The cost-ledger wrapper reads usageRef.errorMessage
+    // to record the failure.
+    yield AI_UNAVAILABLE_MESSAGE;
+    return;
   } finally {
     // Defensive: if the consumer broke out of the for-await early
     // (e.g. controller cancel), tear down the SDK stream too. Calling
@@ -455,6 +502,33 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // Graceful degrade: if every AI provider's circuit is open, do NOT
+  // open a stream. We emit a single SSE delta with the friendly outage
+  // text and close. The client sees the same shape it always does
+  // (deltas + done) so no UI special-case is needed.
+  const availability = isAIAvailable();
+  if (!availability.available) {
+    // Persist the user's turn so they can see it (and so it can be
+    // answered when the provider recovers). Skip on no-workspace.
+    if (workspaceId) {
+      void recordChatTurn({
+        workspaceId,
+        userId: user.id,
+        contextRef: (body.context_ref ?? "").trim() || null,
+        role: "user",
+        content: message,
+      });
+    }
+    async function* outageMessage(): AsyncIterable<string> {
+      yield AI_UNAVAILABLE_MESSAGE;
+    }
+    return sseResponse(
+      outageMessage(),
+      (chunk) => ({ event: "delta", data: chunk }),
+      req.signal
+    );
+  }
+
   // Persona is workspace-scoped. Without a workspace we use the
   // defaults — keeps the route usable for unscoped chats.
   const persona = workspaceId
@@ -542,8 +616,11 @@ export async function POST(req: NextRequest) {
       for await (const chunk of tokens) {
         yield chunk;
       }
-      // Successful close. usageRef.usage may still be undefined if the
-      // client aborted before finalMessage() resolved.
+      // Stream closed. If streamAnthropicText silently degraded (it
+      // catches retryable errors + yields the friendly outage text, so
+      // the client always sees a clean delta+done) we still want a
+      // failure row in the ledger. usageRef.errorMessage is the flag.
+      const degraded = !!usageRef.errorMessage;
       void recordAiCall({
         workspace_id: workspaceId,
         user_id: userIdForLog,
@@ -551,7 +628,8 @@ export async function POST(req: NextRequest) {
         input_tokens: usageRef.usage?.input_tokens ?? 0,
         output_tokens: usageRef.usage?.output_tokens ?? 0,
         latency_ms: Date.now() - startedAt,
-        status: "ok",
+        status: degraded ? "error" : "ok",
+        error: degraded ? usageRef.errorMessage : null,
       });
     } catch (err) {
       void recordAiCall({

@@ -40,6 +40,12 @@ import {
   getWorkspaceBudgetStatus,
   upgradeMessageForTier,
 } from "@/lib/ai/budget-check";
+import {
+  AllProvidersUnavailableError,
+  callWithFallback,
+  providerForModel,
+} from "@/lib/ai/model-fallback";
+import { AI_UNAVAILABLE_MESSAGE } from "@/lib/ai/availability";
 import type {
   CallUsage,
   ConversationMessage,
@@ -170,6 +176,13 @@ export async function runExecutor(
   // runtime_model_assignments take effect without a server restart.
   const resolved = await getRuntimeModel("executor");
   const MODEL = resolved.id;
+  const PROVIDER = providerForModel(MODEL);
+  // Same-provider tier fallback (e.g. Sonnet → Haiku). Both speak the
+  // same tool-use API so we can swap mid-flight without rewriting
+  // messages. fallbackId is admin-configurable per call_kind via the
+  // runtime_model_assignments table.
+  const FALLBACK_MODEL = resolved.fallbackId;
+  const FALLBACK_PROVIDER = FALLBACK_MODEL ? providerForModel(FALLBACK_MODEL) : null;
   // System prompt + tool catalog are stable across turns; cachedSystem()
   // and cachedTools() mark them with cache_control: ephemeral so the
   // ≥1024-token prefix lands at ~10% input cost on repeated calls.
@@ -211,48 +224,91 @@ export async function runExecutor(
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     const cachedMsgs = cachedMessages(messages);
-    const startedAt = Date.now();
     let response: Anthropic.Messages.Message;
+    let actualModel: string;
     try {
-      response = await client().messages.create({
-        model: MODEL,
-        max_tokens: 1024,
-        system,
-        tools,
-        messages: cachedMsgs,
+      // Wrap the model call in the fallback wrapper. Circuit-breaker
+      // gates whether we even try the primary; a retryable 5xx/429
+      // fails over to the same-provider tier fallback (e.g. Sonnet →
+      // Haiku) if configured. Both attempts get a cost-ledger row via
+      // the recordAttempt hook.
+      const result = await callWithFallback<Anthropic.Messages.Message>({
+        primary: {
+          provider: PROVIDER,
+          model: MODEL,
+          run: () =>
+            client().messages.create({
+              model: MODEL,
+              max_tokens: 1024,
+              system,
+              tools,
+              messages: cachedMsgs,
+            }),
+        },
+        fallback:
+          FALLBACK_MODEL && FALLBACK_PROVIDER === PROVIDER
+            ? {
+                provider: FALLBACK_PROVIDER,
+                model: FALLBACK_MODEL,
+                run: () =>
+                  client().messages.create({
+                    model: FALLBACK_MODEL,
+                    max_tokens: 1024,
+                    system,
+                    tools,
+                    messages: cachedMsgs,
+                  }),
+              }
+            : null,
+        callKind: "executor",
+        recordAttempt: (entry) => {
+          // Only log non-OK attempts here. Successful attempts get a
+          // richer row below with token counts pulled from the
+          // SDK response.
+          if (entry.status !== "ok") {
+            void recordAiCall({
+              workspace_id: ctx.workspaceId,
+              user_id: ctx.userId,
+              model: entry.model,
+              latency_ms: entry.latencyMs,
+              status: "error",
+              error: entry.error,
+            });
+          }
+        },
       });
+      response = result.value;
+      actualModel = result.modelUsed;
     } catch (e) {
-      // Log the failed call before re-throwing so the cost ledger
-      // still tracks API errors (auth issues, 429s, etc.).
-      void recordAiCall({
-        workspace_id: ctx.workspaceId,
-        user_id: ctx.userId,
-        model: MODEL,
-        latency_ms: Date.now() - startedAt,
-        status: "error",
-        error: e instanceof Error ? e.message : String(e),
-      });
+      if (e instanceof AllProvidersUnavailableError) {
+        // Full outage — surface friendly text instead of bubbling a 500
+        // up to the dispatcher. Cost-ledger rows for each failed attempt
+        // were already written by recordAttempt above.
+        return {
+          text: AI_UNAVAILABLE_MESSAGE,
+          usage,
+        };
+      }
       throw e;
     }
 
-    // Per-call cost ledger row. Cached + uncached input tokens collapse
-    // into the same input_tokens field — the price is identical
-    // post-discount, so accounting at this granularity isn't worth the
-    // schema churn yet.
+    // Per-call cost ledger row for the successful attempt. Cached +
+    // uncached input tokens collapse into the same input_tokens field
+    // — the price is identical post-discount, so accounting at this
+    // granularity isn't worth the schema churn yet.
     void recordAiCall({
       workspace_id: ctx.workspaceId,
       user_id: ctx.userId,
-      model: MODEL,
+      model: actualModel,
       input_tokens: totalInputTokens(response.usage),
       output_tokens: response.usage.output_tokens,
-      latency_ms: Date.now() - startedAt,
       status: "ok",
     });
 
     usage.push({
       bucket: "quick",
       tokens: totalInputTokens(response.usage) + response.usage.output_tokens,
-      model: MODEL,
+      model: actualModel,
       callKind: "executor",
     });
 
@@ -354,41 +410,79 @@ export async function runExecutor(
       // model turn to let the model phrase the confirmation question.
       if (pendingApproval) {
         const cachedMsgs2 = cachedMessages(messages);
-        const followupStartedAt = Date.now();
         let followup: Anthropic.Messages.Message;
+        let followupModel: string;
         try {
-          followup = await client().messages.create({
-            model: MODEL,
-            max_tokens: 256,
-            system,
-            tools,
-            messages: cachedMsgs2,
+          const result = await callWithFallback<Anthropic.Messages.Message>({
+            primary: {
+              provider: PROVIDER,
+              model: MODEL,
+              run: () =>
+                client().messages.create({
+                  model: MODEL,
+                  max_tokens: 256,
+                  system,
+                  tools,
+                  messages: cachedMsgs2,
+                }),
+            },
+            fallback:
+              FALLBACK_MODEL && FALLBACK_PROVIDER === PROVIDER
+                ? {
+                    provider: FALLBACK_PROVIDER,
+                    model: FALLBACK_MODEL,
+                    run: () =>
+                      client().messages.create({
+                        model: FALLBACK_MODEL,
+                        max_tokens: 256,
+                        system,
+                        tools,
+                        messages: cachedMsgs2,
+                      }),
+                  }
+                : null,
+            callKind: "executor",
+            recordAttempt: (entry) => {
+              if (entry.status !== "ok") {
+                void recordAiCall({
+                  workspace_id: ctx.workspaceId,
+                  user_id: ctx.userId,
+                  model: entry.model,
+                  latency_ms: entry.latencyMs,
+                  status: "error",
+                  error: entry.error,
+                });
+              }
+            },
           });
+          followup = result.value;
+          followupModel = result.modelUsed;
         } catch (e) {
-          void recordAiCall({
-            workspace_id: ctx.workspaceId,
-            user_id: ctx.userId,
-            model: MODEL,
-            latency_ms: Date.now() - followupStartedAt,
-            status: "error",
-            error: e instanceof Error ? e.message : String(e),
-          });
+          if (e instanceof AllProvidersUnavailableError) {
+            // Outage during the confirmation phrasing turn — return the
+            // pre-built fallback summary so the user still sees the
+            // confirmation prompt, just without LLM polish.
+            return {
+              text: `I'd like to ${pendingApproval.summary}. Reply YES to confirm.`,
+              usage,
+              pendingApproval,
+            };
+          }
           throw e;
         }
         void recordAiCall({
           workspace_id: ctx.workspaceId,
           user_id: ctx.userId,
-          model: MODEL,
+          model: followupModel,
           input_tokens: totalInputTokens(followup.usage),
           output_tokens: followup.usage.output_tokens,
-          latency_ms: Date.now() - followupStartedAt,
           status: "ok",
         });
         usage.push({
           bucket: "quick",
           tokens:
             totalInputTokens(followup.usage) + followup.usage.output_tokens,
-          model: MODEL,
+          model: followupModel,
           callKind: "executor",
         });
         finalText =
