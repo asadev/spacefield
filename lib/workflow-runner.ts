@@ -3,6 +3,7 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { safeFetch, SafeFetchError } from "@/lib/safe-fetch";
 import { log } from "@/lib/log";
+import { withAdvisoryLock, AdvisoryLockKeys } from "@/lib/db/advisory-lock";
 import type {
   AgentWorkflowRow,
   AiSkillRow,
@@ -88,6 +89,36 @@ export interface RunWorkflowResult {
 /* ────────────────────── runWorkflow ────────────────────── */
 
 export async function runWorkflow(
+  opts: RunWorkflowOptions
+): Promise<RunWorkflowResult> {
+  // Serialise concurrent runs of the SAME workflow_id. Two callers
+  // trying to fire the same workflow at the same moment (a double-
+  // clicked Run button, a cron firing twice in a single tick) would
+  // each insert a `workflow_runs` row and contend on downstream
+  // state. The advisory-lock gate makes the second caller bail
+  // cleanly with status='skipped' instead of running duplicate work.
+  //
+  // We scope the lock key with the workflow id — different workflows
+  // can still run in parallel. The base key is namespaced under
+  // AdvisoryLockKeys.WorkflowRunner so we don't collide with the
+  // ai-batch runner or the outbox relay.
+  const lockKey = `${AdvisoryLockKeys.WorkflowRunner}:${opts.workflow_id}`;
+  const gated = await withAdvisoryLock(lockKey, async () =>
+    runWorkflowInternal(opts)
+  );
+  if (!gated.acquired) {
+    return {
+      ok: false,
+      run_id: "",
+      results: [],
+      duration_ms: 0,
+      error: `another runner is already executing workflow ${opts.workflow_id}`,
+    };
+  }
+  return gated.value as RunWorkflowResult;
+}
+
+async function runWorkflowInternal(
   opts: RunWorkflowOptions
 ): Promise<RunWorkflowResult> {
   const admin = createAdminClient();

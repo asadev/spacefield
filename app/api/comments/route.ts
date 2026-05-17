@@ -9,6 +9,8 @@ import {
 } from "@/lib/collab/comments";
 import { safeErrorMessage } from "@/lib/safe-error";
 import { createClient } from "@/lib/supabase/server";
+import { withIdempotency } from "@/lib/idempotency";
+import { emit, OutboxEventTypes } from "@/lib/outbox";
 
 /* /api/comments — polymorphic thread API.
  *
@@ -33,6 +35,17 @@ import { createClient } from "@/lib/supabase/server";
  */
 
 const MAX_MENTIONS = 10;
+
+/** Stable hex digest of a string. Used to build idempotency keys from
+ *  a content-derived fingerprint when the client doesn't supply an
+ *  explicit Idempotency-Key header. Web Crypto so it works on edge. */
+async function sha1Hex(input: string): Promise<string> {
+  const data = new TextEncoder().encode(input);
+  const buf = await crypto.subtle.digest("SHA-1", data);
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
 
 async function requireUser() {
   const supabase = await createClient();
@@ -118,17 +131,72 @@ export const POST = withApiHandler(
       return NextResponse.json({ error: "body_too_long" }, { status: 400 });
     }
 
+    // Idempotency: a network blip after createComment succeeds (which
+    // also fans out mention notifications and emits an activity row)
+    // would otherwise let the client retry and double-post the comment
+    // plus double-fan-out the notifications. We accept either an
+    // explicit `Idempotency-Key` header or fall back to a digest of
+    // (user, entity, body, parent) so an exact-duplicate retry within
+    // the cache window collapses cleanly.
+    const headerKey = req.headers.get("idempotency-key") ?? "";
+    const fallbackKey = `${user.id}|${entityType}|${entityId}|${parentCommentId ?? ""}|${body}`;
+    const idempotencyKey = headerKey
+      ? `comments-create:${user.id}:${headerKey}`
+      : `comments-create:${await sha1Hex(fallbackKey)}`;
+
+    const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+    const supabaseServiceRoleKey =
+      process.env.SUPABASE_SERVICE_ROLE_KEY ||
+      process.env.SUPABASE_SERVICE_ROLE ||
+      "";
+
+    type CreateResp =
+      | { ok: true; item: unknown }
+      | { ok: false; error: string };
+
     try {
-      const item = await createComment({
-        workspaceId,
-        entityType,
-        entityId,
-        authorUserId: user.id,
-        body,
-        mentions,
-        parentCommentId,
-      });
-      return NextResponse.json({ item });
+      const wrapped = await withIdempotency<CreateResp>(
+        {
+          key: idempotencyKey,
+          ttl_sec: 60 * 10, // 10 min — enough for exact-dup retries, short enough that legitimate "same comment a while later" still posts
+          supabase: { url: supabaseUrl, serviceRoleKey: supabaseServiceRoleKey },
+        },
+        async () => {
+          const item = await createComment({
+            workspaceId,
+            entityType,
+            entityId,
+            authorUserId: user.id,
+            body,
+            mentions,
+            parentCommentId,
+          });
+          // Mention-fanout outbox event for downstream subscribers
+          // (push, email digest). The notifications rows themselves
+          // are already written inside createComment — this is the
+          // pub-sub hook. Dedup by comment id.
+          const created = item as { id?: string; mentions?: string[] };
+          if (created.id && Array.isArray(created.mentions) && created.mentions.length > 0) {
+            void emit(
+              OutboxEventTypes.CommentMentionFanout,
+              {
+                comment_id: created.id,
+                workspace_id: workspaceId,
+                entity_type: entityType,
+                entity_id: entityId,
+                mentioned: created.mentions,
+                actor_user_id: user.id,
+              },
+              { dedupeKey: `comment-mention-fanout:${created.id}` }
+            );
+          }
+          return { ok: true, item };
+        }
+      );
+      if (wrapped.ok) {
+        return NextResponse.json({ item: wrapped.item });
+      }
+      return NextResponse.json({ error: wrapped.error }, { status: 400 });
     } catch (e) {
       return NextResponse.json(
         {
