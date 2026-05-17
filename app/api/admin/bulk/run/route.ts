@@ -608,17 +608,26 @@ const DISPATCH: Record<string, Record<string, ActionHandler>> = {
           Date.now() - 30 * 24 * 60 * 60 * 1000
         ).toISOString();
         const recentRunCounts = new Map<string, number>();
-        // Best-effort: a single grouped query if the targets list is small.
-        await Promise.all(
-          args.targetIds.map(async (id) => {
-            const { count } = await admin
-              .from("ai_agent_runs")
-              .select("id", { count: "exact", head: true })
-              .eq("agent_id", id)
-              .gte("created_at", since);
-            recentRunCounts.set(id, count ?? 0);
-          })
-        );
+        // N+1 fix — was firing one HEAD count per agent_id. Now one
+        // batched select grouped in JS. We pull just `agent_id` so the
+        // payload is small even when an agent has many recent runs.
+        if (args.targetIds.length > 0) {
+          const { data: runRows } = await admin
+            .from("ai_agent_runs")
+            .select("agent_id")
+            .in("agent_id", args.targetIds)
+            .gte("created_at", since);
+          for (const r of (runRows ?? []) as { agent_id: string }[]) {
+            recentRunCounts.set(
+              r.agent_id,
+              (recentRunCounts.get(r.agent_id) ?? 0) + 1
+            );
+          }
+          // Ensure every target has an entry (zero if no recent runs).
+          for (const id of args.targetIds) {
+            if (!recentRunCounts.has(id)) recentRunCounts.set(id, 0);
+          }
+        }
 
         const op = await runBulk({
           operation: "agent.delete",

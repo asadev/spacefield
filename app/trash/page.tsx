@@ -7,9 +7,13 @@
  * role can't use it.
  */
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { useWorkspace } from "@/lib/workspaces/client";
+import { VirtualTableBody } from "@/components/VirtualList";
+
+const TRASH_ROW_HEIGHT = 40; // matches `px-3 py-2` row chrome below
+const TRASH_VIEWPORT_HEIGHT = 540; // fits ~13 rows; rest virtualized
 
 interface TrashItem {
   entity_type: string;
@@ -216,76 +220,127 @@ export default function TrashPage() {
         </div>
       )}
 
-      <div className="overflow-hidden rounded-xl border border-app bg-app-elevated">
-        <table className="w-full text-xs">
-          <thead className="bg-surface text-[10px] uppercase tracking-[0.15em] text-faint">
+      <TrashTable
+        items={items}
+        refreshing={refreshing}
+        busy={busy}
+        isAdmin={isAdmin}
+        onRestore={restore}
+        onPurge={purge}
+      />
+    </main>
+  );
+}
+
+/**
+ * Body of the recycle-bin table. When the list grows past ~30 rows the
+ * windowed render (VirtualTableBody) keeps the row count in the DOM
+ * bounded — important because power users with hundreds of deleted
+ * items would otherwise force React to reconcile every action button on
+ * every state change.
+ */
+function TrashTable({
+  items,
+  refreshing,
+  busy,
+  isAdmin,
+  onRestore,
+  onPurge,
+}: {
+  items: TrashItem[];
+  refreshing: boolean;
+  busy: string | null;
+  isAdmin: boolean;
+  onRestore: (i: TrashItem) => void;
+  onPurge: (i: TrashItem) => void;
+}) {
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  return (
+    <div
+      ref={scrollRef}
+      className="overflow-auto rounded-xl border border-app bg-app-elevated"
+      style={{ maxHeight: TRASH_VIEWPORT_HEIGHT }}
+    >
+      <table className="w-full text-xs">
+        <thead className="sticky top-0 z-10 bg-surface text-[10px] uppercase tracking-[0.15em] text-faint">
+          <tr>
+            <th className="px-3 py-2 text-left">Item</th>
+            <th className="px-3 py-2 text-left">Type</th>
+            <th className="px-3 py-2 text-left">Deleted</th>
+            <th className="px-3 py-2 text-right">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {refreshing && items.length === 0 && (
             <tr>
-              <th className="px-3 py-2 text-left">Item</th>
-              <th className="px-3 py-2 text-left">Type</th>
-              <th className="px-3 py-2 text-left">Deleted</th>
-              <th className="px-3 py-2 text-right">Actions</th>
+              <td colSpan={4} className="px-3 py-8 text-center text-muted">
+                Loading…
+              </td>
             </tr>
-          </thead>
-          <tbody>
-            {refreshing && items.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-3 py-8 text-center text-muted">
-                  Loading…
-                </td>
-              </tr>
-            )}
-            {!refreshing && items.length === 0 && (
-              <tr>
-                <td colSpan={4} className="px-3 py-10 text-center">
-                  <div className="text-sm text-app">Nothing in trash</div>
-                  <div className="mt-1 text-xs text-muted">
-                    Deleted records will appear here for restore.
-                  </div>
-                </td>
-              </tr>
-            )}
-            {items.map((i) => {
-              const busyKey = `${i.entity_type}:${i.entity_id}`;
-              const isBusy = busy === busyKey;
-              return (
-                <tr key={busyKey} className="border-t border-app">
-                  <td className="px-3 py-2 text-app">{i.label}</td>
-                  <td className="px-3 py-2">
-                    <span className="rounded-full bg-surface px-2 py-0.5 text-[10px] uppercase tracking-[0.15em] text-secondary">
-                      {ENTITY_LABEL[i.entity_type] ?? i.entity_type}
-                    </span>
-                  </td>
-                  <td className="px-3 py-2 text-muted">
-                    {new Date(i.deleted_at).toLocaleString()}
-                  </td>
-                  <td className="px-3 py-2 text-right">
-                    <div className="flex justify-end gap-1">
-                      <button
-                        type="button"
-                        onClick={() => restore(i)}
-                        disabled={isBusy}
-                        className="rounded-md border border-app px-2 py-1 text-[11px] text-secondary hover:text-app disabled:opacity-40"
-                      >
-                        Restore
-                      </button>
-                      {isAdmin && (
+          )}
+          {!refreshing && items.length === 0 && (
+            <tr>
+              <td colSpan={4} className="px-3 py-10 text-center">
+                <div className="text-sm text-app">Nothing in trash</div>
+                <div className="mt-1 text-xs text-muted">
+                  Deleted records will appear here for restore.
+                </div>
+              </td>
+            </tr>
+          )}
+          {items.length > 0 && (
+            <VirtualTableBody<TrashItem>
+              items={items}
+              rowHeight={TRASH_ROW_HEIGHT}
+              scrollRef={scrollRef}
+              columnCount={4}
+              getKey={(i) => `${i.entity_type}:${i.entity_id}`}
+              renderRow={(i) => {
+                const busyKey = `${i.entity_type}:${i.entity_id}`;
+                const isBusy = busy === busyKey;
+                return (
+                  <>
+                    <td className="border-t border-app px-3 py-2 text-app">
+                      {i.label}
+                    </td>
+                    <td className="border-t border-app px-3 py-2">
+                      <span className="rounded-full bg-surface px-2 py-0.5 text-[10px] uppercase tracking-[0.15em] text-secondary">
+                        {ENTITY_LABEL[i.entity_type] ?? i.entity_type}
+                      </span>
+                    </td>
+                    <td className="border-t border-app px-3 py-2 text-muted">
+                      {new Date(i.deleted_at).toLocaleString()}
+                    </td>
+                    <td className="border-t border-app px-3 py-2 text-right">
+                      <div className="flex justify-end gap-1">
                         <button
                           type="button"
-                          onClick={() => purge(i)}
+                          onClick={() => onRestore(i)}
                           disabled={isBusy}
-                          className="rounded-md border border-rose-500/40 px-2 py-1 text-[11px] text-rose-500 hover:bg-rose-500/10 disabled:opacity-40"
+                          className="rounded-md border border-app px-2 py-1 text-[11px] text-secondary hover:text-app disabled:opacity-40"
                         >
-                          Purge
+                          Restore
                         </button>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </main>
+                        {isAdmin && (
+                          <button
+                            type="button"
+                            onClick={() => onPurge(i)}
+                            disabled={isBusy}
+                            className="rounded-md border border-rose-500/40 px-2 py-1 text-[11px] text-rose-500 hover:bg-rose-500/10 disabled:opacity-40"
+                          >
+                            Purge
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </>
+                );
+              }}
+            />
+          )}
+        </tbody>
+      </table>
+    </div>
   );
 }
