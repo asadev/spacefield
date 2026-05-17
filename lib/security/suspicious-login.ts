@@ -18,8 +18,12 @@ import "server-only";
  * responsible for the hashing — we never see the plaintext.
  */
 
+import type { SupabaseClient } from "@supabase/supabase-js";
+
 import { createAdminClient } from "@/lib/supabase/admin";
 import { createNotification } from "@/lib/collab/notifications";
+import { hashFingerprint } from "@/lib/security/lockout";
+import { log } from "@/lib/log";
 
 interface PendingAlert {
   id: number;
@@ -113,5 +117,53 @@ function formatWhen(iso: string): string {
     return d.toUTCString();
   } catch {
     return iso;
+  }
+}
+
+/* recordLogin — invoked from /auth/callback after a session is
+ * established. Hashes the raw IP / UA with the server-side secret,
+ * then calls the `record_login` RPC as the authenticated user (which
+ * is how the RPC pins the row to auth.uid()).
+ *
+ * Fire-and-forget by contract: the caller awaits but never branches on
+ * the return value — a transient DB error must never block a sign-in
+ * redirect. We swallow errors and route them through `log.warn` so
+ * they're visible in production logs without breaking the user flow.
+ */
+export interface RecordLoginArgs {
+  /** The supabase user.id of the just-signed-in user. Currently only
+   *  used for log correlation — the RPC itself reads `auth.uid()`. */
+  user_id: string;
+  /** Raw IP. Hashed in this function; never sent to the DB plaintext. */
+  ip: string | null | undefined;
+  /** Raw User-Agent header. Same hashing treatment as `ip`. */
+  ua: string | null | undefined;
+  /** A Supabase client with the *user's* cookies attached. Required —
+   *  `record_login` is security-definer but checks `auth.uid()`, so we
+   *  must call it as the user, not the service role. */
+  supabase: SupabaseClient;
+}
+
+export async function recordLogin(args: RecordLoginArgs): Promise<void> {
+  const { user_id, ip, ua, supabase } = args;
+  try {
+    const ipHash = hashFingerprint(ip ?? null);
+    const uaHash = hashFingerprint(ua ?? null);
+    const { error } = await supabase.rpc("record_login", {
+      p_ip_hash: ipHash,
+      p_ua_hash: uaHash,
+    });
+    if (error) {
+      log.warn("auth.record_login_failed", {
+        user_id,
+        rpc_error: error.message,
+      });
+    }
+  } catch (err) {
+    log.warn(
+      "auth.record_login_exception",
+      { user_id },
+    );
+    void err;
   }
 }

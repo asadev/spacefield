@@ -72,6 +72,37 @@ export async function isAccountLocked(email: string): Promise<boolean> {
   return Boolean(data);
 }
 
+/** Alias matching the N3-wiring naming convention. Identical to
+ *  `isAccountLocked`. */
+export const isLockedOut = isAccountLocked;
+
+/** Locked + the `locked_until` ISO timestamp (or null if unlocked).
+ *  Used by the sign-in entry points so we can route the user to
+ *  `/auth/locked?until=…` and render a human countdown. */
+export interface LockoutState {
+  locked: boolean;
+  until: string | null;
+}
+
+export async function getLockoutState(email: string): Promise<LockoutState> {
+  if (!email || !email.includes("@")) return { locked: false, until: null };
+  const admin = createAdminClient();
+  // We hit the table directly (not the RPC) because we want the
+  // `locked_until` timestamp too, not just the boolean. `account_lockouts`
+  // is service-role-only so this is safe.
+  const { data, error } = await admin
+    .from("account_lockouts")
+    .select("locked_until")
+    .eq("email_lower", email.toLowerCase())
+    .maybeSingle();
+  if (error || !data) return { locked: false, until: null };
+  const untilMs = Date.parse(data.locked_until as string);
+  if (!Number.isFinite(untilMs) || untilMs <= Date.now()) {
+    return { locked: false, until: null };
+  }
+  return { locked: true, until: new Date(untilMs).toISOString() };
+}
+
 export interface RecordFailureContext {
   ipHash?: string | null;
   uaHash?: string | null;
