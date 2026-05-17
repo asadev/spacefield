@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { assertAdmin } from "@/app/admin/_lib";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -16,11 +17,17 @@ export const dynamic = "force-dynamic";
  * We keep the raw payload around as `raw` for debugging.
  */
 export async function GET(req: NextRequest) {
+  let auth: { userId: string; email: string | null };
   try {
-    await assertAdmin();
+    auth = await assertAdmin();
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "forbidden" },
+      {
+        error: safeErrorMessage(e, {
+          source: "admin.agents.visibility.auth",
+          fallback: "forbidden",
+        }),
+      },
       { status: 403 }
     );
   }
@@ -43,7 +50,14 @@ export async function GET(req: NextRequest) {
   const { data, error } = await admin.rpc("agent_visible", args);
   if (error) {
     return NextResponse.json(
-      { ok: false, error: error.message },
+      {
+        ok: false,
+        error: safeErrorMessage(error, {
+          source: "admin.agents.visibility.rpc",
+          userId: auth.userId,
+          fallback: "agent_visibility_check_failed",
+        }),
+      },
       { status: 500 }
     );
   }

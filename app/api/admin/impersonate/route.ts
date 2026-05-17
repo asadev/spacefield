@@ -7,6 +7,7 @@ import {
   listActiveImpersonations,
   startImpersonation,
 } from "@/lib/impersonate";
+import { safeErrorMessage } from "@/lib/safe-error";
 
 export const dynamic = "force-dynamic";
 
@@ -28,7 +29,12 @@ export async function GET() {
     await assertAdmin();
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "forbidden" },
+      {
+        error: safeErrorMessage(e, {
+          source: "admin.impersonate.list.auth",
+          fallback: "forbidden",
+        }),
+      },
       { status: 401 }
     );
   }
@@ -42,7 +48,12 @@ export async function POST(req: NextRequest) {
     auth = await assertAdmin();
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "forbidden" },
+      {
+        error: safeErrorMessage(e, {
+          source: "admin.impersonate.start.auth",
+          fallback: "forbidden",
+        }),
+      },
       { status: 401 }
     );
   }
@@ -74,18 +85,30 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ session });
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "failed" },
+      {
+        error: safeErrorMessage(e, {
+          source: "admin.impersonate.start",
+          userId: auth.userId,
+          fallback: "impersonate_start_failed",
+        }),
+      },
       { status: 500 }
     );
   }
 }
 
 export async function DELETE(req: NextRequest) {
+  let auth: { userId: string; email: string | null };
   try {
-    await assertAdmin();
+    auth = await assertAdmin();
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "forbidden" },
+      {
+        error: safeErrorMessage(e, {
+          source: "admin.impersonate.end.auth",
+          fallback: "forbidden",
+        }),
+      },
       { status: 401 }
     );
   }
@@ -99,7 +122,13 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "failed" },
+      {
+        error: safeErrorMessage(e, {
+          source: "admin.impersonate.end",
+          userId: auth.userId,
+          fallback: "impersonate_end_failed",
+        }),
+      },
       { status: 500 }
     );
   }

@@ -10,6 +10,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { ALL_SKILLS } from "@/lib/agent/skills";
 
 interface PutBody {
@@ -90,7 +91,16 @@ export async function PUT(
     { onConflict: "workspace_id,skill_id" }
   );
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: safeErrorMessage(error, {
+          source: "agent.permissions.put",
+          userId: auth.user.id,
+          fallback: "permission_update_failed",
+        }),
+      },
+      { status: 400 }
+    );
   }
   return NextResponse.json({ skill_id: skillId, mode });
 }
@@ -120,7 +130,16 @@ export async function DELETE(
     .eq("workspace_id", workspaceId)
     .eq("skill_id", skillId);
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 400 });
+    return NextResponse.json(
+      {
+        error: safeErrorMessage(error, {
+          source: "agent.permissions.delete",
+          userId: auth.user?.id ?? null,
+          fallback: "permission_delete_failed",
+        }),
+      },
+      { status: 400 }
+    );
   }
   return NextResponse.json({ ok: true, skill_id: skillId });
 }

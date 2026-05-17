@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 
 import { assertAdmin } from "@/app/admin/_lib";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 export const dynamic = "force-dynamic";
@@ -16,11 +17,17 @@ export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  let auth: { userId: string; email: string | null };
   try {
-    await assertAdmin();
+    auth = await assertAdmin();
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "forbidden" },
+      {
+        error: safeErrorMessage(e, {
+          source: "admin.skills.agents.auth",
+          fallback: "forbidden",
+        }),
+      },
       { status: 401 }
     );
   }
@@ -38,7 +45,16 @@ export async function GET(
     .order("status", { ascending: true })
     .order("display_name", { ascending: true });
   if (error) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json(
+      {
+        error: safeErrorMessage(error, {
+          source: "admin.skills.agents.list",
+          userId: auth.userId,
+          fallback: "skill_agents_list_failed",
+        }),
+      },
+      { status: 500 }
+    );
   }
 
   return NextResponse.json({ skill_id: skillId, agents: data ?? [] });
