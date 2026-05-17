@@ -5,6 +5,9 @@ export const metadata = {
   description: "How Space Field acts as a data processor for our business customers.",
 };
 
+// Legal copy changes only on deploy. 1-hour ISR.
+export const revalidate = 3600;
+
 export default function DpaPage() {
   return (
     <>

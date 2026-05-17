@@ -33,6 +33,11 @@ export const metadata: Metadata = {
     "Pricing that fits your team. One workspace OS, every tool included. Start free, upgrade when you grow. Free, Pro, Team, and Enterprise plans.",
 };
 
+// Pricing copy is hard-coded in TierGrid.tsx — no DB read, no
+// dynamic data. 5-minute ISR window is conservative; the page only
+// changes when we redeploy with new copy or new tier structure.
+export const revalidate = 300;
+
 export default function PricingPage() {
   return (
     <main className="min-h-screen bg-app text-app">
