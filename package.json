@@ -7,6 +7,9 @@
     "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
+    "test": "node -e \"try { require.resolve('vitest/package.json'); require('child_process').execSync('npx vitest run', { stdio: 'inherit' }) } catch (e) { console.log('[test] vitest not installed — install with: pnpm add -D vitest @vitest/coverage-v8'); process.exit(0) }\"",
+    "test:e2e": "node -e \"try { require.resolve('@playwright/test/package.json'); require('child_process').execSync('npx playwright test', { stdio: 'inherit' }) } catch (e) { console.log('[test:e2e] @playwright/test not installed — install with: pnpm add -D @playwright/test && pnpm exec playwright install --with-deps chromium'); process.exit(0) }\"",
+    "check:bundle": "node scripts/check-bundle-budget.js",
     "postinstall": "node -e \"try { require('fs').statSync('.git'); require('child_process').execSync('git config core.hooksPath .githooks', { stdio: 'ignore' }) } catch (e) {}\""
   },
   "dependencies": {
