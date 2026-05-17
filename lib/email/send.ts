@@ -30,6 +30,7 @@ import "server-only";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { log } from "@/lib/log";
+import { buildListUnsubscribeHeaders } from "@/lib/email/unsubscribe-token";
 
 export type EmailKind =
   | "suspicious-login"
@@ -50,6 +51,13 @@ export interface SendEmailArgs {
   kind: EmailKind;
   /** Optional workspace scope. Persisted to `email_outbox` for routing. */
   workspace_id?: string | null;
+  /**
+   * Optional recipient user_id. When set AND the kind is a marketing /
+   * digest kind, we add an RFC 8058 List-Unsubscribe + one-click POST
+   * header. Transactional kinds (suspicious-login, password-reset, etc.)
+   * never get the header — the helper that builds them returns null.
+   */
+  user_id?: string | null;
 }
 
 export interface SendEmailResult {
@@ -128,6 +136,7 @@ interface ResendSendBody {
   subject: string;
   html: string;
   text: string;
+  headers?: Record<string, string>;
 }
 
 async function sendViaResend(
@@ -140,6 +149,13 @@ async function sendViaResend(
     html: args.html,
     text: args.text,
   };
+  const unsub = buildListUnsubscribeHeaders(args.user_id, args.kind);
+  if (unsub) {
+    body.headers = {
+      "List-Unsubscribe": unsub.listUnsubscribe,
+      "List-Unsubscribe-Post": unsub.listUnsubscribePost,
+    };
+  }
   try {
     const r = await fetch("https://api.resend.com/emails", {
       method: "POST",
@@ -174,6 +190,11 @@ async function sendViaResend(
 
 /* ─────────────────────────── Postmark path ────────────────────────── */
 
+interface PostmarkHeader {
+  Name: string;
+  Value: string;
+}
+
 interface PostmarkSendBody {
   From: string;
   To: string;
@@ -181,6 +202,7 @@ interface PostmarkSendBody {
   HtmlBody: string;
   TextBody: string;
   MessageStream: string;
+  Headers?: PostmarkHeader[];
 }
 
 async function sendViaPostmark(
@@ -196,6 +218,13 @@ async function sendViaPostmark(
     // with their own stream override via env var.
     MessageStream: process.env.POSTMARK_MESSAGE_STREAM || "outbound",
   };
+  const unsub = buildListUnsubscribeHeaders(args.user_id, args.kind);
+  if (unsub) {
+    body.Headers = [
+      { Name: "List-Unsubscribe", Value: unsub.listUnsubscribe },
+      { Name: "List-Unsubscribe-Post", Value: unsub.listUnsubscribePost },
+    ];
+  }
   try {
     const r = await fetch("https://api.postmarkapp.com/email", {
       method: "POST",
