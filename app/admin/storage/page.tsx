@@ -96,44 +96,73 @@ export default async function AdminStoragePage({
   >();
 
   if (topUsageIds.length > 0) {
-    const [{ data: wsRows }, capLookups] = await Promise.all([
-      admin
-        .from("workspaces")
-        .select("id, name, user_id")
-        .in("id", topUsageIds),
-      // Per-workspace cap requires reading owner tier + addon. The
-      // existing `workspace_storage` RPC does that in one SQL call.
-      // Run them in parallel — 50 round-trips is fine for an admin page.
-      Promise.all(
-        topUsageIds.map(async (id) => {
-          try {
-            const r = await admin.rpc("workspace_storage", { ws_id: id });
-            return { id, data: r.data } as {
-              id: string;
-              data:
-                | Array<{ cap_bytes: number; used_bytes: number }>
-                | { cap_bytes: number; used_bytes: number }
-                | null;
-            };
-          } catch {
-            return { id, data: null as
-              | Array<{ cap_bytes: number; used_bytes: number }>
-              | { cap_bytes: number; used_bytes: number }
-              | null };
-          }
-        })
-      ),
-    ]);
+    // N+1 fix — was looping `rpc("workspace_storage")` per workspace
+    // (~50 round-trips per render). Now four batch queries replicate
+    // the RPC's join graph in JS: workspace → owner → subscription
+    // tier → tier base cap → workspace storage add-on.
+    const { data: wsRows } = await admin
+      .from("workspaces")
+      .select("id, name, user_id")
+      .in("id", topUsageIds);
     for (const w of (wsRows ?? []) as WorkspaceRow[]) {
       workspaceMap.set(w.id, w);
     }
-    for (const r of capLookups) {
-      const row = Array.isArray(r.data) ? r.data[0] : r.data;
-      if (!row) continue;
-      storageStats.set(r.id, {
-        workspace_id: r.id,
-        cap_bytes: Number(row.cap_bytes ?? 0),
-        used_bytes: Number(row.used_bytes ?? 0),
+
+    const ownerIds = Array.from(
+      new Set(
+        ((wsRows ?? []) as WorkspaceRow[])
+          .map((w) => w.user_id)
+          .filter((v): v is string => Boolean(v))
+      )
+    );
+
+    type SubRow = { user_id: string; tier_id: string | null };
+    type TierRow = { tier_id: string; max_storage_per_workspace_mb: number };
+    type AddonRow = { workspace_id: string; addon_gb: number };
+
+    const [subsRes, addonsRes] = await Promise.all([
+      ownerIds.length > 0
+        ? admin
+            .from("subscriptions")
+            .select("user_id, tier_id")
+            .in("user_id", ownerIds)
+        : Promise.resolve({ data: [] as SubRow[] }),
+      admin
+        .from("workspace_storage_addons")
+        .select("workspace_id, addon_gb")
+        .in("workspace_id", topUsageIds),
+    ]);
+
+    const tierByUser = new Map<string, string>();
+    for (const s of ((subsRes.data ?? []) as SubRow[])) {
+      if (s.user_id && s.tier_id) tierByUser.set(s.user_id, s.tier_id);
+    }
+    const tierIds = Array.from(new Set([...tierByUser.values(), "free"]));
+    const { data: tierRows } = await admin
+      .from("subscription_tiers")
+      .select("tier_id, max_storage_per_workspace_mb")
+      .in("tier_id", tierIds);
+    const tierBaseBytes = new Map<string, number>();
+    for (const t of ((tierRows ?? []) as TierRow[])) {
+      tierBaseBytes.set(
+        t.tier_id,
+        Number(t.max_storage_per_workspace_mb ?? 0) * 1024 * 1024
+      );
+    }
+    const addonBytes = new Map<string, number>();
+    for (const a of ((addonsRes.data ?? []) as AddonRow[])) {
+      addonBytes.set(a.workspace_id, Number(a.addon_gb ?? 0) * 1024 * 1024 * 1024);
+    }
+
+    for (const t of topUsage) {
+      const ws = workspaceMap.get(t.id);
+      const ownerTier = ws ? tierByUser.get(ws.user_id) ?? "free" : "free";
+      const baseBytes = tierBaseBytes.get(ownerTier) ?? 0;
+      const addon = addonBytes.get(t.id) ?? 0;
+      storageStats.set(t.id, {
+        workspace_id: t.id,
+        cap_bytes: baseBytes + addon,
+        used_bytes: t.used_bytes,
       });
     }
   }
