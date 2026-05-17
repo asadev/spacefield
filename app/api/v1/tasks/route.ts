@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { withApiHandler } from "@/lib/api-wrap";
+import { timeQuery } from "@/lib/observability/query-timing";
 import {
   authenticateV1,
   buildListResponse,
@@ -52,7 +53,11 @@ export const GET = withApiHandler(
     if (status) q = q.eq("status", status);
     if (cursor) q = q.gt("id", cursor);
 
-    const { data, error } = await q;
+    const { data, error } = await timeQuery(
+      "tasks.list",
+      async () => await q,
+      { source: "v1.tasks" }
+    );
     if (error) {
       return NextResponse.json(
         { error: "query_failed", detail: error.message },
