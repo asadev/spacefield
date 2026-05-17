@@ -3,32 +3,36 @@
   "regions": ["fra1"],
   "crons": [
     {
-      "path": "/api/cron/social-publish",
-      "schedule": "0 9 * * *"
+      "path": "/api/cron/paddle-retention",
+      "schedule": "3 5 * * *"
     },
     {
       "path": "/api/cron/audit-purge",
-      "schedule": "15 6 * * 1"
+      "schedule": "21 6 * * 1"
     },
     {
       "path": "/api/cron/slow-queries-snapshot",
-      "schedule": "45 6 * * 1"
+      "schedule": "43 6 * * 1"
     },
     {
       "path": "/api/cron/account-purge",
-      "schedule": "0 7 * * *"
+      "schedule": "8 7 * * *"
     },
     {
       "path": "/api/cron/workspace-purge",
-      "schedule": "30 7 * * *"
+      "schedule": "33 7 * * *"
     },
     {
-      "path": "/api/cron/paddle-retention",
-      "schedule": "0 5 * * *"
+      "path": "/api/cron/social-publish",
+      "schedule": "11 9 * * *"
     },
     {
       "path": "/api/cron/suspicious-login-scan",
-      "schedule": "*/15 * * * *"
+      "schedule": "4,19,34,49 * * * *"
+    },
+    {
+      "path": "/api/cron/stuck-jobs-detect",
+      "schedule": "2,7,12,17,22,27,32,37,42,47,52,57 * * * *"
     },
     {
       "path": "/api/cron/ai-batch-runner",
