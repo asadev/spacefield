@@ -311,6 +311,10 @@ export async function createEmployeeDocument(input: {
   }
 
   const supabase = await createClient();
+  // SC-005: NEVER persist the plaintext number via direct INSERT. The
+  // row goes in first with no number, then we call the encrypt-on-write
+  // RPC which fills number_encrypted + number_last4 and leaves the
+  // legacy plaintext column null.
   const { data, error } = await supabase
     .from("employee_documents")
     .insert({
@@ -318,7 +322,7 @@ export async function createEmployeeDocument(input: {
       employee_id: input.employee_id,
       kind: input.kind,
       name: input.name.trim(),
-      number: input.number ?? null,
+      number: null,
       issued_at: input.issued_at ?? null,
       expires_at: input.expires_at ?? null,
       file_url: safeFileUrl,
@@ -328,8 +332,51 @@ export async function createEmployeeDocument(input: {
     .select("*")
     .maybeSingle();
   if (error) return { ok: false, error: error.message };
+  if (data && input.number && input.number.trim()) {
+    try {
+      const { setDocNumber } = await import("./encryption");
+      await setDocNumber((data as EmployeeDocument).id, input.number.trim());
+    } catch (e) {
+      // Roll back the half-built row so we never leave an unencrypted
+      // (or empty-PII-but-meant-to-have-one) record around.
+      await supabase
+        .from("employee_documents")
+        .delete()
+        .eq("id", (data as EmployeeDocument).id);
+      return {
+        ok: false,
+        error: (e as Error)?.message ?? "encrypt_failed",
+      };
+    }
+  }
   if (data) await _indexEmployeeDocument(data as EmployeeDocument);
   revalidatePath(`/people/${input.employee_id}`);
+  return { ok: true };
+}
+
+/**
+ * SC-005: encrypt-on-write update of an employee document's number.
+ * Goes through the SECURITY DEFINER `set_employee_document_number`
+ * RPC which clears the plaintext column and writes both
+ * `number_encrypted` and `number_last4`.
+ *
+ * Pass `null` to clear the number entirely.
+ */
+export async function setEmployeeDocumentNumber(input: {
+  doc_id: string;
+  number: string | null;
+}): Promise<ActionResult> {
+  const userId = await uid();
+  if (!userId) return { ok: false, error: "not_authenticated" };
+  if (!input.doc_id) return { ok: false, error: "doc_id_required" };
+  try {
+    const { setDocNumber } = await import("./encryption");
+    await setDocNumber(input.doc_id, input.number?.trim() || null);
+  } catch (e) {
+    return { ok: false, error: (e as Error)?.message ?? "encrypt_failed" };
+  }
+  // We don't know the employee_id here without a fetch — let the
+  // caller revalidate. Most callers already do.
   return { ok: true };
 }
 
