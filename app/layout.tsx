@@ -6,6 +6,8 @@ import "./globals.css";
 import { ThemeProvider, themeInitScript } from "@/components/ThemeProvider";
 import CommandPaletteProvider from "@/components/CommandPaletteProvider";
 import CookieConsent from "@/components/CookieConsent";
+import PWAInstallPrompt from "@/components/PWAInstallPrompt";
+import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import TabVisibility from "./_components/TabVisibility";
 import SiteBanner from "./_components/SiteBanner";
 import { getActiveBrand, brandCssVarsBlock } from "@/lib/runtime-brand";
@@ -87,6 +89,7 @@ export default async function RootLayout({
           <style dangerouslySetInnerHTML={{ __html: brandCss }} />
         )}
         {faviconUrl && <link rel="icon" href={faviconUrl} />}
+        <link rel="manifest" href="/manifest.webmanifest" />
       </head>
       <body className="relative">
         <SiteBanner />
@@ -94,7 +97,9 @@ export default async function RootLayout({
         <ThemeProvider>
           <CommandPaletteProvider>{children}</CommandPaletteProvider>
           <CookieConsent initialAccepted={consent !== null} />
+          <PWAInstallPrompt />
         </ThemeProvider>
+        <ServiceWorkerRegister />
         <Analytics />
         <SpeedInsights />
       </body>
