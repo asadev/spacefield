@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
+import FeedbackButton from "@/components/FeedbackButton";
 import NotificationBell from "@/components/NotificationBell";
 import ThemeToggle from "@/components/ThemeToggle";
 
@@ -56,8 +57,9 @@ export default function Header({ email }: { email?: string | null }) {
           })}
         </nav>
 
-        {/* Identity + theme + notifications + exit */}
+        {/* Identity + theme + feedback + notifications + exit */}
         <div className="hidden items-center gap-3 text-xs text-muted md:flex">
+          <FeedbackButton />
           <ThemeToggle />
           <span className="font-mono tabular-nums">{email ?? "—"}</span>
           {email ? <NotificationBell /> : null}

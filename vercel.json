@@ -54,6 +54,10 @@
     {
       "path": "/api/cron/anomaly-check",
       "schedule": "13,43 * * * *"
+    },
+    {
+      "path": "/api/cron/api-token-reminder",
+      "schedule": "27 8 * * *"
     }
   ]
 }
