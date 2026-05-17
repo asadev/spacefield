@@ -89,7 +89,7 @@ begin
           mean_exec_time,
           total_exec_time,
           rows
-        from public.pg_stat_statements
+        from extensions.pg_stat_statements
         order by mean_exec_time desc
         limit 50
     $view$;
