@@ -1,8 +1,10 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { redirect } from "next/navigation";
 
 import { createClient } from "@/lib/supabase/server";
+import { requireRecentAuth } from "@/lib/mfa/reauth";
 
 /* app/workspace/settings/_actions.ts — server actions for the
  * /workspace/settings page.
@@ -46,6 +48,11 @@ export async function requestWorkspaceDeletion(
   if (!userData?.user) {
     return { ok: false, error: "Not signed in." };
   }
+
+  // S4 — sensitive action: require a recent reauth proof. The reauth
+  // page will redirect back to /workspace/settings on success.
+  const reauthUrl = await requireRecentAuth("/workspace/settings");
+  if (reauthUrl) redirect(reauthUrl);
 
   const { data, error } = await supabase.rpc("request_workspace_deletion", {
     p_workspace_id: workspaceId,
