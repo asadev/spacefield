@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build",
+    "build": "next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "postinstall": "node -e \"try { require('fs').statSync('.git'); require('child_process').execSync('git config core.hooksPath .githooks', { stdio: 'ignore' }) } catch (e) {}\""

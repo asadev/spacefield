@@ -1,5 +1,12 @@
 import type { NextConfig } from "next";
 
+// Build uses webpack (set in package.json::scripts.build = "next build
+// --webpack"). Next 16.2.6 has a Turbopack root-inference regression
+// that throws "couldn't find next/package.json" even with turbopack.root
+// set; tracked for revisiting on a future Next release. Webpack builds
+// 341 pages cleanly in ~75s.
+const projectRoot = process.cwd();
+
 // Lazy + optional wrapper for `@next/bundle-analyzer`. The dep itself is
 // NOT in the production dependency tree — install it on demand:
 //   pnpm add -D @next/bundle-analyzer
@@ -26,7 +33,11 @@ function loadBundleAnalyzer(): ConfigWrapper | null {
 
 const nextConfig: NextConfig = {
   /* config options here */
-  // deploy pipeline test 2026-04-09
+  // outputFileTracingRoot pins the file-tracing analyser to this project
+  // root for both webpack + future-turbopack builds; prevents Next from
+  // walking up the directory tree and treating a parent folder as the
+  // workspace.
+  outputFileTracingRoot: projectRoot,
   experimental: {
     optimizePackageImports: ['framer-motion'],
     // Cap server-action / inbound JSON bodies so attackers can't pin a
