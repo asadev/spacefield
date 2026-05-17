@@ -20,8 +20,11 @@ if ! command -v pnpm >/dev/null 2>&1; then
   exit 1
 fi
 
-# Run the same build Vercel runs
-if pnpm build --silent 2>&1 | tail -40; then
+# Run the same build Vercel runs. `--silent` is the npm-only flag; pnpm
+# uses `--reporter silent` or just inherits quiet output via `--reporter
+# append-only`. Easiest: drop the flag and let the build output stream —
+# the human readable tail -40 still trims to the last lines.
+if pnpm build 2>&1 | tail -40; then
   echo ""
   echo "✓ Build passed — push allowed"
   echo ""
