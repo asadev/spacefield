@@ -29,6 +29,8 @@ import {
   writePendingApproval,
   type PermissionsSnapshot,
 } from "./permissions";
+import { redact, unredact, mergeRedactionMaps } from "./redact";
+import { summariseIfNeeded } from "./summarise";
 import type {
   CallUsage,
   ConversationMessage,
@@ -143,13 +145,35 @@ export async function runOrchestrator(
   // runtime_model_assignments take effect without a server restart.
   const resolved = await getRuntimeModel("orchestrator");
   const MODEL = resolved.id;
+  // System prompt + tool catalog get cache_control: ephemeral markers
+  // (via cachedSystem / cachedTools) so the heavy Sonnet prefix bills at
+  // ~10% on repeated turns.
   const system = cachedSystem(buildSystemPrompt(skills, ctx, persona, channel));
   const tools = cachedTools(toAnthropicTools(skills));
 
-  const messages: Anthropic.Messages.MessageParam[] = [
-    ...historyToAnthropic(history),
-    { role: "user", content: userText },
-  ];
+  // Strip PII from history + user input before crossing the network.
+  const redactedHistory = history.map((m) => {
+    const r = redact(m.content);
+    return { role: m.role, content: r.text, _map: r.map };
+  });
+  const redactedUser = redact(userText);
+  const piiMap = mergeRedactionMaps([
+    ...redactedHistory.map((m) => m._map),
+    redactedUser.map,
+  ]);
+
+  // Long-context guard. Orchestrator gets the same 80k cap; if the
+  // history exceeds it we collapse older turns to a Haiku summary.
+  const flat = redactedHistory.map((m) => ({ role: m.role, content: m.content }));
+  const compacted = await summariseIfNeeded(flat, 80_000);
+
+  const messages: Anthropic.Messages.MessageParam[] = compacted.map((m) => {
+    if (m.role === "system") {
+      return { role: "user", content: m.content };
+    }
+    return { role: m.role as "user" | "assistant", content: m.content };
+  });
+  messages.push({ role: "user", content: redactedUser.text });
 
   let finalText = "";
   let pendingApproval: OrchestratorPendingApproval | undefined;
@@ -293,8 +317,10 @@ export async function runOrchestrator(
     break;
   }
 
+  const renderedText = unredact(finalText || "Done.", piiMap);
+
   return {
-    text: finalText || "Done.",
+    text: renderedText,
     usage,
     pendingApproval,
   };
