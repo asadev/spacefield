@@ -5,6 +5,9 @@ export const metadata = {
   description: "The terms that govern your use of Space Field.",
 };
 
+// Legal copy changes only on deploy. 1-hour ISR.
+export const revalidate = 3600;
+
 const EFFECTIVE = "May 13, 2026";
 
 export default function TermsPage() {

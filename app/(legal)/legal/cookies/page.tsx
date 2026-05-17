@@ -5,6 +5,9 @@ export const metadata = {
   description: "What cookies Space Field sets and why.",
 };
 
+// Legal copy changes only on deploy. 1-hour ISR.
+export const revalidate = 3600;
+
 interface CookieRow {
   name: string;
   vendor: string;

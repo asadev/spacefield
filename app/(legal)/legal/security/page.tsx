@@ -5,6 +5,9 @@ export const metadata = {
   description: "How we protect your data and what we're working on next.",
 };
 
+// Legal copy changes only on deploy. 1-hour ISR.
+export const revalidate = 3600;
+
 export default function SecurityPage() {
   return (
     <>

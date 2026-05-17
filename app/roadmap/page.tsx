@@ -5,6 +5,9 @@ export const metadata = {
   description: "What we shipped recently, what we're building now, and what's next.",
 };
 
+// Roadmap copy is hard-coded; deploy-driven changes only. 5-minute ISR.
+export const revalidate = 300;
+
 /**
  * Public roadmap — handcrafted, NOT auto-derived from the internal
  * checklist. We don't want internal P0/P1 priorities or vendor names

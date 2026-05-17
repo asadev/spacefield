@@ -1,7 +1,8 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 
+import { CACHE_TAGS } from "@/lib/cache/single-flight";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 import { recordAdminAction } from "../_audit";
@@ -153,6 +154,16 @@ export async function createBanner(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/admin/banners");
+  // Bust any unstable_cache reader tagged "banners" (e.g. a future
+  // wrapping of getActiveBanners). Today this is a no-op for the
+  // in-memory TTL cache in lib/runtime-banner.ts — that cache lives
+  // per worker and can't be invalidated remotely. Calling updateTag
+  // here keeps the tag wiring honest so we can move the reader to
+  // unstable_cache without touching every admin action.
+  // We use updateTag rather than revalidateTag because we're inside
+  // a server action and want read-your-own-writes semantics for the
+  // subsequent revalidatePath render. See docs/perf/CACHING.md.
+  updateTag(CACHE_TAGS.banners);
 }
 
 /* ─────────────────────── update ─────────────────────── */
@@ -195,6 +206,7 @@ export async function updateBanner(formData: FormData): Promise<void> {
 
   revalidatePath("/admin/banners");
   revalidatePath(`/admin/banners/${id}`);
+  updateTag(CACHE_TAGS.banners);
 }
 
 /* ─────────────────────── delete ─────────────────────── */
@@ -218,6 +230,7 @@ export async function deleteBanner(formData: FormData): Promise<void> {
   });
 
   revalidatePath("/admin/banners");
+  updateTag(CACHE_TAGS.banners);
 }
 
 /* ─────────────────────── toggle ─────────────────────── */
@@ -248,4 +261,5 @@ export async function toggleBanner(formData: FormData): Promise<void> {
 
   revalidatePath("/admin/banners");
   revalidatePath(`/admin/banners/${id}`);
+  updateTag(CACHE_TAGS.banners);
 }
