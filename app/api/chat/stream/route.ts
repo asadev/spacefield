@@ -11,7 +11,16 @@
  *    raw text deltas. The user is already looking at a specific
  *    record, so an open-ended tool call would be wasteful.
  *
- * Body: { context_ref?: string; message: string }
+ * Body: { context_ref?: string; message: string;
+ *         images?: { mime: string; data: string }[] }
+ *
+ *   - `images[]` are inline data-URL-style attachments — each carries
+ *     its mime type and a base64-encoded payload. We validate mime +
+ *     size server-side and forward them as Anthropic `image` content
+ *     blocks (base64 source) inside the user turn.
+ *   - Data-URL form (`data:image/png;base64,...`) is also accepted for
+ *     the `data` field — we split off the prefix before forwarding.
+ *
  * Out:  text/event-stream with events {delta, done, error}
  *
  * Abort: `req.signal` is forwarded into the Anthropic SDK's
@@ -20,6 +29,15 @@
  *
  * Auth: standard cookie session. Workspace membership is verified
  *       against the context's workspace_id when a context ref resolves.
+ *
+ * Budget: the workspace's tier-level monthly USD spend is checked
+ *         before opening a stream. When the workspace is over budget
+ *         we emit a single friendly delta and close.
+ *
+ * Cost ledger: every successful (or failed) Anthropic call writes a
+ *              row to `ai_calls` via `recordAiCall(...)`. Usage tokens
+ *              are read from the SDK's final message after iteration
+ *              ends.
  *
  * Runtime: Node — we share `getRuntimeModel()` with the rest of the
  * runtime, which uses the service-role admin client to read
@@ -40,6 +58,11 @@ import { getRuntimeModel } from "@/lib/agent/runtime/_models";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { enforceRateLimit } from "@/lib/rate-limit";
+import { recordAiCall } from "@/lib/ai/cost";
+import {
+  getWorkspaceBudgetStatus,
+  upgradeMessageForTier,
+} from "@/lib/ai/budget-check";
 
 export const runtime = "nodejs";
 // 60s ceiling — same as /api/agent/dispatch. Long-running streams can
@@ -47,16 +70,99 @@ export const runtime = "nodejs";
 // the SSE-helper finalizer either way.
 export const maxDuration = 60;
 
+/** Allowed inline-image mime types. Matches what Anthropic accepts on
+ *  vision-capable models (sonnet 3.5 / sonnet 4 / haiku 3 vision). */
+const ALLOWED_IMAGE_MIMES = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/jpg",
+  "image/webp",
+  "image/gif",
+]);
+
+/** Hard cap per image (base64-decoded). Anthropic's documented limit
+ *  is 5 MB per image; we enforce the same cap pre-flight so a bad
+ *  upload bounces with a 400 instead of a 502 from upstream. */
+const MAX_IMAGE_BYTES = 5 * 1024 * 1024; // 5 MB
+
+/** Cap the total number of attachments per turn so a malicious caller
+ *  can't drag the request past memory limits. The vision UX is "one
+ *  picture, one question"; 4 is plenty for "compare these screenshots". */
+const MAX_IMAGES_PER_TURN = 4;
+
+interface ChatStreamImage {
+  /** "image/png" | "image/jpeg" | "image/webp" | "image/gif". Normalised
+   *  server-side; "image/jpg" is rewritten to "image/jpeg" before the
+   *  Anthropic call. */
+  mime: string;
+  /** Raw base64 (no `data:...;base64,` prefix). Data-URL form is
+   *  accepted and stripped in `parseImage()`. */
+  data: string;
+}
+
 interface ChatStreamBody {
   context_ref?: string | null;
   message?: string;
   workspace_id?: string | null;
+  /** Inline image attachments. Forwarded as Anthropic `image` content
+   *  blocks alongside the text message. */
+  images?: ChatStreamImage[];
 }
 
 let _client: Anthropic | null = null;
 function anthropic(): Anthropic {
   if (!_client) _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
   return _client;
+}
+
+/** Strip a `data:image/...;base64,` prefix if present and return the
+ *  raw base64 payload + inferred mime. Tolerates extra whitespace. */
+function parseImage(img: ChatStreamImage): {
+  ok: true;
+  mime: string;
+  base64: string;
+  bytes: number;
+} | {
+  ok: false;
+  error: string;
+} {
+  if (!img || typeof img.data !== "string") {
+    return { ok: false, error: "image_data_required" };
+  }
+  let mime = (img.mime ?? "").trim().toLowerCase();
+  let raw = img.data.trim();
+
+  // Accept full data URLs as well as bare base64.
+  if (raw.startsWith("data:")) {
+    const match = raw.match(/^data:([^;]+);base64,(.+)$/i);
+    if (!match) return { ok: false, error: "image_invalid_data_url" };
+    if (!mime) mime = match[1].toLowerCase();
+    raw = match[2];
+  }
+  // Whitespace-tolerant — some clients line-wrap base64.
+  raw = raw.replace(/\s+/g, "");
+
+  // Quick sanity check: base64 only contains [A-Za-z0-9+/=].
+  if (!/^[A-Za-z0-9+/=]+$/.test(raw)) {
+    return { ok: false, error: "image_invalid_base64" };
+  }
+  // Normalise "image/jpg" → "image/jpeg" (Anthropic only accepts the
+  // canonical form). Other typos we let through so the SDK can surface
+  // a clean error rather than us guessing.
+  if (mime === "image/jpg") mime = "image/jpeg";
+
+  if (!ALLOWED_IMAGE_MIMES.has(mime)) {
+    return { ok: false, error: `image_mime_not_supported:${mime}` };
+  }
+
+  // Cheap byte-count estimate: each base64 char is 6 bits, minus
+  // padding. Avoids materialising the Buffer just to measure.
+  const padding = raw.endsWith("==") ? 2 : raw.endsWith("=") ? 1 : 0;
+  const bytes = Math.floor((raw.length * 3) / 4) - padding;
+  if (bytes > MAX_IMAGE_BYTES) {
+    return { ok: false, error: "image_too_large" };
+  }
+  return { ok: true, mime, base64: raw, bytes };
 }
 
 /**
@@ -69,7 +175,11 @@ function buildSystemPrompt(opts: {
   personaPrefix: string;
   userEmail: string | null;
   contextChunk: string;
+  hasImages: boolean;
 }): string {
+  const visionLine = opts.hasImages
+    ? "\n- The user has attached one or more images. Describe what they show when relevant and use them to answer the question."
+    : "";
   const base = `${opts.personaPrefix}
 
 You are the Spacefield assistant answering questions about a specific record. The user (${opts.userEmail ?? "signed-in user"}) opened this chat from the record's detail page.
@@ -78,7 +188,7 @@ Rules:
 - Answer ONLY from the record context provided below. Don't make up data the user didn't show you.
 - If the user asks something the context doesn't cover, say so plainly — don't invent.
 - Be concise: 2–4 sentences unless the user asks for detail.
-- Plain text. Light markdown is fine but no headings.`;
+- Plain text. Light markdown is fine but no headings.${visionLine}`;
 
   if (!opts.contextChunk) {
     return `${base}
@@ -92,19 +202,61 @@ ${opts.contextChunk}
 — END CONTEXT —`;
 }
 
+/** Build the user-turn content blocks. Always includes the text. When
+ *  images are attached, each becomes an Anthropic `image` block with a
+ *  base64 source. Images come first so the model's attention lands on
+ *  them before the question (matches Anthropic's prompting guidance). */
+function buildUserContent(
+  message: string,
+  images: { mime: string; base64: string }[]
+): Anthropic.Messages.ContentBlockParam[] {
+  if (images.length === 0) {
+    return [{ type: "text", text: message }];
+  }
+  const blocks: Anthropic.Messages.ContentBlockParam[] = images.map((img) => ({
+    type: "image",
+    source: {
+      type: "base64",
+      media_type: img.mime as
+        | "image/png"
+        | "image/jpeg"
+        | "image/webp"
+        | "image/gif",
+      data: img.base64,
+    },
+  }));
+  blocks.push({ type: "text", text: message });
+  return blocks;
+}
+
+/** Holder so the async generator can hand back token usage to the
+ *  caller after the stream finishes. JS doesn't let us `return` from a
+ *  generator's consumer cleanly — closing over this object is the
+ *  simplest approach. */
+interface UsageRef {
+  usage?: Anthropic.Messages.Usage;
+  errorMessage?: string;
+}
+
 /**
  * Stream Anthropic deltas as plain text chunks. Yields ONLY the
  * `text_delta` payloads — message_start/stop/content_block_* are
  * dropped because the SSE client doesn't need them. Honours
  * `signal.aborted` so the client's stop button propagates upstream.
+ *
+ * Token usage is captured into the supplied `usageRef` after the
+ * generator finishes so the caller can write a single recordAiCall
+ * row with accurate counts.
  */
 async function* streamAnthropicText(opts: {
   model: string;
   system: string;
   message: string;
+  images: { mime: string; base64: string }[];
   signal: AbortSignal;
   maxTokens: number;
   temperature: number;
+  usageRef: UsageRef;
 }): AsyncIterable<string> {
   const stream = anthropic().messages.stream(
     {
@@ -112,7 +264,9 @@ async function* streamAnthropicText(opts: {
       max_tokens: opts.maxTokens,
       temperature: opts.temperature,
       system: opts.system,
-      messages: [{ role: "user", content: opts.message }],
+      messages: [
+        { role: "user", content: buildUserContent(opts.message, opts.images) },
+      ],
     },
     { signal: opts.signal }
   );
@@ -128,6 +282,20 @@ async function* streamAnthropicText(opts: {
         if (t) yield t;
       }
     }
+    // The stream may end naturally (end_turn) or because the client
+    // aborted. Either way, ask for the assembled message so we can
+    // read its usage.
+    try {
+      const final = await stream.finalMessage();
+      opts.usageRef.usage = final.usage;
+    } catch {
+      // finalMessage() rejects after a controller abort — that's fine,
+      // we just won't have token counts for an aborted call.
+    }
+  } catch (err) {
+    opts.usageRef.errorMessage =
+      err instanceof Error ? err.message : String(err ?? "stream_error");
+    throw err;
   } finally {
     // Defensive: if the consumer broke out of the for-await early
     // (e.g. controller cancel), tear down the SDK stream too. Calling
@@ -169,6 +337,29 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Validate + normalise inline image attachments. Each one is decoded
+  // once (size-checked via base64 length) and forwarded to Anthropic
+  // as a base64 source block. Failures return 400 so the client can
+  // surface a clear "this image didn't upload" message.
+  const rawImages = Array.isArray(body.images) ? body.images : [];
+  if (rawImages.length > MAX_IMAGES_PER_TURN) {
+    return NextResponse.json(
+      {
+        error: "too_many_images",
+        max: MAX_IMAGES_PER_TURN,
+      },
+      { status: 400 }
+    );
+  }
+  const validatedImages: { mime: string; base64: string }[] = [];
+  for (const img of rawImages) {
+    const parsed = parseImage(img);
+    if (!parsed.ok) {
+      return NextResponse.json({ error: parsed.error }, { status: 400 });
+    }
+    validatedImages.push({ mime: parsed.mime, base64: parsed.base64 });
+  }
+
   // Resolve context. When `context_ref` is missing or unresolvable we
   // still serve the request — the chat is useful without it.
   const loaded = await loadContext(body.context_ref ?? null);
@@ -204,6 +395,27 @@ export async function POST(req: NextRequest) {
     if (!mem) workspaceId = null;
   }
 
+  // Tier budget guard. Identical check the executor/orchestrator run
+  // before kicking off a model call. If the workspace has consumed
+  // 100% of its tier's monthly USD allowance we still return an SSE
+  // stream — but with a single delta carrying the upgrade message,
+  // then `done`. The UI doesn't have to special-case this; the user
+  // just sees the assistant explain the cap.
+  if (workspaceId) {
+    const budget = await getWorkspaceBudgetStatus(workspaceId);
+    if (budget.over) {
+      const message = upgradeMessageForTier(budget.tier);
+      async function* singleMessage(): AsyncIterable<string> {
+        yield message;
+      }
+      return sseResponse(
+        singleMessage(),
+        (chunk) => ({ event: "delta", data: chunk }),
+        req.signal
+      );
+    }
+  }
+
   // Persona is workspace-scoped. Without a workspace we use the
   // defaults — keeps the route usable for unscoped chats.
   const persona = workspaceId
@@ -225,7 +437,17 @@ export async function POST(req: NextRequest) {
     personaPrefix: personaSystemPrefix(persona),
     userEmail: user.email ?? null,
     contextChunk: trimContextChunk(loaded.prompt_chunk),
+    hasImages: validatedImages.length > 0,
   });
+
+  // Used by the streamer to surface usage tokens after the iterator
+  // finishes (see UsageRef comment). We snapshot start time here so
+  // both ok and error paths log accurate latency.
+  const usageRef: UsageRef = {};
+  const startedAt = Date.now();
+  // Capture id locally so the generator's closure isn't blocked by
+  // the auth-narrowing being lost inside an async generator body.
+  const userIdForLog = user.id;
 
   // Hand the request's signal directly to the SDK + the SSE encoder so
   // an aborted client tears down the upstream request.
@@ -233,10 +455,52 @@ export async function POST(req: NextRequest) {
     model: resolved.id,
     system,
     message,
+    images: validatedImages,
     signal: req.signal,
     maxTokens: resolved.maxTokens || 1024,
     temperature: resolved.temperature ?? 1.0,
+    usageRef,
   });
 
-  return sseResponse(tokens, (chunk) => ({ event: "delta", data: chunk }), req.signal);
+  // Wrap the SSE producer so we can write a cost-ledger row after the
+  // stream closes. We do this by tee-ing the async iterable through a
+  // small wrapper that records on completion.
+  async function* withCostLog(): AsyncIterable<string> {
+    try {
+      for await (const chunk of tokens) {
+        yield chunk;
+      }
+      // Successful close. usageRef.usage may still be undefined if the
+      // client aborted before finalMessage() resolved.
+      void recordAiCall({
+        workspace_id: workspaceId,
+        user_id: userIdForLog,
+        model: resolved.id,
+        input_tokens: usageRef.usage?.input_tokens ?? 0,
+        output_tokens: usageRef.usage?.output_tokens ?? 0,
+        latency_ms: Date.now() - startedAt,
+        status: "ok",
+      });
+    } catch (err) {
+      void recordAiCall({
+        workspace_id: workspaceId,
+        user_id: userIdForLog,
+        model: resolved.id,
+        input_tokens: usageRef.usage?.input_tokens ?? 0,
+        output_tokens: usageRef.usage?.output_tokens ?? 0,
+        latency_ms: Date.now() - startedAt,
+        status: "error",
+        error:
+          usageRef.errorMessage ??
+          (err instanceof Error ? err.message : String(err)),
+      });
+      throw err;
+    }
+  }
+
+  return sseResponse(
+    withCostLog(),
+    (chunk) => ({ event: "delta", data: chunk }),
+    req.signal
+  );
 }
