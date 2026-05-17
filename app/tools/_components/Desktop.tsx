@@ -2,20 +2,38 @@
 
 import { AnimatePresence } from "framer-motion";
 import { useEffect, useMemo, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import { useTheme } from "@/components/ThemeProvider";
 import { TOOLS, toolBySlug, type ToolItem } from "../_data/tools-list";
 import { DesktopShellProvider } from "./DesktopShellContext";
-import AmbientSounds from "./AmbientSounds";
+/* Mobile-perf (Wave 4 Z2): AmbientSounds, ScreenshotCapture, and
+ * Onboarding are all below-the-fold for first paint on the desktop
+ * shell. AmbientSounds doesn't render anything until the user enables
+ * a track; ScreenshotCapture only mounts an event listener for the
+ * Cmd-Shift-3/4 hotkeys; Onboarding is gated on `showOnboarding`. Defer
+ * all three so they don't widen the cold-load JS for the OS shell. The
+ * Cmd-Shift hotkeys are still captured because ScreenshotCapture mounts
+ * within ~1 RAF of hydration — the user can't hit them earlier. */
+const AmbientSounds = dynamic(() => import("./AmbientSounds"), {
+  ssr: false,
+  loading: () => null,
+});
+const ScreenshotCapture = dynamic(() => import("./ScreenshotCapture"), {
+  ssr: false,
+  loading: () => null,
+});
+const Onboarding = dynamic(() => import("./Onboarding"), {
+  ssr: false,
+  loading: () => null,
+});
 import AppStore from "./AppStore";
 import ControlCenter from "./ControlCenter";
 import DesktopBackground from "./DesktopBackground";
 import Dock from "./Dock";
-import ScreenshotCapture from "./ScreenshotCapture";
 import Launchpad, { type LaunchpadIntent } from "./Launchpad";
 import MissionControl from "./MissionControl";
 import MobileShell from "./MobileShell";
 import NotificationCenter from "./NotificationCenter";
-import Onboarding from "./Onboarding";
 import SnapPreview from "./SnapPreview";
 import TopBar from "./TopBar";
 import {

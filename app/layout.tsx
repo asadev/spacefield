@@ -146,6 +146,24 @@ export default async function RootLayout({
         <link rel="dns-prefetch" href="https://checkout.paddle.com" />
         <link rel="dns-prefetch" href="https://buy.paddle.com" />
         <link rel="dns-prefetch" href="https://cdn.paddle.com" />
+        {/* Mobile-perf (Wave 4 Z2): explicit preload hints for the
+         * first-paint assets.
+         *
+         *  - The PWA icon doubles as the hero brand mark on `/` (rendered
+         *    as a small squircle next to the wordmark) and as the
+         *    site-banner logo on every marketing page. It's also the
+         *    OG/Twitter card image and the favicon — there is no path on
+         *    spacefield where this file isn't requested in the first
+         *    couple of seconds. SVG is tiny (~1 KB) so the preload cost
+         *    is negligible vs the alternative of waiting for the layout
+         *    to mount before the request kicks off.
+         *
+         *  - `next/font/google` (Inter, imported at the top of this
+         *    file) auto-generates a <link rel="preload"> for its .woff2
+         *    subset, so we deliberately don't duplicate that hint — the
+         *    framework's preload runs at higher priority than anything
+         *    we'd add manually. */}
+        <link rel="preload" as="image" href="/icons/icon-192.svg" type="image/svg+xml" />
       </head>
       <body className="relative">
         <SiteBanner />
