@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { revealDocNumber } from "@/lib/people/encryption";
 import { logAudit } from "@/lib/admin/audit";
+import { safeErrorMessage } from "@/lib/safe-error";
 
 /**
  * POST /api/people/documents/[id]/reveal
@@ -71,7 +72,13 @@ export async function POST(
     number = await revealDocNumber(id);
   } catch (e) {
     return NextResponse.json(
-      { error: (e as Error)?.message ?? "decrypt_failed" },
+      {
+        error: safeErrorMessage(e, {
+          source: "people.documents.reveal",
+          userId: u.user.id,
+          fallback: "decrypt_failed",
+        }),
+      },
       { status: 500 },
     );
   }

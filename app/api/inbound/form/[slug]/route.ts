@@ -15,6 +15,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 import { checkRateLimit, getClientIp } from "@/lib/rate-limit";
+import { safeErrorMessage } from "@/lib/safe-error";
 import {
   ingestFormSubmission,
   loadLeadSourceBySlug,
@@ -152,6 +153,15 @@ export async function POST(
       200
     );
   } catch (e) {
-    return jsonResponse({ ok: false, error: (e as Error).message }, 500);
+    return jsonResponse(
+      {
+        ok: false,
+        error: safeErrorMessage(e, {
+          source: "inbound.form.ingest",
+          fallback: "ingest_failed",
+        }),
+      },
+      500
+    );
   }
 }

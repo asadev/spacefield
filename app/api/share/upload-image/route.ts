@@ -10,6 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createClient } from "@/lib/supabase/server";
 
 export const runtime = "nodejs";
@@ -54,7 +55,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, url: pub.publicUrl });
   } catch (err) {
     return NextResponse.json(
-      { ok: false, error: err instanceof Error ? err.message : "unknown" },
+      {
+        ok: false,
+        error: safeErrorMessage(err, {
+          source: "share.upload_image",
+          fallback: "upload_failed",
+        }),
+      },
       { status: 500 }
     );
   }

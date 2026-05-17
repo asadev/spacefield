@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { randomUUID } from "node:crypto";
 
 import { assertAdmin } from "@/app/admin/_lib";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { putR2Object, r2PublicUrl } from "@/lib/r2";
 
@@ -49,10 +50,16 @@ export async function POST(req: NextRequest) {
   try {
     admin = await assertAdmin();
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "unauthorized";
+    const rawMsg = e instanceof Error ? e.message : "unauthorized";
+    const status = rawMsg === "not signed in" ? 401 : 403;
     return NextResponse.json(
-      { error: msg },
-      { status: msg === "not signed in" ? 401 : 403 }
+      {
+        error: safeErrorMessage(e, {
+          source: "wallpapers.create.auth",
+          fallback: "forbidden",
+        }),
+      },
+      { status }
     );
   }
 

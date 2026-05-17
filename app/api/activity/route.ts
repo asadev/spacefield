@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { listActivities } from "@/lib/collab/activity";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createClient } from "@/lib/supabase/server";
 
 /* GET /api/activity
@@ -58,7 +59,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ items });
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "list_failed" },
+      {
+        error: safeErrorMessage(e, {
+          source: "activity.list",
+          userId: user.id,
+          fallback: "list_failed",
+        }),
+      },
       { status: 400 }
     );
   }

@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createClient } from "@/lib/supabase/server";
 import { deleteR2Object, r2ObjectSize } from "@/lib/r2";
 
@@ -58,8 +59,11 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     return NextResponse.json(
       {
-        error:
-          err instanceof Error ? err.message : "could not verify upload",
+        error: safeErrorMessage(err, {
+          source: "files.finalize.head",
+          userId: user.id,
+          fallback: "could not verify upload",
+        }),
       },
       { status: 500 }
     );

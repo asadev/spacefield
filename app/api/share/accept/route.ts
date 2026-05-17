@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createClient } from "@/lib/supabase/server";
 import { getLinkById } from "@/lib/share/server";
 import { hashClientFingerprint } from "@/lib/share/fingerprint";
@@ -77,7 +78,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "unknown" },
+      {
+        error: safeErrorMessage(err, {
+          source: "share.accept",
+          fallback: "accept_failed",
+        }),
+      },
       { status: 500 }
     );
   }
