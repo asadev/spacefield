@@ -6,6 +6,7 @@ import { useState, useTransition } from "react";
 import { toast } from "@/lib/toast";
 import { pushUndo } from "@/lib/undo";
 import type { TaskPriority, TaskRow } from "@/lib/tasks/types";
+import { firePushPermissionPrompt } from "@/components/PushPermissionPrompt";
 
 interface Props {
   task: TaskRow;
@@ -57,6 +58,19 @@ export default function TaskHeader({ task, statuses }: Props) {
               const v = e.target.value;
               setStatus(v);
               patch({ status: v });
+              // Positive moment: user marked a task done. Nudge for
+              // push permission so future task pings can land. The
+              // helper no-ops if the user already decided or recently
+              // dismissed.
+              if (
+                /^(done|completed|complete)$/i.test(v) &&
+                !/^(done|completed|complete)$/i.test(status)
+              ) {
+                firePushPermissionPrompt("task-completed", {
+                  message:
+                    "Nice — want a heads-up when teammates assign or update tasks?",
+                });
+              }
             }}
             className="rounded-md border border-app bg-app-elevated px-2 py-1 text-app outline-none"
           >
@@ -134,7 +148,7 @@ export default function TaskHeader({ task, statuses }: Props) {
               );
             }
           }}
-          className="ml-auto rounded-md border border-rose-400/30 bg-rose-400/5 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.15em] text-rose-400 transition-colors hover:bg-rose-400/15"
+          className="ms-auto rounded-md border border-rose-400/30 bg-rose-400/5 px-2 py-1 text-[10px] font-medium uppercase tracking-[0.15em] text-rose-400 transition-colors hover:bg-rose-400/15"
         >
           Delete
         </button>

@@ -311,7 +311,7 @@ export default function TierCard({
   return (
     <div className={cardClass} data-tier={tierId}>
       {isRecommended && (
-        <span className="absolute -top-3 right-6 rounded-full bg-tool-accent px-2.5 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-white shadow-sm">
+        <span className="absolute -top-3 end-6 rounded-full bg-tool-accent px-2.5 py-1 text-[0.6rem] font-semibold uppercase tracking-[0.14em] text-white shadow-sm">
           Most popular
         </span>
       )}

@@ -133,7 +133,7 @@ export default function PWAInstallPrompt() {
       role="dialog"
       aria-label="Install Spacefield"
       aria-live="polite"
-      className="fixed bottom-4 left-4 z-[9998] w-[min(340px,calc(100vw-2rem))] rounded-xl border border-app bg-app-elevated p-4 shadow-2xl"
+      className="fixed bottom-4 start-4 z-[9998] w-[min(340px,calc(100vw-2rem))] rounded-xl border border-app bg-app-elevated p-4 shadow-2xl"
     >
       <p className="text-sm font-semibold text-app">Install Spacefield</p>
       <p className="mt-1 text-xs leading-relaxed text-muted">

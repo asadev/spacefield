@@ -108,7 +108,7 @@ export default function ChangelogPage() {
 
         <ul className="mt-10 space-y-6">
           {ENTRIES.map((e, idx) => (
-            <li key={idx} className="border-l-2 border-app pl-6">
+            <li key={idx} className="border-s-2 border-app ps-6">
               <div className="flex items-baseline gap-3">
                 <time className="text-xs text-faint">{e.date}</time>
                 <span

@@ -133,7 +133,7 @@ function TopNav({
           <SpacefieldLogo size="sm" />
         </Link>
 
-        <div className="ml-auto flex items-center gap-1 sm:gap-2">
+        <div className="ms-auto flex items-center gap-1 sm:gap-2">
           <Link
             href="/pricing"
             className="hidden rounded-md px-3 py-1.5 text-sm text-secondary transition-colors hover:text-app sm:inline-block"
@@ -358,13 +358,13 @@ function DesktopShowcase() {
             {/* Floating window 1 */}
             <FauxWindow
               title="Mortgage Calculator"
-              className="absolute left-[6%] top-[14%] w-[52%] max-w-[360px]"
+              className="absolute start-[6%] top-[14%] w-[52%] max-w-[360px]"
               accent="violet"
             />
             {/* Floating window 2 */}
             <FauxWindow
               title="Market Pulse"
-              className="absolute right-[6%] top-[24%] w-[48%] max-w-[320px]"
+              className="absolute end-[6%] top-[24%] w-[48%] max-w-[320px]"
               accent="cyan"
             />
 
@@ -412,7 +412,7 @@ function FauxWindow({
         <span className="h-2.5 w-2.5 rounded-full bg-[#ff5f57]" />
         <span className="h-2.5 w-2.5 rounded-full bg-[#febc2e]" />
         <span className="h-2.5 w-2.5 rounded-full bg-[#28c840]" />
-        <span className="ml-2 text-[11px] font-medium text-secondary">
+        <span className="ms-2 text-[11px] font-medium text-secondary">
           {title}
         </span>
       </div>
@@ -482,7 +482,7 @@ function ValueProps() {
           </h2>
         </header>
 
-        <div className="mt-12 grid gap-6 md:grid-cols-3">
+        <div className="mt-12 grid gap-6 sm:grid-cols-2 md:grid-cols-3">
           {items.map((it) => (
             <div
               key={it.title}
@@ -693,7 +693,7 @@ function PricingTeaser({ onSignIn }: { onSignIn: () => void }) {
           </h2>
         </header>
 
-        <div className="mt-10 grid gap-4 md:grid-cols-3">
+        <div className="mt-10 grid gap-4 sm:grid-cols-2 md:grid-cols-3">
           {tiers.map((t) => (
             <div
               key={t.name}
@@ -713,7 +713,7 @@ function PricingTeaser({ onSignIn }: { onSignIn: () => void }) {
               </div>
               <div className="mt-3 text-3xl font-bold text-app">
                 {t.price}
-                <span className="ml-1 text-sm font-normal text-muted">
+                <span className="ms-1 text-sm font-normal text-muted">
                   /mo
                 </span>
               </div>

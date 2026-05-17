@@ -307,7 +307,7 @@ export default function ComparisonTable() {
                 >
                   {name}
                   {idx === 1 && (
-                    <span className="ml-2 rounded-full bg-tool-accent-soft px-2 py-0.5 text-[0.55rem] font-semibold uppercase tracking-wider text-tool-accent">
+                    <span className="ms-2 rounded-full bg-tool-accent-soft px-2 py-0.5 text-[0.55rem] font-semibold uppercase tracking-wider text-tool-accent">
                       Popular
                     </span>
                   )}
