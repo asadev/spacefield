@@ -23,6 +23,36 @@ const BLOCKED_KEYWORDS = [
   "security",
 ];
 
+// Postgres functions that either side-channel server resources or leak
+// configuration/file-system state. Even via SELECT a caller can DoS the
+// DB (pg_sleep), kill other sessions (pg_terminate_backend), or read
+// arbitrary files from the data directory (pg_read_file, lo_export).
+// Rejected via word-boundary regex below.
+const BLOCKED_FUNCTIONS = [
+  "pg_sleep",
+  "pg_terminate_backend",
+  "pg_cancel_backend",
+  "pg_read_file",
+  "pg_read_binary_file",
+  "pg_ls_dir",
+  "pg_ls_logdir",
+  "pg_ls_waldir",
+  "pg_ls_tmpdir",
+  "lo_import",
+  "lo_export",
+  "pg_advisory_lock",
+  "pg_advisory_xact_lock",
+  "pg_advisory_unlock",
+  "current_setting",
+  "set_config",
+  "pg_stat_file",
+  "pg_stat_activity",
+  "pg_read_server_files",
+  "pg_write_server_files",
+  "dblink",
+  "dblink_exec",
+];
+
 export type SqlCheck = {
   ok: boolean;
   error?: string;
@@ -61,6 +91,16 @@ export function validateSelect(raw: string): SqlCheck {
     const re = new RegExp(`\\b${kw}\\b`, "i");
     if (re.test(sanitized)) {
       return { ok: false, error: `Blocked keyword: ${kw.toUpperCase()}` };
+    }
+  }
+
+  // Block dangerous function calls (DoS / info-disclosure / file-IO) on
+  // word boundaries. Done as a second pass so the error message says
+  // "Blocked function" rather than "Blocked keyword".
+  for (const fn of BLOCKED_FUNCTIONS) {
+    const re = new RegExp(`\\b${fn}\\b`, "i");
+    if (re.test(sanitized)) {
+      return { ok: false, error: `Blocked function: ${fn}` };
     }
   }
 

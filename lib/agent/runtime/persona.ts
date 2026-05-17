@@ -10,6 +10,36 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { stripPromptInjectionMarkers } from "./_sanitize";
+
+// Persona fields are authored by workspace admins and flow straight into
+// the system prompt. A hostile (or compromised) admin could embed
+// `system:` directives, role-tag tokens, or newline-padded payloads to
+// override the model's instructions for every dispatch in the workspace.
+// We strip those markers and clamp length so the persona block is style-
+// only, never authoritative.
+const PERSONA_DESCRIPTION_MAX = 1500;
+const BOT_NAME_MAX = 60;
+
+function sanitizeBotName(s: string): string {
+  // Single-line, length-capped, role-tag-stripped.
+  let out = stripPromptInjectionMarkers(s);
+  out = out.replace(/[\r\n\t]+/g, " ").replace(/\s+/g, " ").trim();
+  if (out.length > BOT_NAME_MAX) out = out.slice(0, BOT_NAME_MAX);
+  return out;
+}
+
+function sanitizePersonaDescription(s: string): string {
+  // Multi-line allowed but role tags / control chars stripped + capped.
+  let out = stripPromptInjectionMarkers(s);
+  // Collapse runs of blank lines so an admin can't pad a fake system
+  // directive far away from the description body.
+  out = out.replace(/\n{3,}/g, "\n\n").trim();
+  if (out.length > PERSONA_DESCRIPTION_MAX) {
+    out = out.slice(0, PERSONA_DESCRIPTION_MAX) + "… [truncated]";
+  }
+  return out;
+}
 
 export type VoiceTone = "friendly" | "formal" | "casual" | "direct" | "playful";
 
@@ -85,11 +115,13 @@ export async function loadPersona(
  *  prompt-caching still hits, as long as the underlying row hasn't
  *  changed within the cache window. */
 export function personaSystemPrefix(p: AgentPersona): string {
+  const safeName = sanitizeBotName(p.bot_name) || DEFAULT_PERSONA.bot_name;
+  const safeDesc = sanitizePersonaDescription(p.persona_description);
   const lines: string[] = [];
-  lines.push(`You are "${p.bot_name}".`);
+  lines.push(`You are "${safeName}".`);
   lines.push(TONE_GUIDANCE[p.voice_tone]);
-  if (p.persona_description.trim().length > 0) {
-    lines.push(`About you: ${p.persona_description.trim()}`);
+  if (safeDesc.length > 0) {
+    lines.push(`About you: ${safeDesc}`);
   }
   return lines.join("\n");
 }
