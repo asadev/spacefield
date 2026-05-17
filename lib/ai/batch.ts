@@ -3,6 +3,7 @@ import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { withAdvisoryLock, AdvisoryLockKeys } from "@/lib/db/advisory-lock";
 
 import { recordAiCall } from "./cost";
 
@@ -99,8 +100,25 @@ export interface BatchRunResult {
  * Anthropic, and update the row. Designed to be called from the
  * cron route — invoked manually it'll still work but won't have the
  * auth gate.
+ *
+ * The advisory-lock gate keeps two overlapping cron invocations from
+ * trying to drain at once. The CLAIM SQL is already atomic so this
+ * is defence-in-depth, but it also stops two simultaneous runners
+ * from each spending the function-budget on the same set of rows
+ * (queued → running flip succeeds for only one but both still wake
+ * up). If we don't get the lock, we no-op cleanly.
  */
 export async function runQueuedAIBatch(limit = 5): Promise<BatchRunResult> {
+  const gated = await withAdvisoryLock(AdvisoryLockKeys.AiBatchRunner, () =>
+    runQueuedAIBatchInternal(limit)
+  );
+  if (!gated.acquired) {
+    return { picked: 0, done: 0, failed: 0, ids: [] };
+  }
+  return gated.value as BatchRunResult;
+}
+
+async function runQueuedAIBatchInternal(limit = 5): Promise<BatchRunResult> {
   const admin = createAdminClient();
 
   // Claim up to `limit` queued rows. Two-step pattern because

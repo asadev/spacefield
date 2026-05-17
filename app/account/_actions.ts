@@ -7,6 +7,8 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { hashIp } from "@/lib/lifecycle";
 import { requireRecentAuth } from "@/lib/mfa/reauth";
+import { withIdempotency } from "@/lib/idempotency";
+import { emit, OutboxEventTypes } from "@/lib/outbox";
 
 /* app/account/_actions.ts — Server actions called by the /account
  * page's client form components.
@@ -102,15 +104,58 @@ export async function requestAccountDeletion(
   const ip = (forwardedFor?.split(",")[0]?.trim() || realIp || "").trim() || null;
   const ipHash = await hashIp(ip);
 
-  const { data, error } = await supabase.rpc("request_account_deletion", {
-    p_reason: reason,
-    p_ip_hash: ipHash,
-  });
-  if (error) {
-    return { ok: false, error: error.message };
+  // Idempotency: a double-click on Confirm Delete would otherwise call
+  // request_account_deletion twice, and while the RPC is itself
+  // idempotent at the data layer (status flips and stays), the second
+  // call resets the 30-day grace window. Key the wrapper on the user
+  // id + a short time bucket (1 minute) so legitimate retries within
+  // a single submission collapse but a deliberate "change my mind /
+  // re-request" 5 minutes later still works.
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL ?? "";
+  const supabaseServiceRoleKey =
+    process.env.SUPABASE_SERVICE_ROLE_KEY ||
+    process.env.SUPABASE_SERVICE_ROLE ||
+    "";
+  const minuteBucket = Math.floor(Date.now() / 60_000);
+  const idempotencyKey = `account-deletion:${userData.user.id}:${minuteBucket}`;
+
+  type DeletionResp = { ok: true; graceUntil: string } | { ok: false; error: string };
+  const wrapped = await withIdempotency<DeletionResp>(
+    {
+      key: idempotencyKey,
+      ttl_sec: 60 * 60, // 1h cache — well past the legit retry window
+      supabase: { url: supabaseUrl, serviceRoleKey: supabaseServiceRoleKey },
+    },
+    async () => {
+      const { data, error } = await supabase.rpc("request_account_deletion", {
+        p_reason: reason,
+        p_ip_hash: ipHash,
+      });
+      if (error) {
+        return { ok: false, error: error.message };
+      }
+      const graceUntil = String(data);
+      // Outbox event for any downstream listeners (email reminders,
+      // billing, future analytics). Dedup by user_id + the same
+      // minute-bucket so retries don't fan out twice.
+      void emit(
+        OutboxEventTypes.AccountDeletionQueued,
+        {
+          user_id: userData.user.id,
+          grace_until: graceUntil,
+          reason,
+        },
+        { dedupeKey: `account-deletion:${userData.user.id}:${minuteBucket}` }
+      );
+      return { ok: true, graceUntil };
+    }
+  );
+
+  if (!wrapped.ok) {
+    return { ok: false, error: wrapped.error };
   }
   revalidatePath("/account");
-  return { ok: true, graceUntil: String(data) };
+  return { ok: true, graceUntil: wrapped.graceUntil };
 }
 
 export async function cancelAccountDeletion(): Promise<ActionResult> {
