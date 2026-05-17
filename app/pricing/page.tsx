@@ -1,10 +1,18 @@
 import type { Metadata } from "next";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import TierGrid from "./_components/TierGrid";
-import AddonSection from "./_components/AddonSection";
-import ComparisonTable from "./_components/ComparisonTable";
-import FaqSection from "./_components/FaqSection";
 import CurrencySwitcher from "@/components/CurrencySwitcher";
+
+/* Mobile-perf (Wave 4 Z2): the Hero + TierGrid is the only thing above
+ * the fold on a mobile cold load. The 422-line ComparisonTable, the
+ * AddonSection, and FaqSection are all below the fold — defer them so
+ * the cold paint downloads only what's visible. SSR stays on so SEO
+ * (and the no-JS view) still renders the full page; the savings are
+ * the parse/eval cost on the client. */
+const ComparisonTable = dynamic(() => import("./_components/ComparisonTable"));
+const AddonSection = dynamic(() => import("./_components/AddonSection"));
+const FaqSection = dynamic(() => import("./_components/FaqSection"));
 
 /* /pricing — public pricing page.
  *
