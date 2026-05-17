@@ -4,6 +4,11 @@ import Anthropic from "@anthropic-ai/sdk";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdvisoryLock, AdvisoryLockKeys } from "@/lib/db/advisory-lock";
+import {
+  busyMessageFor,
+  checkBackpressure,
+  type BackpressureStatus,
+} from "@/lib/workflows/backpressure";
 
 import { recordAiCall } from "./cost";
 
@@ -52,11 +57,30 @@ export interface EnqueueAIBatchResult {
   status: "queued";
 }
 
+export interface EnqueueAIBatchBusy {
+  busy: true;
+  error: string;
+  retry_after_seconds: number;
+  status: BackpressureStatus;
+}
+
 export async function enqueueAIBatch(
   input: EnqueueAIBatchInput
-): Promise<EnqueueAIBatchResult | { error: string }> {
+): Promise<EnqueueAIBatchResult | EnqueueAIBatchBusy | { error: string }> {
   const prompt = (input.prompt ?? "").trim();
   if (!prompt) return { error: "prompt required" };
+
+  // Apply backpressure BEFORE the insert so a queue that's already
+  // deep doesn't get any deeper. See lib/workflows/backpressure.ts.
+  const bp = await checkBackpressure();
+  if (bp.busy) {
+    return {
+      busy: true,
+      error: busyMessageFor(bp),
+      retry_after_seconds: bp.retry_after_seconds,
+      status: bp,
+    };
+  }
 
   const admin = createAdminClient();
   const { data, error } = await admin
