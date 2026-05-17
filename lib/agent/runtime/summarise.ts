@@ -19,6 +19,8 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 
+import { recordAiCall } from "@/lib/ai/cost";
+
 const APPROX_CHARS_PER_TOKEN = 4;
 const SUMMARY_MODEL = "claude-haiku-4-5";
 const SUMMARY_MAX_OUTPUT_TOKENS = 700;
@@ -88,11 +90,34 @@ async function summariseViaAnthropic(
   client: Anthropic
 ): Promise<string> {
   const transcript = renderTranscript(older);
-  const response = await client.messages.create({
+  const startedAt = Date.now();
+  let response: Anthropic.Messages.Message;
+  try {
+    response = await client.messages.create({
+      model: SUMMARY_MODEL,
+      max_tokens: SUMMARY_MAX_OUTPUT_TOKENS,
+      system: buildSummariseSystem(),
+      messages: [{ role: "user", content: transcript }],
+    });
+  } catch (e) {
+    // The summariser doesn't know workspace_id / user_id — it runs as
+    // a background helper. We still log the call so the cost ledger
+    // sees the spend (with NULL attribution); admins can audit
+    // anonymous rows in /admin/insights/ai-costs.
+    void recordAiCall({
+      model: SUMMARY_MODEL,
+      latency_ms: Date.now() - startedAt,
+      status: "error",
+      error: e instanceof Error ? e.message : String(e),
+    });
+    throw e;
+  }
+  void recordAiCall({
     model: SUMMARY_MODEL,
-    max_tokens: SUMMARY_MAX_OUTPUT_TOKENS,
-    system: buildSummariseSystem(),
-    messages: [{ role: "user", content: transcript }],
+    input_tokens: response.usage.input_tokens,
+    output_tokens: response.usage.output_tokens,
+    latency_ms: Date.now() - startedAt,
+    status: "ok",
   });
   const text = response.content
     .filter((b): b is Anthropic.Messages.TextBlock => b.type === "text")

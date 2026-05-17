@@ -14,6 +14,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { totalInputTokens } from "./cache";
 import { getRuntimeModel } from "./_models";
 import { DEFAULT_PERSONA, type AgentPersona } from "./persona";
+import { recordAiCall } from "@/lib/ai/cost";
 import type { CallUsage } from "./types";
 
 let _client: Anthropic | null = null;
@@ -39,9 +40,18 @@ export interface FormatterResult {
   usage: CallUsage[];
 }
 
+export interface FormatReplyContext {
+  /** Workspace owning the dispatch — passed through to recordAiCall so
+   *  the cost ledger can attribute the formatter's spend correctly. */
+  workspaceId?: string | null;
+  /** User who triggered the dispatch. */
+  userId?: string | null;
+}
+
 export async function formatReply(
   raw: string,
-  persona: AgentPersona = DEFAULT_PERSONA
+  persona: AgentPersona = DEFAULT_PERSONA,
+  ctx: FormatReplyContext = {}
 ): Promise<FormatterResult> {
   const trimmed = raw.trim();
   if (trimmed.length < 140 && !/[*_#`]/.test(trimmed)) {
@@ -53,11 +63,35 @@ export async function formatReply(
   const resolved = await getRuntimeModel("formatter");
   const MODEL = resolved.id;
 
-  const response = await client().messages.create({
+  const startedAt = Date.now();
+  let response: Anthropic.Messages.Message;
+  try {
+    response = await client().messages.create({
+      model: MODEL,
+      max_tokens: 512,
+      system: buildSystem(persona),
+      messages: [{ role: "user", content: trimmed }],
+    });
+  } catch (e) {
+    void recordAiCall({
+      workspace_id: ctx.workspaceId ?? null,
+      user_id: ctx.userId ?? null,
+      model: MODEL,
+      latency_ms: Date.now() - startedAt,
+      status: "error",
+      error: e instanceof Error ? e.message : String(e),
+    });
+    throw e;
+  }
+
+  void recordAiCall({
+    workspace_id: ctx.workspaceId ?? null,
+    user_id: ctx.userId ?? null,
     model: MODEL,
-    max_tokens: 512,
-    system: buildSystem(persona),
-    messages: [{ role: "user", content: trimmed }],
+    input_tokens: totalInputTokens(response.usage),
+    output_tokens: response.usage.output_tokens,
+    latency_ms: Date.now() - startedAt,
+    status: "ok",
   });
 
   const text =
