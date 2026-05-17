@@ -76,6 +76,7 @@ function LandingShell() {
       <TopNav scrolled={scrolled} onSignIn={openSignIn} />
       {hasInvite && <InviteBanner onSignIn={openSignIn} />}
       <Hero onSignIn={openSignIn} />
+      <TrustedBy />
       <DesktopShowcase />
       <ValueProps />
       <ToolsStrip />
@@ -317,6 +318,54 @@ function Hero({ onSignIn }: { onSignIn: () => void }) {
           }
         }
       `}</style>
+    </section>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* TrustedBy — customer logo strip                                      */
+/* ------------------------------------------------------------------ */
+
+/* Today: five grayscale placeholders. When real customer logos come in,
+ * swap entries in CUSTOMER_LOGOS to point at /logos/customers/<slug>.svg.
+ * Permission paperwork is required before any real logo is published —
+ * see docs/marketing/LOGO-WALL.md for the procedure.
+ *
+ * The strip stays low-key intentionally: grayscale, muted opacity, no
+ * borders. It signals "we have customers" without screaming. Once we
+ * have a flagship logo or two, dial opacity up. */
+const CUSTOMER_LOGOS = [
+  { src: "/logos/customer-placeholders/logo-1.svg", alt: "Customer logo placeholder 1" },
+  { src: "/logos/customer-placeholders/logo-2.svg", alt: "Customer logo placeholder 2" },
+  { src: "/logos/customer-placeholders/logo-3.svg", alt: "Customer logo placeholder 3" },
+  { src: "/logos/customer-placeholders/logo-4.svg", alt: "Customer logo placeholder 4" },
+  { src: "/logos/customer-placeholders/logo-5.svg", alt: "Customer logo placeholder 5" },
+];
+
+function TrustedBy() {
+  return (
+    <section className="bg-app">
+      <div className="mx-auto max-w-6xl px-5 py-10">
+        <div className="flex flex-col items-center gap-5">
+          <span className="text-[0.6rem] uppercase tracking-[0.25em] text-muted">
+            Trusted by teams in real estate, marketing, and operations
+          </span>
+          <div className="flex w-full flex-wrap items-center justify-center gap-x-8 gap-y-4 opacity-70">
+            {CUSTOMER_LOGOS.map((logo) => (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                key={logo.src}
+                src={logo.src}
+                alt={logo.alt}
+                width={120}
+                height={36}
+                loading="lazy"
+                className="h-9 w-auto grayscale"
+              />
+            ))}
+          </div>
+        </div>
+      </div>
     </section>
   );
 }
