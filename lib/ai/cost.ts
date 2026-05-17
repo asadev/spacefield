@@ -57,6 +57,23 @@ export async function recordAiCall(input: RecordAiCallInput): Promise<void> {
       // eslint-disable-next-line no-console
       console.warn("[ai-cost] insert failed:", error.message);
     }
+
+    // Overage billing — fire-and-forget. We only consider successful
+    // calls; failed calls don't burn any provider budget.
+    //
+    // Imported lazily so this file (used by SSR components) doesn't
+    // drag the overage path into bundles that never bill.
+    if (
+      (input.status ?? "ok") === "ok" &&
+      cost > 0 &&
+      input.workspace_id
+    ) {
+      void import("./usage-billing").then(({ chargeOverage }) =>
+        chargeOverage(input.workspace_id, cost)
+      ).catch(() => {
+        // budget telemetry must never block the cost-record path
+      });
+    }
   } catch (e) {
     // eslint-disable-next-line no-console
     console.warn(
