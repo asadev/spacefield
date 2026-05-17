@@ -12,6 +12,7 @@
 
 import OpenAI from "openai";
 import { getRuntimeModel } from "./_models";
+import { recordAiCall } from "@/lib/ai/cost";
 import type { ClassifierResult } from "./types";
 
 const SKILL_SUMMARY = `
@@ -89,15 +90,42 @@ export async function classify(
     ? `Recent context:\n${recent}\n\nNew message: ${userText}`
     : userText;
 
-  const resp = await client().chat.completions.create({
+  const startedAt = Date.now();
+  let resp: Awaited<ReturnType<OpenAI["chat"]["completions"]["create"]>> & {
+    choices: { message: { content?: string | null } }[];
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
+  };
+  try {
+    resp = (await client().chat.completions.create({
+      model,
+      messages: [
+        { role: "system", content: SYSTEM },
+        { role: "user", content: userPrompt },
+      ],
+      response_format: { type: "json_object" },
+      max_tokens: 200,
+      temperature: 0,
+    })) as typeof resp;
+  } catch (e) {
+    void recordAiCall({
+      model,
+      latency_ms: Date.now() - startedAt,
+      status: "error",
+      error: e instanceof Error ? e.message : String(e),
+    });
+    throw e;
+  }
+
+  // Per-call cost ledger. The classifier doesn't know the caller's
+  // workspace at this layer (dispatcher debits credits via a separate
+  // path); we log model + token usage so spend per model still
+  // aggregates correctly platform-wide.
+  void recordAiCall({
     model,
-    messages: [
-      { role: "system", content: SYSTEM },
-      { role: "user", content: userPrompt },
-    ],
-    response_format: { type: "json_object" },
-    max_tokens: 200,
-    temperature: 0,
+    input_tokens: resp.usage?.prompt_tokens ?? 0,
+    output_tokens: resp.usage?.completion_tokens ?? 0,
+    latency_ms: Date.now() - startedAt,
+    status: "ok",
   });
 
   const raw = resp.choices[0]?.message?.content ?? "{}";

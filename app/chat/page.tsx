@@ -8,11 +8,14 @@
  * `contact:<uuid>`, `deal:<uuid>`, `employee:<uuid>`.
  *
  * Server-renders the loaded entity into a header + initial prompt
- * chunk, then hands off to the client-side `ChatPanel` which mounts
- * `<AIStreamView>` against `/api/chat/stream`. The same SSE pipeline
- * carries deltas, the same stop button is available, and the same
- * context block is re-sent to the API on each turn so the model
- * doesn't need to re-fetch the entity.
+ * chunk, then hands off to the client-side `ChatPanel`, which owns
+ * the textarea + drop zone + file picker and talks to
+ * `/api/chat/stream` via the shared `useAIStream` hook.
+ *
+ * Vision input: users can drag-drop or paperclip-pick PNG/JPEG/WebP/
+ * GIF images (≤ 5 MB each, max 4 per message). The route forwards
+ * them to Anthropic as inline base64 `image` content blocks alongside
+ * the text question.
  *
  * Anonymous users see a sign-in nudge — the route is meaningless
  * without an authenticated workspace context.
