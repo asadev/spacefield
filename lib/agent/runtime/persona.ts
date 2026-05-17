@@ -9,6 +9,7 @@
  * the runtime is identity-stable when persistence is unavailable.
  */
 
+import type Anthropic from "@anthropic-ai/sdk";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { stripPromptInjectionMarkers } from "./_sanitize";
 
@@ -124,4 +125,29 @@ export function personaSystemPrefix(p: AgentPersona): string {
     lines.push(`About you: ${safeDesc}`);
   }
   return lines.join("\n");
+}
+
+/**
+ * Return the persona prefix as an Anthropic TextBlockParam with
+ * `cache_control: ephemeral`. This is useful when callers want to split
+ * the system field into multiple cache breakpoints — e.g. persona block
+ * (stable per-workspace), skill catalogue (stable per-deploy), tail
+ * rules (stable per-call). Anthropic caches a block only when it's
+ * ≥1024 tokens; for short persona prefixes the breakpoint still costs
+ * nothing (cache miss simply reads at base price).
+ *
+ * Today the executor and orchestrator concatenate the persona into the
+ * full system string and cache the whole block via cachedSystem(). This
+ * helper exists so future call sites (e.g. a long-running session agent
+ * with a stable workspace persona but rotating system rules) can place a
+ * cache breakpoint specifically at the persona boundary.
+ */
+export function personaCachedSystemBlock(
+  p: AgentPersona
+): Anthropic.Messages.TextBlockParam {
+  return {
+    type: "text",
+    text: personaSystemPrefix(p),
+    cache_control: { type: "ephemeral" },
+  };
 }

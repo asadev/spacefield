@@ -33,6 +33,8 @@ import {
   writePendingApproval,
   type PermissionsSnapshot,
 } from "./permissions";
+import { redact, unredact, mergeRedactionMaps } from "./redact";
+import { summariseIfNeeded } from "./summarise";
 import type {
   CallUsage,
   ConversationMessage,
@@ -149,13 +151,41 @@ export async function runExecutor(
   // runtime_model_assignments take effect without a server restart.
   const resolved = await getRuntimeModel("executor");
   const MODEL = resolved.id;
+  // System prompt + tool catalog are stable across turns; cachedSystem()
+  // and cachedTools() mark them with cache_control: ephemeral so the
+  // ≥1024-token prefix lands at ~10% input cost on repeated calls.
   const system = cachedSystem(buildSystemPrompt(skills, ctx, persona, channel));
   const tools = cachedTools(toAnthropicTools(skills));
 
-  const messages: Anthropic.Messages.MessageParam[] = [
-    ...historyToAnthropic(history),
-    { role: "user", content: userText },
-  ];
+  // PII redaction — strip emails/phones/Emirates IDs/passports/credit
+  // cards from history + the new user message before they reach the
+  // provider. We keep one merged token map per dispatch so the final
+  // reply can be unredact()'d back to natural language.
+  const redactedHistory = history.map((m) => {
+    const r = redact(m.content);
+    return { role: m.role, content: r.text, _map: r.map };
+  });
+  const redactedUser = redact(userText);
+  const piiMap = mergeRedactionMaps([
+    ...redactedHistory.map((m) => m._map),
+    redactedUser.map,
+  ]);
+
+  // Long-context guard — if the history breaches the cap, summarise the
+  // older turns into a synthetic [prior conversation] block and keep only
+  // the most recent 6 verbatim. Anthropic's messages array only accepts
+  // 'user' | 'assistant'; we fold the synthetic 'system' digest into a
+  // user-prefixed message so the model still sees it.
+  const flat = redactedHistory.map((m) => ({ role: m.role, content: m.content }));
+  const compacted = await summariseIfNeeded(flat, 80_000);
+
+  const messages: Anthropic.Messages.MessageParam[] = compacted.map((m) => {
+    if (m.role === "system") {
+      return { role: "user", content: m.content };
+    }
+    return { role: m.role as "user" | "assistant", content: m.content };
+  });
+  messages.push({ role: "user", content: redactedUser.text });
 
   let finalText = "";
   let pendingApproval: ExecutorPendingApproval | undefined;
@@ -311,8 +341,13 @@ export async function runExecutor(
     break;
   }
 
+  // Reverse PII redaction on the user-visible reply so the response reads
+  // naturally. If the model never echoed a placeholder, unredact() is a
+  // no-op.
+  const renderedText = unredact(finalText || "Done.", piiMap);
+
   return {
-    text: finalText || "Done.",
+    text: renderedText,
     usage,
     pendingApproval,
   };
