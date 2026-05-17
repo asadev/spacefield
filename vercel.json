@@ -11,8 +11,16 @@
       "schedule": "15 6 * * 1"
     },
     {
+      "path": "/api/cron/refresh-matviews",
+      "schedule": "30 6 * * *"
+    },
+    {
       "path": "/api/cron/slow-queries-snapshot",
       "schedule": "45 6 * * 1"
+    },
+    {
+      "path": "/api/cron/partition-rotator",
+      "schedule": "50 6 * * *"
     },
     {
       "path": "/api/cron/account-purge",
