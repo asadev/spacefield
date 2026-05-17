@@ -51,7 +51,7 @@ export default function UndoSnackbar() {
     <div
       role="status"
       aria-live="polite"
-      className="pointer-events-none fixed bottom-4 left-4 z-[9997] w-[min(360px,calc(100vw-2rem))]"
+      className="pointer-events-none fixed bottom-4 start-4 z-[9997] w-[min(360px,calc(100vw-2rem))]"
     >
       <div className="pointer-events-auto overflow-hidden rounded-md border border-app bg-app-elevated/95 shadow-lg backdrop-blur-sm">
         <div className="flex items-center gap-3 px-3 py-2.5">
@@ -76,7 +76,7 @@ export default function UndoSnackbar() {
             type="button"
             onClick={() => dismissUndo(active.id)}
             aria-label="Dismiss"
-            className="ml-1 flex-shrink-0 rounded text-muted transition-colors hover:text-app"
+            className="ms-1 flex-shrink-0 rounded text-muted transition-colors hover:text-app"
           >
             <span aria-hidden className="text-base leading-none">×</span>
           </button>

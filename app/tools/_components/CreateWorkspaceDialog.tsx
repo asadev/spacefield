@@ -10,6 +10,7 @@ import {
   applyWorkspaceTemplate,
   type TemplateKey,
 } from "./WorkspaceTemplates";
+import { firePushPermissionPrompt } from "@/components/PushPermissionPrompt";
 
 /* Modal dialog for creating a new workspace.
  *
@@ -155,6 +156,12 @@ export default function CreateWorkspaceDialog({ open, onClose }: Props) {
     // hook so the new workspace's localStorage namespace is seeded BEFORE
     // the Desktop remounts on activeId — see useWorkspaces.tsx.
     createWorkspace(trimmed, (id) => applyWorkspaceTemplate(id, template));
+    // Positive moment: just created a workspace. Fire the push-prompt
+    // event — the prompt component decides whether to show (browser
+    // support / recently-dismissed gates apply).
+    firePushPermissionPrompt("workspace-created", {
+      message: "Want a ping when teammates join or invite you to a workspace?",
+    });
     onClose();
   };
 

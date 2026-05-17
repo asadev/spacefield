@@ -65,7 +65,7 @@ function PricingTopNav() {
           </span>
         </Link>
 
-        <div className="ml-auto flex items-center gap-1 sm:gap-2">
+        <div className="ms-auto flex items-center gap-1 sm:gap-2">
           <CurrencySwitcher className="hidden sm:inline-flex" />
           <Link
             href="/pricing"
