@@ -11,6 +11,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createClient } from "@/lib/supabase/server";
 import { mintLink } from "@/lib/toshare/server";
 import type { FilePayload } from "@/lib/toshare/types";
@@ -106,7 +107,13 @@ export async function POST(req: NextRequest) {
     });
   } catch (err) {
     return NextResponse.json(
-      { ok: false, error: err instanceof Error ? err.message : "unknown" },
+      {
+        ok: false,
+        error: safeErrorMessage(err, {
+          source: "toshare.upload",
+          fallback: "upload_failed",
+        }),
+      },
       { status: 500 }
     );
   }

@@ -7,6 +7,7 @@ import {
   markAllRead,
   markRead,
 } from "@/lib/collab/notifications";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createClient } from "@/lib/supabase/server";
 
 /* /api/notifications — single inbox API.
@@ -70,7 +71,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ items, unread });
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "list_failed" },
+      {
+        error: safeErrorMessage(e, {
+          source: "notifications.list",
+          userId: user.id,
+          fallback: "list_failed",
+        }),
+      },
       { status: 400 }
     );
   }
@@ -109,7 +116,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "bad_request" }, { status: 400 });
   } catch (e) {
     return NextResponse.json(
-      { error: e instanceof Error ? e.message : "post_failed" },
+      {
+        error: safeErrorMessage(e, {
+          source: "notifications.update",
+          userId: user.id,
+          fallback: "post_failed",
+        }),
+      },
       { status: 400 }
     );
   }

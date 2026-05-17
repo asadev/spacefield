@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { r2, R2_BUCKET } from "@/lib/r2";
@@ -154,8 +155,11 @@ export async function GET(req: NextRequest) {
   } catch (err) {
     return NextResponse.json(
       {
-        error:
-          err instanceof Error ? err.message : "could not read from storage",
+        error: safeErrorMessage(err, {
+          source: "files.load_content.get",
+          userId: user.id,
+          fallback: "could not read from storage",
+        }),
       },
       { status: 500 }
     );

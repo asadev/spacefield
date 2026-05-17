@@ -11,6 +11,7 @@
  * ───────────────────────────────────────────────────────────────────── */
 
 import { NextResponse, type NextRequest } from "next/server";
+import { safeErrorMessage } from "@/lib/safe-error";
 import {
   jsonError,
   readJson,
@@ -137,7 +138,14 @@ export async function POST(req: NextRequest) {
   try {
     slug = await ensureUniqueSlug(auth.supabase, workspace_id, baseSlugSeed);
   } catch (e) {
-    return jsonError((e as Error).message, 500);
+    return jsonError(
+      safeErrorMessage(e, {
+        source: "crm.boards.create.slug",
+        userId: auth.user.id,
+        fallback: "slug_failed",
+      }),
+      500
+    );
   }
 
   // Pick the next position so the new board lands at the bottom.
