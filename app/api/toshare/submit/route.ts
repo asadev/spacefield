@@ -10,6 +10,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createClient } from "@/lib/supabase/server";
 import { recordSubmit, getLinkById } from "@/lib/toshare/server";
 import { hashClientFingerprint } from "@/lib/toshare/fingerprint";
@@ -80,7 +81,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true });
   } catch (err) {
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "unknown" },
+      {
+        error: safeErrorMessage(err, {
+          source: "toshare.submit",
+          fallback: "submit_failed",
+        }),
+      },
       { status: 500 }
     );
   }

@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { assertAdmin } from "@/app/admin/_lib";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { deleteR2Object } from "@/lib/r2";
 
@@ -37,10 +38,16 @@ export async function DELETE(req: NextRequest) {
   try {
     await assertAdmin();
   } catch (e) {
-    const msg = e instanceof Error ? e.message : "unauthorized";
+    const rawMsg = e instanceof Error ? e.message : "unauthorized";
+    const status = rawMsg === "not signed in" ? 401 : 403;
     return NextResponse.json(
-      { error: msg },
-      { status: msg === "not signed in" ? 401 : 403 }
+      {
+        error: safeErrorMessage(e, {
+          source: "wallpapers.delete.auth",
+          fallback: "forbidden",
+        }),
+      },
+      { status }
     );
   }
 

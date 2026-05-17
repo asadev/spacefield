@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { listSavedViews } from "@/app/tools/crm/_data";
 import type { CrmSavedViewRecordType } from "@/app/tools/crm/types";
 import { RECORD_TYPE_VALUES_WITH_ACTIVITY } from "@/app/tools/crm/types";
+import { safeErrorMessage } from "@/lib/safe-error";
 import {
   jsonError,
   readJson,
@@ -34,7 +35,14 @@ export async function GET(req: NextRequest) {
     const items = await listSavedViews(workspaceId, recordType);
     return NextResponse.json({ items });
   } catch (e) {
-    return jsonError((e as Error).message, 500);
+    return jsonError(
+      safeErrorMessage(e, {
+        source: "crm.saved_views.list",
+        userId: auth.user.id,
+        fallback: "list_failed",
+      }),
+      500
+    );
   }
 }
 

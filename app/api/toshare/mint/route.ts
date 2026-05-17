@@ -15,6 +15,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 import { withApiHandler } from "@/lib/api-wrap";
 import { withIdempotency } from "@/lib/idempotency";
+import { safeErrorMessage } from "@/lib/safe-error";
 import { mintLink } from "@/lib/toshare/server";
 import type { ToShareType } from "@/lib/toshare/types";
 
@@ -117,7 +118,13 @@ export const POST = withApiHandler(
       });
     } catch (err) {
       return NextResponse.json(
-        { ok: false, error: err instanceof Error ? err.message : "unknown" },
+        {
+          ok: false,
+          error: safeErrorMessage(err, {
+            source: "toshare.mint",
+            fallback: "mint_failed",
+          }),
+        },
         { status: 500 }
       );
     }
