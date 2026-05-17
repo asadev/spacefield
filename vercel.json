@@ -21,6 +21,14 @@
     {
       "path": "/api/cron/workspace-purge",
       "schedule": "30 7 * * *"
+    },
+    {
+      "path": "/api/cron/paddle-retention",
+      "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/suspicious-login-scan",
+      "schedule": "*/15 * * * *"
     }
   ]
 }
