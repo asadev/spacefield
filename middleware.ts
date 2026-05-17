@@ -30,6 +30,55 @@ function isSecurityBypassPath(pathname: string): boolean {
   return SECURITY_BYPASS_PREFIXES.some((p) => pathname.startsWith(p));
 }
 
+/* A2 — Vary header: every response is rendered conditionally on the
+ * caller's auth cookie (server-rendered admin/user pages branch on
+ * the session) and on Accept-Language (locale-scoped strings + Next's
+ * built-in i18n). Telling shared caches to key on these headers is
+ * cheap and avoids the "logged-in user sees a logged-out cached page"
+ * footgun. Set BEFORE applySecurityHeaders since security-headers.ts
+ * is owned by another module and we don't want to fork it for Vary.
+ *
+ * We also emit `Server-Timing: ttfb;dur=<ms>` so RUM tools (web-vitals,
+ * SpeedCurve, Vercel Speed Insights) can pick up middleware → response
+ * latency without needing extra instrumentation. The value is the time
+ * spent inside middleware, which is a reasonable proxy for TTFB minus
+ * network. Per the spec, multiple Server-Timing values can be appended
+ * downstream as additional headers — we're the first hop. */
+const VARY_HEADERS = "Authorization, Accept-Language, Cookie";
+
+function applyObsHeaders(response: NextResponse, ttfbMs: number): NextResponse {
+  // Vary — preserve any existing Vary (e.g. Next sets it on RSC) and add
+  // our keys idempotently.
+  const existing = response.headers.get("Vary");
+  if (existing && existing.trim().length > 0) {
+    const tokens = new Set(
+      existing.split(",").map((s) => s.trim().toLowerCase()),
+    );
+    const additions: string[] = [];
+    for (const v of VARY_HEADERS.split(", ")) {
+      if (!tokens.has(v.toLowerCase())) additions.push(v);
+    }
+    if (additions.length > 0) {
+      response.headers.set("Vary", `${existing}, ${additions.join(", ")}`);
+    }
+  } else {
+    response.headers.set("Vary", VARY_HEADERS);
+  }
+
+  // Server-Timing — append rather than overwrite so downstream layers
+  // (route handlers, edge functions) can stack their own marks via the
+  // standard comma-separated syntax.
+  const ttfbLine = `ttfb;dur=${ttfbMs}`;
+  const existingTiming = response.headers.get("Server-Timing");
+  response.headers.set(
+    "Server-Timing",
+    existingTiming && existingTiming.trim().length > 0
+      ? `${existingTiming}, ${ttfbLine}`
+      : ttfbLine,
+  );
+  return response;
+}
+
 /* Maintenance-mode bypass list — paths where we MUST NOT redirect even
  * when maintenance is active. Admins still need to flip the toggle
  * back off, the maintenance page itself can't redirect to itself, and
@@ -280,6 +329,11 @@ export async function middleware(request: NextRequest) {
   // browser dev-tools can correlate.
   const requestId = resolveRequestId(request.headers.get("x-request-id"));
 
+  // A2 — capture middleware entry time for the Server-Timing TTFB mark.
+  // We measure middleware-only elapsed; the real network TTFB is larger
+  // but this number is what we can attribute to our code path.
+  const startedAt = Date.now();
+
   try {
     // Maintenance gate — runs before any host/path routing so admins can
     // take the public surface offline while keeping /admin, /signin, and
@@ -377,7 +431,10 @@ export async function middleware(request: NextRequest) {
       !process.env.NEXT_PUBLIC_SUPABASE_URL ||
       !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
     ) {
-      return applySecurityHeaders(response, requestId, path);
+      return applyObsHeaders(
+        applySecurityHeaders(response, requestId, path),
+        Date.now() - startedAt,
+      );
     }
 
     const supabase = createServerClient(
@@ -406,7 +463,10 @@ export async function middleware(request: NextRequest) {
     // here — the side-effect is the point.
     await supabase.auth.getUser();
 
-    return applySecurityHeaders(response, requestId, path);
+    return applyObsHeaders(
+      applySecurityHeaders(response, requestId, path),
+      Date.now() - startedAt,
+    );
   } catch (err) {
     // Top-level safety net — log and re-throw so Next.js can serve its
     // normal error response. We never want middleware to swallow an
