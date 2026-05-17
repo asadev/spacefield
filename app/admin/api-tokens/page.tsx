@@ -179,6 +179,11 @@ export default async function AdminApiTokensPage({
 
   // Stats
   const now = Date.now();
+  // "Expiring soon" = active + has expiry within 14 days. Surfaces
+  // the same population the daily /api/cron/api-token-reminder
+  // email reminder hits, so admins can preview who's about to be
+  // nudged.
+  const expirySoonMs = 14 * 86_400_000;
   const stats = {
     total,
     active: tokenRows.filter(
@@ -193,6 +198,11 @@ export default async function AdminApiTokensPage({
         r.expires_at &&
         new Date(r.expires_at).getTime() <= now
     ).length,
+    expiringSoon: tokenRows.filter((r) => {
+      if (r.revoked_at || !r.expires_at) return false;
+      const t = new Date(r.expires_at).getTime();
+      return t > now && t - now <= expirySoonMs;
+    }).length,
   };
 
   return (
@@ -237,9 +247,14 @@ export default async function AdminApiTokensPage({
       )}
 
       {/* Stats */}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <StatCard label="Total" value={stats.total} />
         <StatCard label="Active" value={stats.active} accent="emerald" />
+        <StatCard
+          label="Expiring soon (14d)"
+          value={stats.expiringSoon}
+          accent="amber"
+        />
         <StatCard label="Revoked" value={stats.revoked} accent="rose" />
         <StatCard label="Expired" value={stats.expired} accent="amber" />
       </div>
@@ -377,8 +392,8 @@ export default async function AdminApiTokensPage({
                         )}
                       </div>
                     </td>
-                    <td className="px-3 py-2 font-mono text-xs tabular-nums text-secondary">
-                      {formatDateTime(t.expires_at)}
+                    <td className="px-3 py-2">
+                      <ExpiryCell expires_at={t.expires_at} now={now} />
                     </td>
                     <td className="px-3 py-2">
                       <div className="font-mono text-xs tabular-nums text-secondary">
@@ -484,6 +499,39 @@ function renderEmpty({
           q={q} · ws={workspaceFilter || "—"} · status={status} · page={page}
         </div>
       </div>
+    </div>
+  );
+}
+
+/** Expiry cell — shows the date plus an inline "in 12 days" hint
+ *  when the expiry is within the cron reminder window so admins can
+ *  see at a glance who's about to be emailed. */
+function ExpiryCell({
+  expires_at,
+  now,
+}: {
+  expires_at: string | null | undefined;
+  now: number;
+}) {
+  if (!expires_at) {
+    return (
+      <span className="font-mono text-xs tabular-nums text-faint">—</span>
+    );
+  }
+  const t = new Date(expires_at).getTime();
+  const ms = t - now;
+  const days = Math.ceil(ms / 86_400_000);
+  const expiringSoon = ms > 0 && days <= 14;
+  return (
+    <div className="space-y-0.5">
+      <div className="font-mono text-xs tabular-nums text-secondary">
+        {formatDateTime(expires_at)}
+      </div>
+      {expiringSoon && (
+        <div className="text-[10px] font-medium text-amber-500">
+          in {days} day{days === 1 ? "" : "s"}
+        </div>
+      )}
     </div>
   );
 }
