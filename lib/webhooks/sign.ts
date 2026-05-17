@@ -147,3 +147,17 @@ export async function sendSigned(
     bodyText,
   };
 }
+
+/* Convenience re-export of the exp-backoff retry helper so existing
+ * callers can `import { deliverWithRetry } from "@/lib/webhooks/sign"`
+ * without learning a new module path. New code can import from
+ * `@/lib/webhooks/retry` directly. */
+export {
+  deliverWithRetry,
+  isRetryable,
+  DEFAULT_BACKOFF_SECONDS,
+} from "@/lib/webhooks/retry";
+export type {
+  DeliverWithRetryInput,
+  DeliverWithRetryResult,
+} from "@/lib/webhooks/retry";

@@ -3,7 +3,10 @@
 import { revalidatePath } from "next/cache";
 
 import { createAdminClient } from "@/lib/supabase/admin";
-import { generateWebhookSecret, sendSigned } from "@/lib/webhooks/sign";
+import {
+  deliverWithRetry,
+  generateWebhookSecret,
+} from "@/lib/webhooks/sign";
 
 import { recordAdminAction } from "../_audit";
 import { assertAdmin } from "../_lib";
@@ -303,30 +306,28 @@ export async function testEndpoint(
         : ep.events[0] ?? "agent.run";
 
     const payload = buildSamplePayload(ep, event);
-    const result = await sendSigned({
+
+    // Use the retry wrapper in async mode so the admin "test send"
+    // attempt persists a `retry_scheduled` row on transient failure
+    // and the retry worker takes over. For a clean success or a
+    // non-retryable 4xx the wrapper logs a `final` row directly and
+    // we return immediately.
+    const result = await deliverWithRetry({
+      endpointId: ep.id,
       url: ep.url,
       event,
       body: payload,
       secret: ep.secret,
+      maxRetries: ep.max_retries,
+      mode: "async",
+      metadata: { triggered_by: "test" },
     });
 
     const admin = createAdminClient();
 
-    // Log the delivery row. attempt=1, triggered_by='test'.
-    await admin.from("webhook_deliveries_v2").insert({
-      endpoint_id: ep.id,
-      event,
-      payload,
-      status: result.status,
-      http_status: result.httpStatus,
-      response_excerpt: result.responseExcerpt,
-      duration_ms: result.durationMs,
-      signed: result.signed,
-      attempt: 1,
-      metadata: { triggered_by: "test" },
-    });
-
-    // Touch last_delivery_* on the endpoint so the index reflects it.
+    // Touch last_delivery_* on the endpoint so the index reflects the
+    // most recent attempt status (success / retry_scheduled / exhausted /
+    // non-retryable failure).
     await admin
       .from("webhook_endpoints")
       .update({
@@ -344,7 +345,8 @@ export async function testEndpoint(
         event,
         status: result.status,
         http_status: result.httpStatus,
-        duration_ms: result.durationMs,
+        attempts: result.attempts,
+        delivery_group: result.deliveryGroup,
       },
     });
 
@@ -353,7 +355,21 @@ export async function testEndpoint(
     if (result.status === "success") {
       return {
         ok: true,
-        message: `Sent · ${result.httpStatus} in ${result.durationMs}ms`,
+        message: `Sent · ${result.httpStatus} in ${result.attempts} attempt(s)`,
+        httpStatus: result.httpStatus,
+      };
+    }
+    if (result.status === "retry_scheduled") {
+      return {
+        ok: true,
+        message: `Receiver returned ${result.httpStatus ?? result.status} on attempt ${result.attempts} — retry scheduled.`,
+        httpStatus: result.httpStatus,
+      };
+    }
+    if (result.status === "exhausted") {
+      return {
+        ok: false,
+        error: `Exhausted retries (${result.attempts}) — last status ${result.httpStatus ?? "n/a"}.`,
         httpStatus: result.httpStatus,
       };
     }
@@ -361,10 +377,10 @@ export async function testEndpoint(
       ok: false,
       error:
         result.status === "timeout"
-          ? `Timed out after ${result.durationMs}ms`
+          ? `Timed out`
           : result.status === "non_2xx"
-          ? `Receiver returned ${result.httpStatus ?? "non-2xx"}`
-          : `Network error (${result.responseExcerpt ?? result.status})`,
+            ? `Receiver returned ${result.httpStatus ?? "non-2xx"}`
+            : `Network error (${result.status})`,
       httpStatus: result.httpStatus,
     };
   } catch (e) {
