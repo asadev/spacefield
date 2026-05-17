@@ -6,6 +6,38 @@ import { createPortal } from "react-dom";
 import { useAuth } from "./useAuth";
 import { useIsMobile } from "./useIsMobile";
 
+/** Best-effort lockout pre-flight. Returns `{locked, until}` from the
+ *  server, or `{locked:false}` on any failure (fail-open — a flaky
+ *  network must never break sign-in). */
+async function probeLockout(
+  email: string,
+): Promise<{ locked: boolean; until: string | null }> {
+  try {
+    const res = await fetch("/api/auth/check-lockout", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ email }),
+    });
+    if (!res.ok) return { locked: false, until: null };
+    const json = (await res.json()) as { locked?: unknown; until?: unknown };
+    return {
+      locked: Boolean(json.locked),
+      until: typeof json.until === "string" ? json.until : null,
+    };
+  } catch {
+    return { locked: false, until: null };
+  }
+}
+
+function minutesUntil(iso: string | null): number | null {
+  if (!iso) return null;
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return null;
+  const diff = ms - Date.now();
+  if (diff <= 0) return null;
+  return Math.max(1, Math.ceil(diff / 60_000));
+}
+
 /* Sign-in dialog. Email magic-link flow.
  *
  * Trade-offs:
@@ -77,6 +109,29 @@ export default function SignInDialog({ open, onClose }: Props) {
     setStatus("sending");
     setErrorMsg(null);
     try {
+      // Lockout pre-flight (N3, 2026-05-17). If the account is locked
+      // we route the user straight to /auth/locked rather than burn a
+      // magic-link send. Fail-open if the probe itself errors —
+      // legitimate users on a flaky connection must still be able to
+      // request a link.
+      const probe = await probeLockout(trimmed);
+      if (probe.locked) {
+        const mins = minutesUntil(probe.until);
+        const human = mins ? `Try again in ~${mins} minute${mins === 1 ? "" : "s"}` : "Try again shortly";
+        setStatus("error");
+        setErrorMsg(
+          `Account temporarily locked due to failed sign-in attempts. ${human}, or request a sign-in link from the unlock page.`,
+        );
+        // Hard navigate — the locked page renders the unlock form and
+        // also lets the user wait it out. We preserve `email` and
+        // `until` so the page can pre-fill + show a countdown.
+        const params = new URLSearchParams();
+        params.set("email", trimmed);
+        if (probe.until) params.set("until", probe.until);
+        window.location.href = `/auth/locked?${params.toString()}`;
+        return;
+      }
+
       await signInWithEmail(trimmed);
       setStatus("sent");
     } catch (err) {
