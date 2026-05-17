@@ -1,7 +1,7 @@
 "use client";
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   Sheets editor — Univer + SheetJS (pro-tier)
+   Sheets editor — Univer + ExcelJS (pro-tier)
    ───────────────────────────────────────────────────────────────────────────
    This is the heavy half of the Sheets app. Loaded behind a
    `dynamic(..., { ssr: false })` boundary so the desktop OS boot stays small.
@@ -18,8 +18,13 @@
    `lib/index.css` — they are imported below. Without these the toolbar /
    ribbon / context menu render unstyled.
 
-     .xlsx bytes  ──XLSX.read──► sheetjs WB ──cellsToUniver──► IWorkbookData
-     IWorkbookData ──univerToSheetjs──► sheetjs WB ──XLSX.write──► .xlsx bytes
+     .xlsx bytes      ──exceljs load──► Workbook ──exceljsToUniver──► IWorkbookData
+     IWorkbookData    ──univerToExceljs──► Workbook ──xlsx.writeBuffer──► .xlsx bytes
+
+   SE-002: ported off the `xlsx` (SheetJS) package — it had unpatched
+   prototype-pollution + ReDoS CVEs (CVE-2023-30533, CVE-2024-22363).
+   exceljs handles cell values, formulas, number formats, and merges; the
+   round-trip preserves what Univer actually uses.
 ═══════════════════════════════════════════════════════════════════════════ */
 
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -89,11 +94,7 @@ import "@univerjs/sheets-sort-ui/lib/index.css";
 import "@univerjs/sheets-filter-ui/lib/index.css";
 import "@univerjs/sheets-conditional-formatting-ui/lib/index.css";
 
-// TODO(SE-002): port to exceljs — bidirectional xlsx<->Univer conversion
-// (sheetjsToUniver, univerToSheetjs, csvToUniver, getXlsxBuffer, encode_col/encode_cell
-// helpers) is ~200 lines of cell/style/merge/formula round-tripping; needs its own
-// focused round so we don't regress the Sheets editor. Keep `xlsx` in deps until then.
-import * as XLSX from "xlsx";
+import ExcelJS from "exceljs";
 
 // ---------------------------------------------------------------------------
 // Public command surface — kept tiny on purpose.
@@ -177,7 +178,22 @@ interface EditorProps {
 }
 
 // ---------------------------------------------------------------------------
-// SheetJS workbook ↔ Univer IWorkbookData conversions
+// A1 helpers (replacing XLSX.utils.encode_col / encode_cell).
+// 0-based column index → letters: 0 → "A", 25 → "Z", 26 → "AA".
+// ---------------------------------------------------------------------------
+
+function encodeCol(col: number): string {
+  let n = col;
+  let out = "";
+  while (n >= 0) {
+    out = String.fromCharCode((n % 26) + 65) + out;
+    n = Math.floor(n / 26) - 1;
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------
+// ExcelJS workbook ↔ Univer IWorkbookData conversions
 // ---------------------------------------------------------------------------
 
 function blankWorkbookData(name: string): IWorkbookData {
@@ -200,61 +216,117 @@ function blankWorkbookData(name: string): IWorkbookData {
   };
 }
 
-function sheetjsToUniver(wb: XLSX.WorkBook, name: string): IWorkbookData {
+/**
+ * Normalize an exceljs CellValue to a primitive Univer can store.
+ * Exceljs returns rich text as `{ richText: [...] }` and dates as Date objects;
+ * Univer's `v` field accepts string/number/boolean.
+ */
+function exceljsCellValueToPrimitive(
+  v: unknown
+): string | number | boolean | undefined {
+  if (v === null || v === undefined) return undefined;
+  if (typeof v === "string" || typeof v === "number" || typeof v === "boolean") {
+    return v;
+  }
+  if (v instanceof Date) return v.toISOString();
+  if (typeof v === "object") {
+    const obj = v as {
+      richText?: Array<{ text?: string }>;
+      text?: string;
+      result?: unknown;
+      formula?: string;
+      hyperlink?: string;
+      error?: string;
+    };
+    // Hyperlink cell { text, hyperlink }
+    if (typeof obj.text === "string") return obj.text;
+    // Rich text { richText: [{ text }, ...] }
+    if (Array.isArray(obj.richText)) {
+      return obj.richText.map((r) => r?.text ?? "").join("");
+    }
+    // Formula cell { formula, result } — surface the cached result as `v`.
+    if ("result" in obj) {
+      return exceljsCellValueToPrimitive(obj.result);
+    }
+    if (typeof obj.error === "string") return obj.error;
+  }
+  return undefined;
+}
+
+/** Extract a formula string from an exceljs cell value, if any. */
+function exceljsCellFormula(v: unknown): string | undefined {
+  if (v && typeof v === "object") {
+    const obj = v as { formula?: string; sharedFormula?: string };
+    if (typeof obj.formula === "string") return obj.formula;
+    if (typeof obj.sharedFormula === "string") return obj.sharedFormula;
+  }
+  return undefined;
+}
+
+function exceljsToUniver(wb: ExcelJS.Workbook, name: string): IWorkbookData {
   const sheets: Record<string, Partial<IWorksheetData>> = {};
   const order: string[] = [];
 
-  for (let idx = 0; idx < wb.SheetNames.length; idx++) {
-    const sheetName = wb.SheetNames[idx];
-    const ws = wb.Sheets[sheetName];
-    if (!ws) continue;
+  let idx = 0;
+  for (const ws of wb.worksheets) {
     const sheetId = `sheet-${idx + 1}`;
     order.push(sheetId);
+    idx += 1;
 
     const cellData: IObjectMatrixPrimitiveType<ICellData> = {};
     let maxRow = 0;
     let maxCol = 0;
 
-    const range = ws["!ref"] ? XLSX.utils.decode_range(ws["!ref"]) : null;
-    if (range) {
-      maxRow = range.e.r + 1;
-      maxCol = range.e.c + 1;
-      for (let r = range.s.r; r <= range.e.r; r++) {
-        for (let c = range.s.c; c <= range.e.c; c++) {
-          const addr = XLSX.utils.encode_cell({ r, c });
-          const cell = ws[addr];
-          if (!cell) continue;
-          const out: ICellData = {};
-          if (cell.f) out.f = `=${cell.f}`;
-          if (cell.v !== undefined && cell.v !== null) {
-            if (cell.t === "n") out.v = Number(cell.v);
-            else if (cell.t === "b") out.v = Boolean(cell.v);
-            else out.v = String(cell.v);
-          }
-          // Number format → Univer's `s.n.pattern`. SheetJS exposes it via `z`.
-          if (cell.z && typeof cell.z === "string") {
-            out.s = { n: { pattern: cell.z } };
-          }
-          if (out.v === undefined && !out.f) continue;
-          if (!cellData[r]) cellData[r] = {};
-          cellData[r][c] = out;
+    // exceljs is 1-indexed on rows AND columns; Univer is 0-indexed.
+    ws.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+      const r = rowNumber - 1;
+      // row.eachCell skips empty trailing cells; we want that — Univer's
+      // cellData is sparse and undefined slots are fine.
+      row.eachCell({ includeEmpty: false }, (cell, colNumber) => {
+        const c = colNumber - 1;
+        const out: ICellData = {};
+        const f = exceljsCellFormula(cell.value);
+        if (f) out.f = f.startsWith("=") ? f : `=${f}`;
+        const prim = exceljsCellValueToPrimitive(cell.value);
+        if (prim !== undefined) out.v = prim;
+        // Number format → Univer's `s.n.pattern`. exceljs exposes it via
+        // `cell.numFmt` (string).
+        const numFmt = (cell as { numFmt?: string }).numFmt;
+        if (numFmt && typeof numFmt === "string" && numFmt !== "General") {
+          out.s = { n: { pattern: numFmt } };
         }
-      }
-    }
+        if (out.v === undefined && !out.f) return;
+        if (r > maxRow) maxRow = r;
+        if (c > maxCol) maxCol = c;
+        if (!cellData[r]) cellData[r] = {};
+        cellData[r][c] = out;
+      });
+    });
 
-    const mergeData =
-      ws["!merges"]?.map((m) => ({
-        startRow: m.s.r,
-        startColumn: m.s.c,
-        endRow: m.e.r,
-        endColumn: m.e.c,
-      })) ?? [];
+    // Merges live on the worksheet model as A1 ranges, e.g. "B2:C4".
+    const mergeData: NonNullable<IWorksheetData["mergeData"]> = [];
+    const merges = ws.model?.merges ?? [];
+    for (const m of merges) {
+      // m is a string like "B2:C4"
+      const match = /^([A-Z]+)(\d+):([A-Z]+)(\d+)$/.exec(String(m).toUpperCase());
+      if (!match) continue;
+      const sc = colLettersToIndex(match[1]);
+      const sr = Number(match[2]) - 1;
+      const ec = colLettersToIndex(match[3]);
+      const er = Number(match[4]) - 1;
+      mergeData.push({
+        startRow: sr,
+        startColumn: sc,
+        endRow: er,
+        endColumn: ec,
+      });
+    }
 
     sheets[sheetId] = {
       id: sheetId,
-      name: sheetName,
-      rowCount: Math.max(maxRow, 100),
-      columnCount: Math.max(maxCol, 26),
+      name: ws.name,
+      rowCount: Math.max(maxRow + 1, 100),
+      columnCount: Math.max(maxCol + 1, 26),
       cellData,
       mergeData,
     };
@@ -271,6 +343,15 @@ function sheetjsToUniver(wb: XLSX.WorkBook, name: string): IWorkbookData {
     styles: {},
     sheets,
   };
+}
+
+/** "AA" → 26 (0-based). Inverse of encodeCol. */
+function colLettersToIndex(letters: string): number {
+  let n = 0;
+  for (const ch of letters) {
+    n = n * 26 + (ch.charCodeAt(0) - 64);
+  }
+  return n - 1;
 }
 
 /**
@@ -296,6 +377,75 @@ function detectDelimiter(text: string): "," | ";" | "\t" | "|" {
   return best;
 }
 
+/**
+ * Minimal RFC-4180-ish CSV parser. Handles quoted fields, escaped quotes
+ * ("" inside a quoted field), CR/LF/CRLF line endings, and a single-char
+ * delimiter. Returns a 2-D array of strings.
+ */
+function parseCsv(text: string, delimiter: string): string[][] {
+  const rows: string[][] = [];
+  let row: string[] = [];
+  let field = "";
+  let inQuotes = false;
+  let i = 0;
+  const n = text.length;
+
+  while (i < n) {
+    const ch = text[i];
+    if (inQuotes) {
+      if (ch === '"') {
+        if (i + 1 < n && text[i + 1] === '"') {
+          field += '"';
+          i += 2;
+          continue;
+        }
+        inQuotes = false;
+        i += 1;
+        continue;
+      }
+      field += ch;
+      i += 1;
+      continue;
+    }
+    if (ch === '"') {
+      inQuotes = true;
+      i += 1;
+      continue;
+    }
+    if (ch === delimiter) {
+      row.push(field);
+      field = "";
+      i += 1;
+      continue;
+    }
+    if (ch === "\r") {
+      row.push(field);
+      field = "";
+      rows.push(row);
+      row = [];
+      // Eat \r\n as a single line break.
+      i += text[i + 1] === "\n" ? 2 : 1;
+      continue;
+    }
+    if (ch === "\n") {
+      row.push(field);
+      field = "";
+      rows.push(row);
+      row = [];
+      i += 1;
+      continue;
+    }
+    field += ch;
+    i += 1;
+  }
+  // Flush the trailing field/row if the file didn't end with a newline.
+  if (field.length > 0 || row.length > 0) {
+    row.push(field);
+    rows.push(row);
+  }
+  return rows;
+}
+
 function csvToUniver(
   text: string,
   name: string,
@@ -307,46 +457,69 @@ function csvToUniver(
         ? "\t"
         : options.delimiter
       : detectDelimiter(text);
-  const wb = XLSX.read(text, {
-    type: "string",
-    FS: delimiter,
-    raw: false,
-  });
-  return sheetjsToUniver(wb, name);
+
+  const rows = parseCsv(text, delimiter);
+  const sheetId = "sheet-1";
+  const cellData: IObjectMatrixPrimitiveType<ICellData> = {};
+  let maxCol = 0;
+  for (let r = 0; r < rows.length; r++) {
+    const row = rows[r];
+    if (!row) continue;
+    for (let c = 0; c < row.length; c++) {
+      const raw = row[c];
+      if (raw === "" || raw === undefined) continue;
+      // Coerce numeric-looking cells. CSV has no types, but the previous
+      // implementation passed `raw: false` so SheetJS also coerced.
+      const asNum = Number(raw);
+      const v: string | number | boolean =
+        raw === "true"
+          ? true
+          : raw === "false"
+            ? false
+            : raw !== "" && !Number.isNaN(asNum) && /^-?\d+(?:\.\d+)?$/.test(raw.trim())
+              ? asNum
+              : raw;
+      if (!cellData[r]) cellData[r] = {};
+      cellData[r][c] = { v };
+      if (c > maxCol) maxCol = c;
+    }
+  }
+  const sheet: Partial<IWorksheetData> = {
+    id: sheetId,
+    name: "Sheet1",
+    rowCount: Math.max(rows.length, 100),
+    columnCount: Math.max(maxCol + 1, 26),
+    cellData,
+  };
+  return {
+    id: `wb-${Date.now()}`,
+    sheetOrder: [sheetId],
+    name,
+    appVersion: "0.21.1",
+    locale: LocaleType.EN_US,
+    styles: {},
+    sheets: { [sheetId]: sheet },
+  };
 }
 
-function univerToSheetjs(snapshot: IWorkbookData): XLSX.WorkBook {
-  const wb = XLSX.utils.book_new();
+async function univerToXlsxBuffer(snapshot: IWorkbookData): Promise<ArrayBuffer> {
+  const wb = new ExcelJS.Workbook();
   const styles = snapshot.styles ?? {};
+
+  let sheetsAdded = 0;
   for (const sheetId of snapshot.sheetOrder) {
     const sheet = snapshot.sheets[sheetId];
     if (!sheet) continue;
-    const aoa: (string | number | boolean | null)[][] = [];
+    // Sheet names: exceljs validates them (max 31 chars, no `: \ / ? * [ ]`).
+    // Fall back to sheetId if the name would otherwise be rejected.
+    const rawName = sheet.name ?? sheetId;
+    const safeName = rawName
+      .replace(/[\\/?*[\]:]/g, "_")
+      .slice(0, 31)
+      .trim() || sheetId;
+    const ws = wb.addWorksheet(safeName);
+    sheetsAdded += 1;
     const cellData = sheet.cellData ?? {};
-    let maxRow = 0;
-    let maxCol = 0;
-    for (const rowKey of Object.keys(cellData)) {
-      const r = Number(rowKey);
-      if (!Number.isFinite(r)) continue;
-      if (r > maxRow) maxRow = r;
-      const row = cellData[r] ?? {};
-      for (const colKey of Object.keys(row)) {
-        const c = Number(colKey);
-        if (!Number.isFinite(c)) continue;
-        if (c > maxCol) maxCol = c;
-      }
-    }
-    for (let r = 0; r <= maxRow; r++) {
-      aoa[r] = new Array(maxCol + 1).fill(null);
-    }
-    const formulaCells: Array<{
-      r: number;
-      c: number;
-      f: string;
-      v?: unknown;
-      z?: string;
-    }> = [];
-    const numFmtCells: Array<{ r: number; c: number; z: string }> = [];
     for (const rowKey of Object.keys(cellData)) {
       const r = Number(rowKey);
       if (!Number.isFinite(r)) continue;
@@ -356,10 +529,10 @@ function univerToSheetjs(snapshot: IWorkbookData): XLSX.WorkBook {
         if (!Number.isFinite(c)) continue;
         const cell = row[c] as ICellData | undefined;
         if (!cell) continue;
+        // exceljs is 1-indexed on both axes.
+        const target = ws.getCell(r + 1, c + 1);
         let pattern: string | undefined;
         if (cell.s) {
-          // `s` may be either an inline IStyleData or a reference into
-          // `snapshot.styles`. Dereference if it's a string.
           const sObj =
             typeof cell.s === "string"
               ? (styles[cell.s] as IStyleData | undefined)
@@ -367,46 +540,53 @@ function univerToSheetjs(snapshot: IWorkbookData): XLSX.WorkBook {
           if (sObj?.n?.pattern) pattern = sObj.n.pattern;
         }
         if (cell.f) {
-          formulaCells.push({
-            r,
-            c,
-            f: cell.f.replace(/^=/, ""),
-            v: cell.v ?? undefined,
-            z: pattern,
-          });
-          aoa[r][c] = (cell.v ?? null) as never;
+          const formula = cell.f.replace(/^=/, "");
+          target.value = {
+            formula,
+            result:
+              cell.v !== undefined && cell.v !== null
+                ? (cell.v as number | string | boolean)
+                : undefined,
+          };
         } else if (cell.v !== undefined && cell.v !== null) {
-          aoa[r][c] = cell.v as never;
-          if (pattern) numFmtCells.push({ r, c, z: pattern });
+          target.value = cell.v as ExcelJS.CellValue;
+        }
+        if (pattern) target.numFmt = pattern;
+      }
+    }
+    if (sheet.mergeData && sheet.mergeData.length > 0) {
+      for (const m of sheet.mergeData) {
+        try {
+          ws.mergeCells(
+            m.startRow + 1,
+            m.startColumn + 1,
+            m.endRow + 1,
+            m.endColumn + 1
+          );
+        } catch {
+          // Overlapping/invalid merges — skip rather than break the save.
         }
       }
     }
-    const ws = XLSX.utils.aoa_to_sheet(aoa);
-    for (const fc of formulaCells) {
-      const addr = XLSX.utils.encode_cell({ r: fc.r, c: fc.c });
-      const existing = ws[addr] || {};
-      existing.f = fc.f;
-      if (fc.v !== undefined) existing.v = fc.v;
-      if (fc.z) existing.z = fc.z;
-      ws[addr] = existing;
-    }
-    for (const nf of numFmtCells) {
-      const addr = XLSX.utils.encode_cell({ r: nf.r, c: nf.c });
-      const existing = ws[addr];
-      if (existing) existing.z = nf.z;
-    }
-    if (sheet.mergeData && sheet.mergeData.length > 0) {
-      ws["!merges"] = sheet.mergeData.map((m) => ({
-        s: { r: m.startRow, c: m.startColumn },
-        e: { r: m.endRow, c: m.endColumn },
-      }));
-    }
-    XLSX.utils.book_append_sheet(wb, ws, sheet.name ?? sheetId);
   }
-  if (wb.SheetNames.length === 0) {
-    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([[]]), "Sheet1");
+
+  if (sheetsAdded === 0) {
+    wb.addWorksheet("Sheet1");
   }
-  return wb;
+
+  const buf = await wb.xlsx.writeBuffer();
+  // exceljs returns a Node `Buffer` in node and a Uint8Array-like in the
+  // browser; both expose .buffer/.byteOffset/.byteLength. Normalize to a
+  // standalone ArrayBuffer slice so consumers don't accidentally see extra
+  // bytes from a shared underlying allocation.
+  const view = buf as unknown as ArrayBufferView;
+  if (view && typeof view.byteLength === "number" && view.buffer) {
+    return view.buffer.slice(
+      view.byteOffset,
+      view.byteOffset + view.byteLength
+    ) as ArrayBuffer;
+  }
+  return buf as unknown as ArrayBuffer;
 }
 
 // ---------------------------------------------------------------------------
@@ -507,12 +687,16 @@ export default function SheetsEditor({
       try {
         let workbookData: IWorkbookData;
         if (initialBuffer && initialFormat === "xlsx") {
-          const wb = XLSX.read(initialBuffer, {
-            type: "array",
-            cellFormula: true,
-            cellNF: true,
-          });
-          workbookData = sheetjsToUniver(wb, docName);
+          const wb = new ExcelJS.Workbook();
+          // exceljs declares `load(buffer: Buffer)` but actually accepts any
+          // ArrayBuffer at runtime — its own ambient declares
+          // `Buffer extends ArrayBuffer`. Cast through `unknown` to satisfy
+          // the .d.ts without depending on Node's stricter `Buffer` global.
+          await wb.xlsx.load(
+            initialBuffer as unknown as Parameters<typeof wb.xlsx.load>[0]
+          );
+          if (disposed) return;
+          workbookData = exceljsToUniver(wb, docName);
         } else if (initialBuffer && initialFormat === "csv") {
           const encoding = csvOptions?.encoding ?? "utf-8";
           const text = new TextDecoder(encoding).decode(
@@ -587,8 +771,7 @@ export default function SheetsEditor({
           if (!fwb) throw new Error("Editor not ready");
           const snapshot = fwb.save();
           const cloned = Tools.deepClone(snapshot) as IWorkbookData;
-          const sjs = univerToSheetjs(cloned);
-          return XLSX.write(sjs, { bookType: "xlsx", type: "array" }) as ArrayBuffer;
+          return univerToXlsxBuffer(cloned);
         };
 
         const setNumberFormat = (pattern: string) => {
@@ -744,7 +927,7 @@ export default function SheetsEditor({
             }
             rows.push({ label, values: series });
           }
-          const a1 = `${XLSX.utils.encode_col(r.startColumn)}${r.startRow + 1}:${XLSX.utils.encode_col(r.endColumn)}${r.endRow + 1}`;
+          const a1 = `${encodeCol(r.startColumn)}${r.startRow + 1}:${encodeCol(r.endColumn)}${r.endRow + 1}`;
           return { range: a1, headers, rows };
         };
 
