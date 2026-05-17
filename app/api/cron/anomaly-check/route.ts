@@ -235,7 +235,9 @@ export async function GET(req: NextRequest) {
       notified_admins: 0,
     };
     try {
-      topSpender = await runTopSpenderCheck(admin);
+      // Cast: SupabaseClient<unknown> has a richer chained-builder shape
+      // than our minimal SupabaseLikeClient interface; runtime is compatible.
+      topSpender = await runTopSpenderCheck(admin as unknown as SupabaseLikeClient);
     } catch (e) {
       log.warn("cron.anomaly.top_spender_failed", {
         error: (e as Error).message,
