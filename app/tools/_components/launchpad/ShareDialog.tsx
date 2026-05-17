@@ -156,6 +156,12 @@ export default function ShareDialog({
   };
 
   const onRevoke = async (shareId: string) => {
+    if (
+      typeof window !== "undefined" &&
+      !window.confirm("Revoke this share? Recipients will lose access.")
+    ) {
+      return;
+    }
     try {
       await fetch(`/api/files/shares/${encodeURIComponent(shareId)}`, {
         method: "DELETE",
