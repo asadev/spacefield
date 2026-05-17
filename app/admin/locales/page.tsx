@@ -25,18 +25,25 @@ export default async function AdminLocalesPage() {
     .order("code", { ascending: true });
   const rows = (rowsRaw ?? []) as LocaleRow[];
 
-  // Count strings per locale. We hit the table once (limit 0, head)
-  // per locale — small N (typically < 20) so cheap.
+  // N+1 fix — was a HEAD count per locale (one round-trip each). Now a
+  // single pull of (locale_code) over the locales we know about, grouped
+  // in JS. Payload is one short string per string-row, which is small
+  // even at thousands of strings (< 50 KB). For platform scale beyond
+  // that, swap to a SQL view: `select locale_code, count(*) ...`.
   const counts = new Map<string, number>();
-  await Promise.all(
-    rows.map(async (r) => {
-      const { count } = await admin
-        .from("locale_strings")
-        .select("string_key", { count: "exact", head: true })
-        .eq("locale_code", r.code);
-      counts.set(r.code, count ?? 0);
-    })
-  );
+  if (rows.length > 0) {
+    const localeCodes = rows.map((r) => r.code);
+    const { data: stringRows } = await admin
+      .from("locale_strings")
+      .select("locale_code")
+      .in("locale_code", localeCodes);
+    for (const r of (stringRows ?? []) as { locale_code: string }[]) {
+      counts.set(r.locale_code, (counts.get(r.locale_code) ?? 0) + 1);
+    }
+    for (const r of rows) {
+      if (!counts.has(r.code)) counts.set(r.code, 0);
+    }
+  }
 
   return (
     <div className="space-y-5">

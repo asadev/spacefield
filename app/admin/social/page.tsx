@@ -335,27 +335,35 @@ async function resolveThumbs(
   // R2_PUBLIC_URL is set, no signing round-trip is needed.
   const publicBase = process.env.R2_PUBLIC_URL?.replace(/\/+$/, "");
   const out = new Map<string, string>();
-  await Promise.all(
-    rows.map(async (r) => {
-      const firstId = r.attachment_ids?.[0];
-      if (!firstId) return;
-      const f = byId.get(firstId);
-      if (!f) return;
-      if (publicBase) {
-        out.set(r.id, `${publicBase}/${f.r2_key}`);
-        return;
-      }
-      try {
-        const url = await presignedDownloadUrl({
-          key: f.r2_key,
-          fileName: f.name,
-          expiresInSeconds: 600,
-        });
-        out.set(r.id, url);
-      } catch {
-        /* ignore — thumb is decorative */
-      }
-    })
-  );
+  // N+1 fix — was signing once per row. Dedupe by r2_key so two posts
+  // attaching the same file share one signed URL (still a CPU op, but
+  // halves CPU on shared thumbs and is correctness-neutral). The signing
+  // cache is request-scoped so URLs never live past the page render.
+  const urlByKey = new Map<string, string>();
+  for (const r of rows) {
+    const firstId = r.attachment_ids?.[0];
+    if (!firstId) continue;
+    const f = byId.get(firstId);
+    if (!f) continue;
+    if (publicBase) {
+      out.set(r.id, `${publicBase}/${f.r2_key}`);
+      continue;
+    }
+    if (urlByKey.has(f.r2_key)) {
+      out.set(r.id, urlByKey.get(f.r2_key)!);
+      continue;
+    }
+    try {
+      const url = await presignedDownloadUrl({
+        key: f.r2_key,
+        fileName: f.name,
+        expiresInSeconds: 600,
+      });
+      urlByKey.set(f.r2_key, url);
+      out.set(r.id, url);
+    } catch {
+      /* ignore — thumb is decorative */
+    }
+  }
   return out;
 }

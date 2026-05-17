@@ -1,5 +1,29 @@
 import type { NextConfig } from "next";
 
+// Lazy + optional wrapper for `@next/bundle-analyzer`. The dep itself is
+// NOT in the production dependency tree — install it on demand:
+//   pnpm add -D @next/bundle-analyzer
+// then run `ANALYZE=1 pnpm build` to emit `analyze/{client,server}.html`.
+// When ANALYZE is unset (the normal case) or the dep isn't installed,
+// we silently fall through and return the un-wrapped config so dev/CI
+// builds aren't impacted.
+type ConfigWrapper = (cfg: NextConfig) => NextConfig;
+
+function loadBundleAnalyzer(): ConfigWrapper | null {
+  if (process.env.ANALYZE !== "1") return null;
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const mod = require("@next/bundle-analyzer") as
+      | ((opts: { enabled: boolean }) => ConfigWrapper)
+      | { default: (opts: { enabled: boolean }) => ConfigWrapper };
+    const factory = typeof mod === "function" ? mod : mod.default;
+    return factory({ enabled: true });
+  } catch {
+    // Dep not installed — bail silently so `next build` keeps working.
+    return null;
+  }
+}
+
 const nextConfig: NextConfig = {
   /* config options here */
   // deploy pipeline test 2026-04-09
@@ -168,5 +192,6 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+const wrap = loadBundleAnalyzer();
+export default wrap ? wrap(nextConfig) : nextConfig;
 // force rebuild
