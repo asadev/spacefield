@@ -58,6 +58,7 @@ const STEP_LABELS: Record<StepKind, string> = {
   send_webhook: "Send webhook",
   post_comment: "Post comment",
   wait: "Wait",
+  custom_code: "Custom code (admin)",
 };
 
 const COND_OPS: WorkflowCondition["op"][] = [
@@ -627,6 +628,13 @@ function buildEmptyStep(kind: StepKind): WorkflowStep {
       body: "",
     };
   }
+  if (kind === "custom_code") {
+    return {
+      kind: "custom_code",
+      code: "// (trigger, ctx) => any\nreturn { ok: true };",
+      timeout_ms: 5000,
+    };
+  }
   return { kind: "wait", seconds: 60 };
 }
 
@@ -775,6 +783,42 @@ function StepEditor({
             value={step.body}
             onChange={(e) => onPatch({ body: e.target.value } as Partial<WorkflowStep>)}
             rows={3}
+            className="input"
+          />
+        </Field>
+      </div>
+    );
+  }
+
+  if (step.kind === "custom_code") {
+    return (
+      <div className="space-y-2">
+        <Field label="JS body (admin-only, untrusted sandbox)">
+          <textarea
+            value={step.code}
+            onChange={(e) => onPatch({ code: e.target.value } as Partial<WorkflowStep>)}
+            rows={6}
+            className="input font-mono text-xs"
+            placeholder={"// (trigger, ctx) => any\nreturn { ok: true };"}
+          />
+        </Field>
+        <Field label="Timeout (ms, 50–30000)">
+          <input
+            type="number"
+            min={50}
+            max={30000}
+            value={step.timeout_ms ?? 5000}
+            onChange={(e) =>
+              onPatch({ timeout_ms: Number(e.target.value) } as Partial<WorkflowStep>)
+            }
+            className="input"
+          />
+        </Field>
+        <Field label="Output variable (optional)">
+          <input
+            value={step.output_var ?? ""}
+            onChange={(e) => onPatch({ output_var: e.target.value } as Partial<WorkflowStep>)}
+            placeholder="my_result"
             className="input"
           />
         </Field>
