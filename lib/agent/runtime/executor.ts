@@ -35,6 +35,11 @@ import {
 } from "./permissions";
 import { redact, unredact, mergeRedactionMaps } from "./redact";
 import { summariseIfNeeded } from "./summarise";
+import { recordAiCall } from "@/lib/ai/cost";
+import {
+  getWorkspaceBudgetStatus,
+  upgradeMessageForTier,
+} from "@/lib/ai/budget-check";
 import type {
   CallUsage,
   ConversationMessage,
@@ -147,6 +152,20 @@ export async function runExecutor(
   const usage: CallUsage[] = [];
   const persona = options.persona ?? DEFAULT_PERSONA;
   const channel: IncomingChannel = options.channel ?? ctx.channel;
+
+  // Tier budget guard. The runtime credit ledger (budget.ts) gates
+  // individual token buckets; this check gates the workspace as a
+  // whole against its tier's monthly USD allowance. Failing here
+  // short-circuits BEFORE we touch the model so we don't even spend
+  // pennies confirming we're broke.
+  const budget = await getWorkspaceBudgetStatus(ctx.workspaceId);
+  if (budget.over) {
+    return {
+      text: upgradeMessageForTier(budget.tier),
+      usage,
+    };
+  }
+
   // Resolve the model lazily per dispatch so admin edits to
   // runtime_model_assignments take effect without a server restart.
   const resolved = await getRuntimeModel("executor");
@@ -192,12 +211,42 @@ export async function runExecutor(
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     const cachedMsgs = cachedMessages(messages);
-    const response = await client().messages.create({
+    const startedAt = Date.now();
+    let response: Anthropic.Messages.Message;
+    try {
+      response = await client().messages.create({
+        model: MODEL,
+        max_tokens: 1024,
+        system,
+        tools,
+        messages: cachedMsgs,
+      });
+    } catch (e) {
+      // Log the failed call before re-throwing so the cost ledger
+      // still tracks API errors (auth issues, 429s, etc.).
+      void recordAiCall({
+        workspace_id: ctx.workspaceId,
+        user_id: ctx.userId,
+        model: MODEL,
+        latency_ms: Date.now() - startedAt,
+        status: "error",
+        error: e instanceof Error ? e.message : String(e),
+      });
+      throw e;
+    }
+
+    // Per-call cost ledger row. Cached + uncached input tokens collapse
+    // into the same input_tokens field — the price is identical
+    // post-discount, so accounting at this granularity isn't worth the
+    // schema churn yet.
+    void recordAiCall({
+      workspace_id: ctx.workspaceId,
+      user_id: ctx.userId,
       model: MODEL,
-      max_tokens: 1024,
-      system,
-      tools,
-      messages: cachedMsgs,
+      input_tokens: totalInputTokens(response.usage),
+      output_tokens: response.usage.output_tokens,
+      latency_ms: Date.now() - startedAt,
+      status: "ok",
     });
 
     usage.push({
@@ -305,12 +354,35 @@ export async function runExecutor(
       // model turn to let the model phrase the confirmation question.
       if (pendingApproval) {
         const cachedMsgs2 = cachedMessages(messages);
-        const followup = await client().messages.create({
+        const followupStartedAt = Date.now();
+        let followup: Anthropic.Messages.Message;
+        try {
+          followup = await client().messages.create({
+            model: MODEL,
+            max_tokens: 256,
+            system,
+            tools,
+            messages: cachedMsgs2,
+          });
+        } catch (e) {
+          void recordAiCall({
+            workspace_id: ctx.workspaceId,
+            user_id: ctx.userId,
+            model: MODEL,
+            latency_ms: Date.now() - followupStartedAt,
+            status: "error",
+            error: e instanceof Error ? e.message : String(e),
+          });
+          throw e;
+        }
+        void recordAiCall({
+          workspace_id: ctx.workspaceId,
+          user_id: ctx.userId,
           model: MODEL,
-          max_tokens: 256,
-          system,
-          tools,
-          messages: cachedMsgs2,
+          input_tokens: totalInputTokens(followup.usage),
+          output_tokens: followup.usage.output_tokens,
+          latency_ms: Date.now() - followupStartedAt,
+          status: "ok",
         });
         usage.push({
           bucket: "quick",

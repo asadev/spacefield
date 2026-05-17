@@ -24,6 +24,7 @@ import {
 } from "@/lib/agent/skills";
 import { getRuntimeModel } from "./_models";
 import { DEFAULT_PERSONA, personaSystemPrefix, type AgentPersona } from "./persona";
+import { wrapAsUntrustedData } from "./_sanitize";
 import {
   effectiveMode,
   writePendingApproval,
@@ -31,6 +32,11 @@ import {
 } from "./permissions";
 import { redact, unredact, mergeRedactionMaps } from "./redact";
 import { summariseIfNeeded } from "./summarise";
+import { recordAiCall } from "@/lib/ai/cost";
+import {
+  getWorkspaceBudgetStatus,
+  upgradeMessageForTier,
+} from "@/lib/ai/budget-check";
 import type {
   CallUsage,
   ConversationMessage,
@@ -141,6 +147,18 @@ export async function runOrchestrator(
   const usage: CallUsage[] = [];
   const persona = options.persona ?? DEFAULT_PERSONA;
   const channel: IncomingChannel = options.channel ?? ctx.channel;
+
+  // Tier budget guard — see executor.ts for the rationale. Sonnet is
+  // the heaviest part of our spend, so the over-budget short-circuit
+  // matters even more here.
+  const budget = await getWorkspaceBudgetStatus(ctx.workspaceId);
+  if (budget.over) {
+    return {
+      text: upgradeMessageForTier(budget.tier),
+      usage,
+    };
+  }
+
   // Resolve the model lazily per dispatch so admin edits to
   // runtime_model_assignments take effect without a server restart.
   const resolved = await getRuntimeModel("orchestrator");
@@ -180,12 +198,39 @@ export async function runOrchestrator(
 
   for (let turn = 0; turn < MAX_TURNS; turn++) {
     const cachedMsgs = cachedMessages(messages);
-    const response = await client().messages.create({
+    const startedAt = Date.now();
+    let response: Anthropic.Messages.Message;
+    try {
+      response = await client().messages.create({
+        model: MODEL,
+        max_tokens: 2048,
+        system,
+        tools,
+        messages: cachedMsgs,
+      });
+    } catch (e) {
+      void recordAiCall({
+        workspace_id: ctx.workspaceId,
+        user_id: ctx.userId,
+        model: MODEL,
+        latency_ms: Date.now() - startedAt,
+        status: "error",
+        error: e instanceof Error ? e.message : String(e),
+      });
+      throw e;
+    }
+
+    // Per-call cost ledger. See executor.ts for the rationale —
+    // identical pattern (cached + uncached tokens collapsed into one
+    // input_tokens count).
+    void recordAiCall({
+      workspace_id: ctx.workspaceId,
+      user_id: ctx.userId,
       model: MODEL,
-      max_tokens: 2048,
-      system,
-      tools,
-      messages: cachedMsgs,
+      input_tokens: totalInputTokens(response.usage),
+      output_tokens: response.usage.output_tokens,
+      latency_ms: Date.now() - startedAt,
+      status: "ok",
     });
 
     usage.push({
@@ -271,10 +316,15 @@ export async function runOrchestrator(
           }
         }
         const result = await executeToolGuarded(tool, use.input, ctx);
+        // Wrap tool output in the same untrusted-data fence the executor
+        // uses (see lib/agent/runtime/_sanitize.ts). Sonnet is more
+        // creative than Haiku and is therefore more, not less, likely
+        // to follow instructions smuggled into a tool result — the
+        // fence + control-char stripping defends against that.
         toolResults.push({
           type: "tool_result",
           tool_use_id: use.id,
-          content: JSON.stringify(result),
+          content: wrapAsUntrustedData(use.name, result),
           is_error: !result.ok,
         });
       }
@@ -282,12 +332,35 @@ export async function runOrchestrator(
 
       if (pendingApproval) {
         const cachedMsgs2 = cachedMessages(messages);
-        const followup = await client().messages.create({
+        const followupStartedAt = Date.now();
+        let followup: Anthropic.Messages.Message;
+        try {
+          followup = await client().messages.create({
+            model: MODEL,
+            max_tokens: 256,
+            system,
+            tools,
+            messages: cachedMsgs2,
+          });
+        } catch (e) {
+          void recordAiCall({
+            workspace_id: ctx.workspaceId,
+            user_id: ctx.userId,
+            model: MODEL,
+            latency_ms: Date.now() - followupStartedAt,
+            status: "error",
+            error: e instanceof Error ? e.message : String(e),
+          });
+          throw e;
+        }
+        void recordAiCall({
+          workspace_id: ctx.workspaceId,
+          user_id: ctx.userId,
           model: MODEL,
-          max_tokens: 256,
-          system,
-          tools,
-          messages: cachedMsgs2,
+          input_tokens: totalInputTokens(followup.usage),
+          output_tokens: followup.usage.output_tokens,
+          latency_ms: Date.now() - followupStartedAt,
+          status: "ok",
         });
         usage.push({
           bucket: "deep",
