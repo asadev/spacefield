@@ -37,6 +37,11 @@ import {
   personaSystemPrefix,
 } from "@/lib/agent/runtime/persona";
 import { getRuntimeModel } from "@/lib/agent/runtime/_models";
+import {
+  type ChatTurn,
+  loadChatHistory,
+  recordChatTurn,
+} from "@/lib/chat/conversation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { enforceRateLimit } from "@/lib/rate-limit";
@@ -102,20 +107,37 @@ async function* streamAnthropicText(opts: {
   model: string;
   system: string;
   message: string;
+  history: ChatTurn[];
   signal: AbortSignal;
   maxTokens: number;
   temperature: number;
+  /** Called once with the full assistant text when the stream completes
+   *  cleanly. Skipped on abort (we don't want to persist half a reply
+   *  attributed to the assistant). Errors inside are swallowed by the
+   *  caller — persistence is best-effort. */
+  onComplete?: (assistantText: string) => Promise<void> | void;
 }): AsyncIterable<string> {
+  // The Anthropic SDK expects alternating user/assistant turns ending
+  // in `user`. History is already in chronological order (loadChatHistory
+  // reverses on read). We just append the fresh user turn.
+  const messages = [
+    ...opts.history.map((m) => ({ role: m.role, content: m.content })),
+    { role: "user" as const, content: opts.message },
+  ];
+
   const stream = anthropic().messages.stream(
     {
       model: opts.model,
       max_tokens: opts.maxTokens,
       temperature: opts.temperature,
       system: opts.system,
-      messages: [{ role: "user", content: opts.message }],
+      messages,
     },
     { signal: opts.signal }
   );
+
+  let assistantText = "";
+  let completed = false;
   try {
     for await (const event of stream) {
       if (opts.signal.aborted) break;
@@ -125,14 +147,33 @@ async function* streamAnthropicText(opts: {
         event.delta.type === "text_delta"
       ) {
         const t = event.delta.text;
-        if (t) yield t;
+        if (t) {
+          assistantText += t;
+          yield t;
+        }
       }
     }
+    // Mark completion only if we got through the loop without an
+    // upstream error AND the client didn't abort. We persist below in
+    // `finally` so a normal close + an abort can be told apart.
+    completed = !opts.signal.aborted;
   } finally {
     // Defensive: if the consumer broke out of the for-await early
     // (e.g. controller cancel), tear down the SDK stream too. Calling
     // abort() on an already-finished stream is a no-op.
     if (!stream.aborted) stream.abort();
+
+    // Best-effort assistant-turn persistence. Wrap in try/catch so a
+    // DB error never bubbles into the SSE stream (we already emitted
+    // `done`). Skip on abort so we don't store a truncated reply that
+    // would mislead future turns.
+    if (completed && assistantText && opts.onComplete) {
+      try {
+        await opts.onComplete(assistantText);
+      } catch {
+        // Swallowed — logged inside recordChatTurn.
+      }
+    }
   }
 }
 
@@ -227,15 +268,52 @@ export async function POST(req: NextRequest) {
     contextChunk: trimContextChunk(loaded.prompt_chunk),
   });
 
+  // Conversation memory. Without a workspace we still serve the turn
+  // statelessly — persistence is workspace-scoped (FK on the table) so
+  // an unscoped chat can't be recorded anyway.
+  const contextRef = (body.context_ref ?? "").trim() || null;
+  const history: ChatTurn[] = workspaceId
+    ? await loadChatHistory({
+        workspaceId,
+        userId: user.id,
+        contextRef,
+      }).catch(() => [])
+    : [];
+
+  // Persist the user's turn BEFORE we hit the model so the message
+  // isn't lost if the upstream errors mid-stream. Fire-and-forget;
+  // recordChatTurn swallows errors internally.
+  if (workspaceId) {
+    void recordChatTurn({
+      workspaceId,
+      userId: user.id,
+      contextRef,
+      role: "user",
+      content: message,
+    });
+  }
+
   // Hand the request's signal directly to the SDK + the SSE encoder so
   // an aborted client tears down the upstream request.
   const tokens = streamAnthropicText({
     model: resolved.id,
     system,
     message,
+    history,
     signal: req.signal,
     maxTokens: resolved.maxTokens || 1024,
     temperature: resolved.temperature ?? 1.0,
+    onComplete: workspaceId
+      ? async (assistantText) => {
+          await recordChatTurn({
+            workspaceId: workspaceId!,
+            userId: user.id,
+            contextRef,
+            role: "assistant",
+            content: assistantText,
+          });
+        }
+      : undefined,
   });
 
   return sseResponse(tokens, (chunk) => ({ event: "delta", data: chunk }), req.signal);
