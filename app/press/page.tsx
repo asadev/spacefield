@@ -5,6 +5,10 @@ export const metadata = {
   description: "Logos, founder bio, and assets for journalists and partners.",
 };
 
+// Press kit changes only on deploy (asset list is hard-coded).
+// Generous ISR — this page is rarely visited and rarely changes.
+export const revalidate = 3600;
+
 interface Asset {
   label: string;
   href: string;

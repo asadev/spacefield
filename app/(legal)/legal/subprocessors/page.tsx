@@ -5,6 +5,9 @@ export const metadata = {
   description: "Third-party services that process data on behalf of Space Field.",
 };
 
+// Legal copy changes only on deploy. 1-hour ISR.
+export const revalidate = 3600;
+
 interface Sub {
   vendor: string;
   purpose: string;

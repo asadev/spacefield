@@ -5,6 +5,9 @@ export const metadata = {
   description: "What you may and may not do on Space Field.",
 };
 
+// Legal copy changes only on deploy. 1-hour ISR.
+export const revalidate = 3600;
+
 export default function AupPage() {
   return (
     <>
