@@ -47,7 +47,7 @@ export default function MarketingShell({ eyebrow, title, children }: Props) {
           <Link href="/terms" className="hover:text-app">
             Terms
           </Link>
-          <span className="ml-auto text-muted">
+          <span className="ms-auto text-muted">
             © {new Date().getFullYear()} Space Field
           </span>
         </footer>
@@ -66,7 +66,7 @@ export default function MarketingShell({ eyebrow, title, children }: Props) {
         }
         .prose-sf ul {
           list-style: disc;
-          padding-left: 1.25rem;
+          padding-inline-start: 1.25rem;
         }
         .prose-sf li {
           font-size: 0.95rem;

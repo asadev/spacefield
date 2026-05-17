@@ -236,7 +236,7 @@ export default function MentionInput({
         className="w-full resize-y rounded-md border border-app bg-app-elevated px-3 py-2 text-sm text-app outline-none placeholder:text-faint focus:border-tool-accent focus:ring-2 focus:ring-tool-accent-soft"
       />
       {query !== null && suggestions.length > 0 && (
-        <div className="absolute left-0 right-0 z-30 mt-1 max-h-56 overflow-auto rounded-md border border-app bg-app-elevated shadow-lg">
+        <div className="absolute inset-x-0 z-30 mt-1 max-h-56 overflow-auto rounded-md border border-app bg-app-elevated shadow-lg">
           {suggestions.map((s, i) => (
             <button
               type="button"

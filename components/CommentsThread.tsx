@@ -270,7 +270,7 @@ export default function CommentsThread({
                 onDelete={() => deleteComment(c.id)}
               />
               {(repliesByParent[c.id] ?? []).map((r) => (
-                <div key={r.id} className="ml-8">
+                <div key={r.id} className="ms-8">
                   <CommentRow
                     comment={r}
                     isAuthor={r.author_user_id === currentUserId}
@@ -279,7 +279,7 @@ export default function CommentsThread({
                 </div>
               ))}
               {replyTo === c.id && (
-                <div className="ml-8">
+                <div className="ms-8">
                   <MentionInput
                     value={replyBody}
                     mentions={replyMentions}

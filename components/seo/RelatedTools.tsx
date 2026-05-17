@@ -35,7 +35,7 @@ export default function RelatedTools({
       >
         {heading}
       </h2>
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
         {items.map((item) => (
           <Link key={item.slug} href={item.href} className={card}>
             <div className="mb-2 text-sm font-semibold text-white">

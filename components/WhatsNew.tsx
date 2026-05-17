@@ -131,7 +131,7 @@ export default function WhatsNew({ lastSeen }: { lastSeen: string | null }) {
                 </span>
                 <span className="text-[11px] text-muted">{e.date}</span>
               </header>
-              <ul className="ml-4 list-disc space-y-1 text-sm leading-relaxed text-app">
+              <ul className="ms-4 list-disc space-y-1 text-sm leading-relaxed text-app">
                 {e.items.map((item, i) => (
                   <li key={i}>{item}</li>
                 ))}

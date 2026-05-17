@@ -73,7 +73,7 @@ export default function Toaster() {
     <div
       aria-live="polite"
       aria-atomic="false"
-      className="pointer-events-none fixed bottom-4 right-4 z-[9998] flex w-[min(360px,calc(100vw-2rem))] flex-col-reverse gap-2"
+      className="pointer-events-none fixed bottom-4 end-4 z-[9998] flex w-[min(360px,calc(100vw-2rem))] flex-col-reverse gap-2"
     >
       {items.map((t) => (
         <ToastItem key={t.id} toast={t} onDismiss={() => dismiss(t.id)} />
@@ -122,7 +122,7 @@ function ToastItem({
         type="button"
         onClick={onDismiss}
         aria-label="Dismiss notification"
-        className="ml-1 flex-shrink-0 rounded text-muted transition-colors hover:text-app focus:outline-none focus:ring-1 focus:ring-app"
+        className="ms-1 flex-shrink-0 rounded text-muted transition-colors hover:text-app focus:outline-none focus:ring-1 focus:ring-app"
       >
         <span aria-hidden className="text-base leading-none">×</span>
       </button>

@@ -85,7 +85,7 @@ function RemoveFactorButton({ factorId }: { factorId: string }) {
         {pending ? "Removing…" : "Remove"}
       </button>
       {state && !state.ok && !state.reauth ? (
-        <span className="ml-2 text-xs text-rose-500">{state.error}</span>
+        <span className="ms-2 text-xs text-rose-500">{state.error}</span>
       ) : null}
     </form>
   );
