@@ -733,6 +733,9 @@ export default function ChatApp({
   }, [editingId, editingDraft, upsertMessageFromRaw]);
 
   const deleteMessage = useCallback(async (id: string) => {
+    if (typeof window !== "undefined" && !window.confirm("Delete this message?")) {
+      return;
+    }
     try {
       const res = await fetch(
         `/api/chat/messages/delete?id=${encodeURIComponent(id)}`,

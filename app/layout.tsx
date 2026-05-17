@@ -9,6 +9,7 @@ import CookieConsent from "@/components/CookieConsent";
 import PWAInstallPrompt from "@/components/PWAInstallPrompt";
 import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
 import Toaster from "@/components/Toaster";
+import UndoSnackbar from "@/components/UndoSnackbar";
 import ShortcutHelp from "@/components/ShortcutHelp";
 import WhatsNew from "@/components/WhatsNew";
 import TabVisibility from "./_components/TabVisibility";
@@ -104,6 +105,7 @@ export default async function RootLayout({
           <CookieConsent initialAccepted={consent !== null} />
           <PWAInstallPrompt />
           <Toaster />
+          <UndoSnackbar />
           <ShortcutHelp />
           <WhatsNew lastSeen={lastSeenWhatsNew} />
         </ThemeProvider>

@@ -4,6 +4,7 @@ import TierGrid from "./_components/TierGrid";
 import AddonSection from "./_components/AddonSection";
 import ComparisonTable from "./_components/ComparisonTable";
 import FaqSection from "./_components/FaqSection";
+import CurrencySwitcher from "@/components/CurrencySwitcher";
 
 /* /pricing — public pricing page.
  *
@@ -65,6 +66,7 @@ function PricingTopNav() {
         </Link>
 
         <div className="ml-auto flex items-center gap-1 sm:gap-2">
+          <CurrencySwitcher className="hidden sm:inline-flex" />
           <Link
             href="/pricing"
             className="rounded-md px-3 py-1.5 text-sm text-app sm:inline-block"
