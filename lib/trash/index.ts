@@ -1,6 +1,8 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { indexDocument } from "@/lib/search/indexer";
+import { log } from "@/lib/log";
 
 /**
  * Universal recycle bin. Walks a known list of soft-delete-capable
@@ -158,6 +160,142 @@ function lookupTable(entityType: string): TrashTable | null {
   return TRASH_TABLES.find((t) => t.entityType === entityType) ?? null;
 }
 
+/**
+ * Re-add a soft-deleted row to `search_documents` after restore so the
+ * undone item shows up in /search again. Only entity types that have a
+ * corresponding search-document mapping (task, project, comment) need
+ * this — everything else relies on its own indexing pipeline at
+ * write-time (CRM contacts/leads/deals re-index on update because
+ * `deleted_at` is one of the watched columns; workspace_files are
+ * indexed by filename in the upload pipeline and don't need extra
+ * help). Wrapped in a try/catch so an indexer failure never blocks the
+ * restore itself; search-staleness is preferable to leaving an item in
+ * the trash.
+ *
+ * Idempotent: indexDocument is an UPSERT on (entity_type, entity_id),
+ * so calling this on a restore-of-a-restore (the row was never deleted
+ * again in the meantime) just refreshes the existing doc with the same
+ * payload.
+ */
+async function reindexAfterRestore(
+  entityType: string,
+  entityId: string
+): Promise<void> {
+  const supabase = await createClient();
+  try {
+    if (entityType === "task") {
+      const { data, error } = await supabase
+        .from("tasks")
+        .select(
+          "id, workspace_id, title, description, due_at, assignee_ids, priority, deleted_at"
+        )
+        .eq("id", entityId)
+        .maybeSingle();
+      if (error || !data || data.deleted_at) return;
+      const t = data as {
+        id: string;
+        workspace_id: string;
+        title: string;
+        description: string | null;
+        due_at: string | null;
+        assignee_ids: string[] | null;
+        priority: string | null;
+      };
+      const dueBit = t.due_at ? `Due ${t.due_at.slice(0, 10)}` : null;
+      const assigneeBit =
+        t.assignee_ids && t.assignee_ids.length > 0
+          ? `${t.assignee_ids.length} assignee${t.assignee_ids.length === 1 ? "" : "s"}`
+          : null;
+      const priorityBit = t.priority ? `${t.priority} priority` : null;
+      const subtitle =
+        [dueBit, assigneeBit, priorityBit].filter(Boolean).join(" · ") || null;
+      await indexDocument({
+        workspaceId: t.workspace_id,
+        entityType: "task",
+        entityId: t.id,
+        title: t.title,
+        subtitle,
+        body: t.description,
+        href: `/tasks/${t.id}`,
+        icon: "check-square",
+      });
+      return;
+    }
+
+    if (entityType === "project") {
+      const { data, error } = await supabase
+        .from("projects")
+        .select("id, workspace_id, name, description, status, deleted_at")
+        .eq("id", entityId)
+        .maybeSingle();
+      if (error || !data || data.deleted_at) return;
+      const p = data as {
+        id: string;
+        workspace_id: string;
+        name: string;
+        description: string | null;
+        status: string | null;
+      };
+      const subtitle = p.status ? `${p.status} project` : null;
+      await indexDocument({
+        workspaceId: p.workspace_id,
+        entityType: "project",
+        entityId: p.id,
+        title: p.name,
+        subtitle,
+        body: p.description,
+        href: `/projects/${p.id}`,
+        icon: "folder",
+      });
+      return;
+    }
+
+    if (entityType === "comment") {
+      const { data, error } = await supabase
+        .from("comments")
+        .select(
+          "id, workspace_id, entity_type, entity_id, body, deleted_at"
+        )
+        .eq("id", entityId)
+        .maybeSingle();
+      if (error || !data || data.deleted_at) return;
+      const c = data as {
+        id: string;
+        workspace_id: string;
+        entity_type: string;
+        entity_id: string;
+        body: string;
+      };
+      const href =
+        c.entity_type === "task"
+          ? `/tasks/${c.entity_id}`
+          : c.entity_type === "project"
+            ? `/projects/${c.entity_id}`
+            : c.entity_type === "contact"
+              ? `/admin/users/${c.entity_id}`
+              : null;
+      if (!href) return;
+      await indexDocument({
+        workspaceId: c.workspace_id,
+        entityType: "comment",
+        entityId: c.id,
+        title: c.body.slice(0, 120) || "(comment)",
+        subtitle: `comment on ${c.entity_type}`,
+        body: c.body,
+        href,
+        icon: "message-square",
+      });
+      return;
+    }
+  } catch (err) {
+    log.warn("trash.restore.reindex_failed", {
+      entity_type: entityType,
+      entity_id: entityId,
+      error: (err as Error)?.message ?? String(err),
+    });
+  }
+}
+
 export async function restoreEntity(input: {
   entityType: string;
   entityId: string;
@@ -171,6 +309,8 @@ export async function restoreEntity(input: {
       .update({ deleted_at: null })
       .eq("id", input.entityId);
     if (error) return { ok: false, error: error.message };
+    // Best-effort search re-index. Doesn't block — see helper docstring.
+    await reindexAfterRestore(input.entityType, input.entityId);
     return { ok: true };
   } catch (e) {
     return { ok: false, error: (e as Error).message };
