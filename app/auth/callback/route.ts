@@ -54,6 +54,7 @@ export async function GET(req: NextRequest) {
   const errorDescription = url.searchParams.get("error_description");
   const next = url.searchParams.get("next") || "/";
   const unlockRequested = url.searchParams.get("unlock") === "1";
+  let cancelledDeletion = false;
 
   // OAuth provider returned an error — bounce back to home with a flag
   // so the UI can surface it.
@@ -133,6 +134,41 @@ export async function GET(req: NextRequest) {
         log.warn("auth.record_login_failed_outer", { user_id: user.id });
         void err;
       });
+
+      // (4) Cancel-on-signin for pending account deletion.
+      //     If the user had an open account_deletion_requests row and
+      //     they just signed in (via magic-link OR OAuth), that's an
+      //     active "I changed my mind" signal — flip cancelled_at on
+      //     the row and surface a toast on the next page. The RPC
+      //     cancel_account_deletion is auth.uid()-pinned so we call it
+      //     with the cookie-bound supabase client.
+      try {
+        const { data: pending } = await supabase
+          .from("account_deletion_requests")
+          .select("user_id, cancelled_at")
+          .eq("user_id", user.id)
+          .is("cancelled_at", null)
+          .maybeSingle();
+        if (pending && pending.cancelled_at === null) {
+          const { error: cancelErr } = await supabase.rpc(
+            "cancel_account_deletion",
+          );
+          if (cancelErr) {
+            log.warn("auth.cancel_deletion_failed", {
+              user_id: user.id,
+              error: cancelErr.message,
+            });
+          } else {
+            // Flag for the post-redirect toast pickup below.
+            cancelledDeletion = true;
+          }
+        }
+      } catch (err) {
+        log.warn("auth.cancel_deletion_lookup_failed", {
+          user_id: user.id,
+        });
+        void err;
+      }
     }
   }
 
@@ -147,6 +183,18 @@ export async function GET(req: NextRequest) {
     target.searchParams.set(
       "toast",
       "success:Account unlocked. Welcome back.",
+    );
+  }
+
+  // If we just auto-cancelled a pending account-deletion request,
+  // surface a different toast so the user knows what just happened
+  // (sign-in is treated as a "I changed my mind" signal). The unlock
+  // toast wins if both fired in the same callback — extremely unlikely
+  // but the unlock copy is more important to surface.
+  if (cancelledDeletion && !unlockRequested) {
+    target.searchParams.set(
+      "toast",
+      "info:Your account-deletion request was cancelled because you signed in. Re-request from /account/danger-zone if you still want to delete.",
     );
   }
 
