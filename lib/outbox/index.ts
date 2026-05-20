@@ -3,6 +3,8 @@ import "server-only";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { log } from "@/lib/log";
 import { safeFetch, SafeFetchError } from "@/lib/safe-fetch";
+import { sendEmail } from "@/lib/email/send";
+import { accountDeletionConfirmEmail } from "@/lib/email/templates/account-deletion-confirm";
 
 /**
  * lib/outbox/index.ts — Transactional outbox helpers.
@@ -275,11 +277,94 @@ const OUTBOX_HANDLERS: Record<string, OutboxHandler> = {
     return { ok: true };
   },
 
-  /** account.deletion_queued — no-op handler. Producer side already
-   *  did the work (the RPC scheduled the purge). This event exists so
-   *  external observers can subscribe, and so the lifecycle history
-   *  has a single source of truth via the outbox. */
-  "account.deletion_queued": async () => ({ ok: true }),
+  /** account.deletion_queued — fires the lifecycle confirmation email.
+   *  Two variants distinguished by payload.kind:
+   *    "scheduled" → 30-day grace warning, sent at request time.
+   *    "final"     → "your data has been purged" notice, sent right
+   *                  before the cron purges the row.
+   *  Defaults to "scheduled" for backwards-compat with rows queued
+   *  before the kind field existed.
+   *  Email lookup goes through admin.auth.admin.getUserById since the
+   *  payload only carries user_id, not the email. If the user is
+   *  already gone (deleted between queue + dispatch) we treat that as
+   *  ok=true — there's no one to email anyway.
+   *
+   *  We also accept an explicit `email` in payload as a fallback for
+   *  the "final" case: the cron snapshots emails BEFORE deletion and
+   *  passes them in so we don't race the cascade. */
+  "account.deletion_queued": async (row) => {
+    const p = row.payload as {
+      user_id?: string;
+      grace_until?: string;
+      reason?: string | null;
+      kind?: "scheduled" | "final";
+      email?: string;
+      name?: string | null;
+    };
+    const kind = p?.kind === "final" ? "final" : "scheduled";
+    const userId = typeof p?.user_id === "string" ? p.user_id : null;
+    if (!userId && !p?.email) {
+      return { ok: false, error: "payload.user_id or payload.email required" };
+    }
+
+    let email = typeof p?.email === "string" ? p.email : "";
+    let name: string | null = typeof p?.name === "string" ? p.name : null;
+    if (!email && userId) {
+      try {
+        const admin = createAdminClient();
+        const { data, error } = await admin.auth.admin.getUserById(userId);
+        if (error) {
+          // User no longer exists — final-purge race. Treat as success
+          // so the row marks processed (no email is the right outcome).
+          if (/not found|user_not_found/i.test(error.message)) {
+            return { ok: true };
+          }
+          return { ok: false, error: error.message };
+        }
+        email = data?.user?.email ?? "";
+        if (!name) {
+          const meta = data?.user?.user_metadata as
+            | { full_name?: string; name?: string }
+            | undefined;
+          name = meta?.full_name ?? meta?.name ?? null;
+        }
+      } catch (e) {
+        return {
+          ok: false,
+          error: e instanceof Error ? e.message : String(e),
+        };
+      }
+    }
+    if (!email) {
+      // Nothing to send to — count as processed; no point retrying.
+      return { ok: true };
+    }
+
+    const purgeAt = typeof p?.grace_until === "string" ? p.grace_until : new Date().toISOString();
+    const tpl = accountDeletionConfirmEmail({
+      kind,
+      purgeAt,
+      name,
+      cancelUrl: "https://spacefield.co/account",
+    });
+
+    const result = await sendEmail({
+      to: email,
+      subject: tpl.subject,
+      html: tpl.html,
+      text: tpl.text,
+      kind: "account-deletion-confirm",
+      user_id: userId,
+    });
+    // sendEmail never throws and persists to email_outbox on any
+    // provider failure, so ok=false here means we genuinely couldn't
+    // queue it at all (e.g. DB down). Surface to the outbox so it
+    // retries with backoff.
+    if (!result.ok) {
+      return { ok: false, error: result.error ?? "send_failed" };
+    }
+    return { ok: true };
+  },
 
   /** file.finalize_completed — no-op for now; reserved for indexing
    *  + virus-scanning hooks to subscribe to. */
