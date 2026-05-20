@@ -1,6 +1,6 @@
-import { timingSafeEqual } from "node:crypto";
 import { NextResponse, type NextRequest } from "next/server";
 
+import { requireCron } from "@/lib/cron/_check_enabled";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { publishSocialPost } from "@/lib/meta-publish";
 
@@ -15,12 +15,8 @@ import { publishSocialPost } from "@/lib/meta-publish";
  * so even if two cron invocations overlap (or the manual button
  * races the cron), only one wins the row.
  *
- * Auth: Vercel adds an `Authorization: Bearer <CRON_SECRET>` header
- * to scheduled invocations. We accept either:
- *   - that header (production), or
- *   - calls from the Vercel cron user-agent (`vercel-cron/1.0`).
- * Manual hits without either are rejected to keep this from being
- * a wide-open trigger.
+ * Auth: see lib/cron/_check_enabled.ts → requireCron (timing-safe
+ * Bearer / ?token= against CRON_SECRET; hard-fails when unset).
  */
 
 export const dynamic = "force-dynamic";
@@ -31,9 +27,8 @@ const BATCH_LIMIT = 25;
 type ScheduledRow = { id: string };
 
 export async function GET(req: NextRequest) {
-  if (!isAuthorizedCronCall(req)) {
-    return NextResponse.json({ error: "forbidden" }, { status: 403 });
-  }
+  const denied = requireCron(req);
+  if (denied) return denied;
 
   const admin = createAdminClient();
   const nowIso = new Date().toISOString();
@@ -72,34 +67,4 @@ export async function GET(req: NextRequest) {
     picked: rows.length,
     results,
   });
-}
-
-function isAuthorizedCronCall(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get("authorization");
-    if (auth && safeEqualHeader(auth, `Bearer ${secret}`)) return true;
-  }
-  const ua = req.headers.get("user-agent") ?? "";
-  if (ua.toLowerCase().includes("vercel-cron")) return true;
-  // Allow the special header Vercel sets on scheduled invocations.
-  if (req.headers.get("x-vercel-cron")) return true;
-  return false;
-}
-
-/**
- * Constant-time string compare. Buffer.byteLength must match for
- * timingSafeEqual to even run, so we early-out on length mismatch
- * with a known-good 0-byte compare to keep the timing flat.
- */
-function safeEqualHeader(a: string, b: string): boolean {
-  const ab = Buffer.from(a);
-  const bb = Buffer.from(b);
-  if (ab.length !== bb.length) {
-    // Burn a fixed-cost compare so length-mismatched inputs don't
-    // observably short-circuit faster than mismatched-content inputs.
-    timingSafeEqual(Buffer.alloc(1), Buffer.alloc(1));
-    return false;
-  }
-  return timingSafeEqual(ab, bb);
 }

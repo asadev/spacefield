@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { revalidatePath } from "next/cache";
 
 import { runBulk } from "@/lib/bulk";
+import { escapeCsvCell } from "@/lib/escape-helpers";
 import { safeErrorMessage } from "@/lib/safe-error";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -326,7 +327,7 @@ const DISPATCH: Record<string, Record<string, ActionHandler>> = {
               p?.is_admin ? "true" : "false",
               a?.created_at ?? p?.created_at ?? "",
             ]
-              .map(csvCell)
+              .map(escapeCsvCell)
               .join(",")
           );
         }
@@ -553,7 +554,7 @@ const DISPATCH: Record<string, Record<string, ActionHandler>> = {
               w?.created_at ?? "",
               w?.updated_at ?? "",
             ]
-              .map(csvCell)
+              .map(escapeCsvCell)
               .join(",")
           );
         }
@@ -735,7 +736,7 @@ const DISPATCH: Record<string, Record<string, ActionHandler>> = {
               a?.created_at ?? "",
               a?.updated_at ?? "",
             ]
-              .map(csvCell)
+              .map(escapeCsvCell)
               .join(",")
           );
         }
@@ -881,7 +882,7 @@ const DISPATCH: Record<string, Record<string, ActionHandler>> = {
               s?.created_at ?? "",
               s?.updated_at ?? "",
             ]
-              .map(csvCell)
+              .map(escapeCsvCell)
               .join(",")
           );
         }
@@ -1025,7 +1026,7 @@ const DISPATCH: Record<string, Record<string, ActionHandler>> = {
               a?.created_at ?? "",
               a?.updated_at ?? "",
             ]
-              .map(csvCell)
+              .map(escapeCsvCell)
               .join(",")
           );
         }
@@ -1306,14 +1307,6 @@ function uniqueStrings(values: unknown[]): string[] {
     out.push(s);
   }
   return out;
-}
-
-function csvCell(value: unknown): string {
-  const s = String(value ?? "");
-  if (/[",\r\n]/.test(s)) {
-    return `"${s.replace(/"/g, '""')}"`;
-  }
-  return s;
 }
 
 function jsonResultFromBulk(

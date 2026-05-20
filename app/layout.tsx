@@ -182,8 +182,20 @@ export default async function RootLayout({
           <WhatsNew lastSeen={lastSeenWhatsNew} />
         </ThemeProvider>
         <ServiceWorkerRegister />
-        <Analytics />
-        <SpeedInsights />
+        {/* Analytics + Speed Insights drop a Vercel _vercel_* cookie on
+         * first request and ping vercel-insights.com on every nav, so
+         * they count as non-essential telemetry under GDPR/ePrivacy and
+         * must wait for explicit consent. We render them only when the
+         * SSR-read consent cookie is "all"; "essential" or null keep
+         * them off the page. The cookie is set both server-side and
+         * client-side by CookieConsent, so the next request after the
+         * user clicks Accept will SSR with these elements present. */}
+        {consent === "all" && (
+          <>
+            <Analytics />
+            <SpeedInsights />
+          </>
+        )}
       </body>
     </html>
   );

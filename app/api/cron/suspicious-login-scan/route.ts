@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { requireCron } from "@/lib/cron/_check_enabled";
 import { safeErrorMessage } from "@/lib/safe-error";
 import { scanAndNotify } from "@/lib/security/suspicious-login";
 import { createAdminClient } from "@/lib/supabase/admin";
@@ -24,10 +25,8 @@ import { log } from "@/lib/log";
  *      `sendEmail()`. Then marks `email_sent_at` so the next tick
  *      skips it.
  *
- * Same auth pattern as /api/cron/audit-purge:
- *   - `Authorization: Bearer <CRON_SECRET>` (manual / staging)
- *   - `vercel-cron/1.0` user-agent
- *   - `x-vercel-cron` header set
+ * Auth: see lib/cron/_check_enabled.ts → requireCron (timing-safe
+ * Bearer / ?token= against CRON_SECRET; hard-fails when unset).
  */
 
 export const runtime = "nodejs";
@@ -39,9 +38,8 @@ const SITE_ORIGIN = process.env.NEXT_PUBLIC_SITE_URL || "https://spacefield.co";
 const EMAIL_MAX_PER_RUN = 200;
 
 export async function GET(req: NextRequest) {
-  if (!isAuthorizedCronCall(req)) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const denied = requireCron(req);
+  if (denied) return denied;
 
   try {
     const inApp = await scanAndNotify();
@@ -204,16 +202,3 @@ async function markEmailSent(
   }
 }
 
-/* ─────────────────────── auth helper ─────────────────────── */
-
-function isAuthorizedCronCall(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get("authorization");
-    if (auth === `Bearer ${secret}`) return true;
-  }
-  const ua = req.headers.get("user-agent") ?? "";
-  if (ua.toLowerCase().includes("vercel-cron")) return true;
-  if (req.headers.get("x-vercel-cron")) return true;
-  return false;
-}

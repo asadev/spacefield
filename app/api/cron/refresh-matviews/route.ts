@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { requireCron } from "@/lib/cron/_check_enabled";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /* GET /api/cron/refresh-matviews
@@ -13,8 +14,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  *   - public.ai_cost_daily      (per workspace x day x model)
  *   - public.api_latency_hourly (per source x hour with p50/p95/p99)
  *
- * Auth: matches /api/cron/audit-purge — CRON_SECRET bearer, vercel-cron
- * UA, or x-vercel-cron header. Anything else 401s.
+ * Auth: see lib/cron/_check_enabled.ts → requireCron (timing-safe
+ * Bearer / ?token= against CRON_SECRET; hard-fails when unset).
  */
 
 export const runtime = "nodejs";
@@ -22,9 +23,8 @@ export const dynamic = "force-dynamic";
 export const maxDuration = 60;
 
 export async function GET(req: NextRequest) {
-  if (!isAuthorizedCronCall(req)) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const denied = requireCron(req);
+  if (denied) return denied;
 
   const admin = createAdminClient();
   const startedAt = Date.now();
@@ -46,16 +46,4 @@ export async function GET(req: NextRequest) {
     refreshed: ["ai_cost_daily", "api_latency_hourly"],
     duration_ms: Date.now() - startedAt,
   });
-}
-
-function isAuthorizedCronCall(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get("authorization");
-    if (auth === `Bearer ${secret}`) return true;
-  }
-  const ua = req.headers.get("user-agent") ?? "";
-  if (ua.toLowerCase().includes("vercel-cron")) return true;
-  if (req.headers.get("x-vercel-cron")) return true;
-  return false;
 }
