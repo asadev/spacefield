@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getLeadById } from "@/app/tools/crm/_data";
+import { indexLead, unindexLead } from "@/lib/crm/search-index";
 import { jsonError, readJson, requireUser } from "../../_helpers";
 import { leadUpdate } from "../../_schemas";
 
@@ -34,6 +35,7 @@ export async function PATCH(
     .select("*")
     .single();
   if (error) return jsonError(error.message, 500);
+  await indexLead(data);
   return NextResponse.json({ item: data });
 }
 
@@ -49,5 +51,6 @@ export async function DELETE(
     .delete()
     .eq("id", id);
   if (error) return jsonError(error.message, 500);
+  await unindexLead(id);
   return NextResponse.json({ ok: true });
 }

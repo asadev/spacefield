@@ -1,6 +1,7 @@
 /* CRM leads skill — pre-qualification + convert to deal. */
 
 import { clampList, runQuery, toolError, toolOk } from "../_helpers";
+import { indexContact, indexDeal, indexLead } from "@/lib/crm/search-index";
 import type { SkillDefinition, ToolDefinition } from "@/lib/agent/runtime/types";
 
 const SELECT =
@@ -84,6 +85,7 @@ const create_lead: ToolDefinition = {
       .select("*")
       .single();
     if (error) return toolError(error.message);
+    await indexLead(data);
     return toolOk(data);
   },
 };
@@ -111,6 +113,7 @@ const update_lead_status: ToolDefinition = {
       .select("*")
       .maybeSingle();
     if (error) return toolError(error.message);
+    if (data) await indexLead(data);
     return toolOk(data);
   },
 };
@@ -158,7 +161,7 @@ const convert_lead_to_deal: ToolDefinition = {
         email: lead.email,
         phone: lead.phone,
       })
-      .select("id")
+      .select("*")
       .single();
     if (contactErr) return toolError(contactErr.message);
 
@@ -173,17 +176,36 @@ const convert_lead_to_deal: ToolDefinition = {
         close_date: close_date ?? null,
         primary_contact_id: contact.id,
       })
-      .select("id, name, amount, currency")
+      .select("*")
       .single();
     if (dealErr) return toolError(dealErr.message);
 
-    await ctx.supabase
+    const { data: updatedLead } = await ctx.supabase
       .from("crm_leads")
       .update({ status: "converted" })
       .eq("workspace_id", ctx.workspaceId)
-      .eq("id", id);
+      .eq("id", id)
+      .select("*")
+      .maybeSingle();
 
-    return toolOk({ deal, contact_id: contact.id });
+    // Best-effort search backfill so the new contact + deal show up in
+    // /search and Cmd-K straight away, and the lead's "converted" badge
+    // updates the subtitle.
+    await Promise.all([
+      indexContact(contact),
+      indexDeal(deal),
+      updatedLead ? indexLead(updatedLead) : Promise.resolve(),
+    ]);
+
+    return toolOk({
+      deal: {
+        id: deal.id,
+        name: deal.name,
+        amount: deal.amount,
+        currency: deal.currency,
+      },
+      contact_id: contact.id,
+    });
   },
 };
 

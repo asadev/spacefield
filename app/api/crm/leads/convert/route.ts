@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getDefaultPipeline } from "@/app/tools/crm/_data";
+import { indexContact, indexDeal, indexLead } from "@/lib/crm/search-index";
 import { jsonError, readJson, requireUser } from "../../_helpers";
 import { leadConvert } from "../../_schemas";
 
@@ -92,6 +93,16 @@ export async function POST(req: NextRequest) {
     .select("*")
     .single();
   if (uErr) return jsonError(uErr.message, 500);
+
+  // Backfill search_documents — the lead is now "converted" but still
+  // searchable, and the freshly-minted contact + deal need their first
+  // entries. Helpers swallow errors, so a search blip never fails the
+  // lifecycle write.
+  await Promise.all([
+    indexLead(updatedLead),
+    indexContact(contact),
+    indexDeal(deal),
+  ]);
 
   return NextResponse.json({
     lead: updatedLead,

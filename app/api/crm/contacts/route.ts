@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { listContacts } from "@/app/tools/crm/_data";
 import { safeErrorMessage } from "@/lib/safe-error";
+import { indexContact } from "@/lib/crm/search-index";
 import {
   jsonError,
   readJson,
@@ -62,5 +63,6 @@ export async function POST(req: NextRequest) {
     .select("*")
     .single();
   if (error) return jsonError(error.message, 500);
+  await indexContact(data);
   return NextResponse.json({ item: data });
 }
