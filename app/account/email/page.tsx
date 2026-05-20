@@ -51,7 +51,7 @@ export default async function EmailPrefsPage({
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login?next=/account/email");
+    redirect("/signin?next=/account/email");
   }
 
   const { data: row } = await supabase

@@ -44,7 +44,7 @@ export default async function InboxPage({
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) {
-    redirect("/login?next=/inbox");
+    redirect("/signin?next=/inbox");
   }
 
   const sp = (await searchParams) ?? {};
