@@ -2,13 +2,14 @@
 
 import { AnimatePresence, motion } from "framer-motion";
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useWorkspaceKey } from "./useWorkspaces";
 
 interface Props {
   open: boolean;
   onClose: () => void;
 }
 
+/* Notification kinds we colour-code locally. The server can emit any
+ * kind string; anything we don't recognise falls back to "info". */
 type NotificationKind = "info" | "insight" | "release";
 
 interface Notification {
@@ -16,73 +17,37 @@ interface Notification {
   title: string;
   body: string;
   kind: NotificationKind;
+  href: string | null;
+  read: boolean;
   createdAt: number; // epoch ms
-  dismissed: boolean;
 }
 
-const STORAGE_SUFFIX = "tools-desktop-notifications-v1";
-
-/* Default seed used the first time the user opens Notification Center, or
- * after they've dismissed everything and we want to reset on a manual reset.
- * We compute createdAt relative to "now" so the relative-time labels match
- * the spec ("2m ago", "1h ago", "3h ago"). */
-function defaultNotifications(now: number): Notification[] {
-  return [
-    {
-      id: "welcome",
-      title: "Welcome to your workspace",
-      body: "Open Property Valuation to get started.",
-      kind: "info",
-      createdAt: now - 2 * 60 * 1000,
-      dismissed: false,
-    },
-    {
-      id: "market-pulse-jvc",
-      title: "Market Pulse",
-      body: "JVC yields are up 0.4% week-over-week.",
-      kind: "insight",
-      createdAt: now - 60 * 60 * 1000,
-      dismissed: false,
-    },
-    {
-      id: "release-neighborhood-2",
-      title: "New tool available",
-      body: "Neighborhood Report 2.0 just shipped — give it a spin.",
-      kind: "release",
-      createdAt: now - 3 * 60 * 60 * 1000,
-      dismissed: false,
-    },
-  ];
+/* Raw row shape returned by GET /api/notifications. */
+interface ApiItem {
+  id: string;
+  kind: string;
+  title: string;
+  body: string;
+  href: string | null;
+  read: boolean;
+  created_at: string;
 }
 
-function loadNotifications(storageKey: string): Notification[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = localStorage.getItem(storageKey);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      if (Array.isArray(parsed)) {
-        return parsed
-          .filter(
-            (n): n is Notification =>
-              n &&
-              typeof n.id === "string" &&
-              typeof n.title === "string" &&
-              typeof n.body === "string" &&
-              (n.kind === "info" || n.kind === "insight" || n.kind === "release") &&
-              typeof n.createdAt === "number" &&
-              typeof n.dismissed === "boolean",
-          );
-      }
-    }
-  } catch {}
-  return defaultNotifications(Date.now());
+function normaliseKind(k: string): NotificationKind {
+  if (k === "insight" || k === "release") return k;
+  return "info";
 }
 
-function saveNotifications(storageKey: string, list: Notification[]) {
-  try {
-    localStorage.setItem(storageKey, JSON.stringify(list));
-  } catch {}
+function rowToNotification(r: ApiItem): Notification {
+  return {
+    id: r.id,
+    title: r.title,
+    body: r.body ?? "",
+    kind: normaliseKind(r.kind),
+    href: r.href,
+    read: r.read,
+    createdAt: Date.parse(r.created_at) || Date.now(),
+  };
 }
 
 function relativeTime(then: number, now: number): string {
@@ -98,19 +63,53 @@ function relativeTime(then: number, now: number): string {
 }
 
 /* Right-side slide-in panel modeled on macOS Notification Center.
- * Anchored under the 32px TopBar (h-8), 360px wide, full remaining height. */
+ * Anchored under the 32px TopBar (h-8), 360px wide, full remaining height.
+ *
+ * Data source: GET /api/notifications (latest 30 rows for auth.uid()).
+ * Marking read: POST /api/notifications/mark-read with { id }.
+ * The previous localStorage demo seed was a placeholder pre-API and has
+ * been removed (qa-d-notif-fake-seed). */
 export default function NotificationCenter({ open, onClose }: Props) {
-  const STORAGE_KEY = useWorkspaceKey(STORAGE_SUFFIX);
   const [items, setItems] = useState<Notification[]>([]);
   const [hydrated, setHydrated] = useState(false);
   const [now, setNow] = useState<number>(() => Date.now());
 
-  // Hydrate from localStorage on first open / mount.
+  // Fetch the inbox each time the panel opens. Cheap (latest 30 rows)
+  // and avoids stale data when notifications arrive while the panel is
+  // closed. We don't poll here — bell badge owns that elsewhere.
   useEffect(() => {
-    setItems(loadNotifications(STORAGE_KEY));
-    setHydrated(true);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    if (!open) return;
+    let cancelled = false;
+    setHydrated(false);
+    void (async () => {
+      try {
+        const res = await fetch("/api/notifications?limit=30", {
+          cache: "no-store",
+          credentials: "same-origin",
+        });
+        if (!res.ok) {
+          if (!cancelled) {
+            setItems([]);
+            setHydrated(true);
+          }
+          return;
+        }
+        const data = (await res.json()) as { items?: ApiItem[] };
+        if (cancelled) return;
+        const rows = Array.isArray(data.items) ? data.items : [];
+        setItems(rows.map(rowToNotification));
+        setHydrated(true);
+      } catch {
+        if (!cancelled) {
+          setItems([]);
+          setHydrated(true);
+        }
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   // Tick the relative-time clock once a minute so labels stay fresh while
   // the panel is open. Cheap and bounded.
@@ -131,27 +130,50 @@ export default function NotificationCenter({ open, onClose }: Props) {
     return () => document.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
-  const dismiss = useCallback((id: string) => {
-    setItems((prev) => {
-      const next = prev.map((n) =>
-        n.id === id ? { ...n, dismissed: true } : n,
-      );
-      saveNotifications(STORAGE_KEY, next);
-      return next;
-    });
-  }, [STORAGE_KEY]);
+  /* Mark a single notification read on the server, then optimistically
+   * remove it from the visible list. If the server call fails (offline,
+   * 401, race), we leave the row visible so the user can try again. */
+  const dismiss = useCallback(async (id: string) => {
+    // Optimistic: hide it. Restore if the API call fails.
+    const previous = items;
+    setItems((prev) => prev.filter((n) => n.id !== id));
+    try {
+      const res = await fetch("/api/notifications/mark-read", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ id }),
+      });
+      if (!res.ok) {
+        setItems(previous);
+      }
+    } catch {
+      setItems(previous);
+    }
+  }, [items]);
 
-  const clearAll = useCallback(() => {
-    setItems((prev) => {
-      const next = prev.map((n) => ({ ...n, dismissed: true }));
-      saveNotifications(STORAGE_KEY, next);
-      return next;
-    });
-  }, [STORAGE_KEY]);
+  const clearAll = useCallback(async () => {
+    const previous = items;
+    setItems([]);
+    try {
+      const res = await fetch("/api/notifications/mark-read", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        credentials: "same-origin",
+        body: JSON.stringify({ id: "all" }),
+      });
+      if (!res.ok) {
+        setItems(previous);
+      }
+    } catch {
+      setItems(previous);
+    }
+  }, [items]);
 
-  // Visible (non-dismissed) sorted newest first.
+  // Visible (unread) sorted newest first. Read items don't appear in
+  // the center — they're history, surfaced in /inbox.
   const visible = useMemo(
-    () => items.filter((n) => !n.dismissed).sort((a, b) => b.createdAt - a.createdAt),
+    () => items.filter((n) => !n.read).sort((a, b) => b.createdAt - a.createdAt),
     [items],
   );
 
@@ -202,10 +224,10 @@ export default function NotificationCenter({ open, onClose }: Props) {
                 {hydrated && visible.length > 0 && (
                   <button
                     type="button"
-                    onClick={clearAll}
+                    onClick={() => void clearAll()}
                     className="rounded-md px-2 py-1 text-[11px] text-secondary hover:bg-surface hover:text-app transition-colors"
                   >
-                    Clear all
+                    Mark all read
                   </button>
                 )}
                 <button
@@ -243,7 +265,7 @@ export default function NotificationCenter({ open, onClose }: Props) {
                         key={n.id}
                         notification={n}
                         now={now}
-                        onDismiss={() => dismiss(n.id)}
+                        onDismiss={() => void dismiss(n.id)}
                       />
                     ))}
                   </AnimatePresence>
@@ -303,11 +325,11 @@ function NotificationCard({
           </div>
         </div>
       </div>
-      {/* Dismiss × — visible on hover/focus. Always reachable for keyboard. */}
+      {/* Mark-read × — visible on hover/focus. Always reachable for keyboard. */}
       <button
         type="button"
         onClick={onDismiss}
-        aria-label={`Dismiss ${notification.title}`}
+        aria-label={`Mark ${notification.title} read`}
         className="absolute right-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full text-faint opacity-0 transition-all hover:bg-surface hover:text-app focus:opacity-100 group-hover:opacity-100"
       >
         <svg
