@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { requireCron } from "@/lib/cron/_check_enabled";
 import { runOutboxRelay } from "@/lib/outbox";
 import { withAdvisoryLock, AdvisoryLockKeys } from "@/lib/db/advisory-lock";
 
@@ -15,9 +16,8 @@ import { withAdvisoryLock, AdvisoryLockKeys } from "@/lib/db/advisory-lock";
  * don't get the lock we silently no-op — the next tick will pick up
  * what's left.
  *
- * Auth follows the same convention as the other cron routes — accepts
- * either `Authorization: Bearer <CRON_SECRET>` or the `vercel-cron`
- * UA / `x-vercel-cron` header.
+ * Auth: see lib/cron/_check_enabled.ts → requireCron (timing-safe
+ * Bearer / ?token= against CRON_SECRET; hard-fails when unset).
  */
 
 export const runtime = "nodejs";
@@ -29,9 +29,8 @@ export const maxDuration = 300;
 const RELAY_LIMIT = 25;
 
 export async function GET(req: NextRequest) {
-  if (!isAuthorizedCronCall(req)) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const denied = requireCron(req);
+  if (denied) return denied;
   try {
     const gated = await withAdvisoryLock(
       AdvisoryLockKeys.OutboxRelay,
@@ -49,16 +48,4 @@ export async function GET(req: NextRequest) {
     const message = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-}
-
-function isAuthorizedCronCall(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get("authorization");
-    if (auth === `Bearer ${secret}`) return true;
-  }
-  const ua = req.headers.get("user-agent") ?? "";
-  if (ua.toLowerCase().includes("vercel-cron")) return true;
-  if (req.headers.get("x-vercel-cron")) return true;
-  return false;
 }

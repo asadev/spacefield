@@ -22,12 +22,13 @@
  * cool-down state in this route — the goal is "still bad" visibility,
  * not a one-shot pager.)
  *
- * Auth pattern matches sibling crons (CRON_SECRET / vercel-cron UA /
- * x-vercel-cron header). See /api/cron/stuck-jobs-detect.
+ * Auth: see lib/cron/_check_enabled.ts → requireCron (timing-safe
+ * Bearer / ?token= against CRON_SECRET; hard-fails when unset).
  */
 
 import { NextResponse, type NextRequest } from "next/server";
 
+import { requireCron } from "@/lib/cron/_check_enabled";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { log } from "@/lib/log";
 import { safeErrorMessage } from "@/lib/safe-error";
@@ -80,9 +81,8 @@ type Anomaly = {
 };
 
 export async function GET(req: NextRequest) {
-  if (!isAuthorizedCronCall(req)) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const denied = requireCron(req);
+  if (denied) return denied;
 
   try {
     const admin = createAdminClient();
@@ -276,18 +276,6 @@ export async function GET(req: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-function isAuthorizedCronCall(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get("authorization");
-    if (auth === `Bearer ${secret}`) return true;
-  }
-  const ua = req.headers.get("user-agent") ?? "";
-  if (ua.toLowerCase().includes("vercel-cron")) return true;
-  if (req.headers.get("x-vercel-cron")) return true;
-  return false;
 }
 
 // ─────────────────────── Top-spender check ───────────────────────

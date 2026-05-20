@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 import { checkIsAdmin } from "@/app/admin/_lib";
+import { escapeCsvCell } from "@/lib/escape-helpers";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /**
@@ -44,16 +45,10 @@ export async function GET(req: NextRequest) {
     "ip_hash",
     "user_agent",
   ];
-  const escape = (v: unknown): string => {
-    if (v === null || v === undefined) return "";
-    const s = String(v);
-    if (/[",\n]/.test(s)) return `"${s.replace(/"/g, '""')}"`;
-    return s;
-  };
 
   const lines = [
     header.join(","),
-    ...rows.map((r) => header.map((h) => escape(r[h])).join(",")),
+    ...rows.map((r) => header.map((h) => escapeCsvCell(r[h])).join(",")),
   ];
 
   return new NextResponse(lines.join("\n"), {
