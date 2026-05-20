@@ -1,6 +1,89 @@
 import "server-only";
 
+import { timingSafeEqual } from "node:crypto";
+import { NextResponse } from "next/server";
+
 import { createAdminClient } from "@/lib/supabase/admin";
+
+/**
+ * Constant-time string compare. Buffer.byteLength must match for
+ * timingSafeEqual to even run, so we early-out on length mismatch with
+ * a known-good 0-byte compare to keep the timing flat.
+ */
+function timingSafeStringEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a);
+  const bb = Buffer.from(b);
+  if (ab.length !== bb.length) {
+    // Burn a fixed-cost compare so length-mismatched inputs don't
+    // observably short-circuit faster than mismatched-content inputs.
+    timingSafeEqual(Buffer.alloc(1), Buffer.alloc(1));
+    return false;
+  }
+  return timingSafeEqual(ab, bb);
+}
+
+/**
+ * Cron-route authentication gate.
+ *
+ * Returns a 401 NextResponse if the request is NOT authorised, or
+ * `null` if the handler should proceed.
+ *
+ * Hardening rules (QA: qa-f-cron-auth-open + qa-f-cron-timing-cmp):
+ *   - HARD-FAIL when `CRON_SECRET` is unset. No env, no traffic — the
+ *     old code allowed the `vercel-cron` UA header through with no
+ *     secret configured, which any caller could spoof.
+ *   - Accept `Authorization: Bearer <CRON_SECRET>` (Vercel scheduled
+ *     invocations send this) OR a `?token=<CRON_SECRET>` query param
+ *     (for manual cURL when juggling shell quoting).
+ *   - The comparison runs through `timingSafeEqual` after a length
+ *     check, so attacker-controlled inputs can't leak the secret a
+ *     byte at a time.
+ *   - No `user-agent: vercel-cron` fallback any more — anyone can set
+ *     a UA, and once a real secret is configured Vercel will send the
+ *     Authorization header anyway. `x-vercel-cron` is also untrusted
+ *     (no signature on it).
+ *
+ * Callers MUST invoke this at the top of every `/api/cron/*` GET
+ * handler:
+ *
+ *   import { requireCron } from "@/lib/cron/_check_enabled";
+ *
+ *   export async function GET(req: NextRequest) {
+ *     const denied = requireCron(req);
+ *     if (denied) return denied;
+ *     // ...normal handler
+ *   }
+ */
+export function requireCron(req: Request): NextResponse | null {
+  const secret = process.env.CRON_SECRET;
+  if (!secret) {
+    // No secret configured = closed door. Better to break the cron
+    // and alert in logs than leave it open.
+    return NextResponse.json(
+      { error: "unauthorized", reason: "cron_secret_unset" },
+      { status: 401 }
+    );
+  }
+
+  // Header form (Vercel scheduled invocations + standard manual cURL).
+  const auth = req.headers.get("authorization");
+  if (auth && timingSafeStringEqual(auth, `Bearer ${secret}`)) {
+    return null;
+  }
+
+  // Query-string form (panel "Run now" buttons, ad-hoc shell calls).
+  try {
+    const u = new URL(req.url);
+    const token = u.searchParams.get("token");
+    if (token && timingSafeStringEqual(token, secret)) {
+      return null;
+    }
+  } catch {
+    // Bad URL — fall through to reject.
+  }
+
+  return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+}
 
 /**
  * Helper for cron route handlers.

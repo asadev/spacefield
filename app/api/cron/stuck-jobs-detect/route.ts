@@ -11,14 +11,13 @@
  * table. Notification fan-out is done by `stuck_jobs_alert` so we
  * don't enumerate admins in app code.
  *
- * Auth pattern mirrors /api/cron/suspicious-login-scan:
- *   - `Authorization: Bearer <CRON_SECRET>` for manual / staging runs
- *   - `vercel-cron/1.0` user-agent (Vercel-issued cron)
- *   - `x-vercel-cron` header (Vercel-issued cron)
+ * Auth: see lib/cron/_check_enabled.ts → requireCron (timing-safe
+ * Bearer / ?token= against CRON_SECRET; hard-fails when unset).
  */
 
 import { NextResponse, type NextRequest } from "next/server";
 
+import { requireCron } from "@/lib/cron/_check_enabled";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { log } from "@/lib/log";
 import { histogram, METRIC_NAMES } from "@/lib/metrics";
@@ -31,9 +30,8 @@ export const maxDuration = 60;
 const DEFAULT_THRESHOLD_MIN = 30;
 
 export async function GET(req: NextRequest) {
-  if (!isAuthorizedCronCall(req)) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const denied = requireCron(req);
+  if (denied) return denied;
 
   // Threshold override via ?minutes=N (used for testing). Clamp to a
   // sane range so a bad value can't accidentally mark every running
@@ -195,14 +193,3 @@ export async function GET(req: NextRequest) {
   }
 }
 
-function isAuthorizedCronCall(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get("authorization");
-    if (auth === `Bearer ${secret}`) return true;
-  }
-  const ua = req.headers.get("user-agent") ?? "";
-  if (ua.toLowerCase().includes("vercel-cron")) return true;
-  if (req.headers.get("x-vercel-cron")) return true;
-  return false;
-}
