@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { requireCron } from "@/lib/cron/_check_enabled";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /* GET /api/cron/slow-queries-snapshot
@@ -9,8 +10,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * persists every row to public.slow_query_snapshots so we keep a
  * longitudinal history that survives pg_stat_statements_reset().
  *
- * Auth: same pattern as /api/cron/audit-purge (CRON_SECRET bearer,
- * vercel-cron user-agent, or x-vercel-cron header).
+ * Auth: see lib/cron/_check_enabled.ts → requireCron (timing-safe
+ * Bearer / ?token= against CRON_SECRET; hard-fails when unset).
  */
 
 export const runtime = "nodejs";
@@ -28,9 +29,8 @@ type SlowQueryRow = {
 };
 
 export async function GET(req: NextRequest) {
-  if (!isAuthorizedCronCall(req)) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const denied = requireCron(req);
+  if (denied) return denied;
 
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("admin_slow_queries", {
@@ -78,16 +78,4 @@ export async function GET(req: NextRequest) {
     captured: payload.length,
     captured_at: capturedAt,
   });
-}
-
-function isAuthorizedCronCall(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get("authorization");
-    if (auth === `Bearer ${secret}`) return true;
-  }
-  const ua = req.headers.get("user-agent") ?? "";
-  if (ua.toLowerCase().includes("vercel-cron")) return true;
-  if (req.headers.get("x-vercel-cron")) return true;
-  return false;
 }

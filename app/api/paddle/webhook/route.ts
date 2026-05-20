@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
-import crypto from "node:crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPaddleWebhookSecret } from "@/lib/paddle";
+import { verifyPaddleSignature } from "@/lib/paddle-verify";
 import { matchPaddleProduct } from "@/app/_data/paddle-products";
 import { withIdempotency } from "@/lib/idempotency";
 import { safeErrorMessage } from "@/lib/safe-error";
@@ -66,59 +66,10 @@ interface PaddleEvent {
   data?: PaddleSubscriptionData | null;
 }
 
-const SKEW_TOLERANCE_SECONDS = 5 * 60;
-
-function timingSafeEqualHex(a: string, b: string): boolean {
-  try {
-    const ab = Buffer.from(a, "hex");
-    const bb = Buffer.from(b, "hex");
-    if (ab.length !== bb.length) return false;
-    return crypto.timingSafeEqual(ab, bb);
-  } catch {
-    return false;
-  }
-}
-
-function parsePaddleSignature(header: string): { ts: string; h1: string } | null {
-  // Format: `ts=1700000000;h1=abc123...` — could carry multiple `h1`
-  // values across rotations; we accept the first.
-  const parts = header.split(";").map((p) => p.trim()).filter(Boolean);
-  let ts = "";
-  let h1 = "";
-  for (const p of parts) {
-    const eq = p.indexOf("=");
-    if (eq < 0) continue;
-    const k = p.slice(0, eq).trim();
-    const v = p.slice(eq + 1).trim();
-    if (k === "ts" && !ts) ts = v;
-    else if (k === "h1" && !h1) h1 = v;
-  }
-  if (!ts || !h1) return null;
-  return { ts, h1 };
-}
-
-function verifyPaddleSignature(
-  secret: string,
-  rawBody: string,
-  signatureHeader: string
-): boolean {
-  const parsed = parsePaddleSignature(signatureHeader);
-  if (!parsed) return false;
-  const tsNum = Number(parsed.ts);
-  if (!Number.isFinite(tsNum)) return false;
-  const now = Math.floor(Date.now() / 1000);
-  if (Math.abs(now - tsNum) > SKEW_TOLERANCE_SECONDS) return false;
-  const signed = `${parsed.ts}:${rawBody}`;
-  const expected = crypto.createHmac("sha256", secret).update(signed).digest("hex");
-  return timingSafeEqualHex(parsed.h1, expected);
-}
-
 export async function POST(req: NextRequest) {
+  // verifyPaddleSignature consumes the body, so clone first — we still
+  // need the rawBody string for JSON.parse and idempotency keying.
   const rawBody = await req.text();
-  const signatureHeader = req.headers.get("paddle-signature") ?? "";
-  if (!signatureHeader) {
-    return NextResponse.json({ error: "missing paddle-signature" }, { status: 400 });
-  }
 
   let secret: string;
   try {
@@ -130,8 +81,26 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  if (!verifyPaddleSignature(secret, rawBody, signatureHeader)) {
-    return NextResponse.json({ error: "signature mismatch" }, { status: 401 });
+  // Reconstruct a Request shape for the verifier (it reads the body +
+  // the `paddle-signature` header). Using a fresh Request with the
+  // already-consumed body string avoids double-reading the inbound req.
+  const verifyResult = await verifyPaddleSignature(
+    new Request(req.url, {
+      method: req.method,
+      headers: req.headers,
+      body: rawBody,
+    }),
+    secret,
+  );
+  if (!verifyResult.ok) {
+    const status =
+      verifyResult.reason === "missing-signature-header"
+        ? 400
+        : 401;
+    return NextResponse.json(
+      { error: verifyResult.reason },
+      { status }
+    );
   }
 
   let payload: PaddleEvent;

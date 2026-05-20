@@ -8,8 +8,8 @@
  * `api_tokens.expiry_reminder_sent_at = now()` so the next run
  * doesn't spam.
  *
- * Auth: same pattern as /api/cron/stuck-jobs-detect (CRON_SECRET
- * bearer, vercel-cron UA, or x-vercel-cron header).
+ * Auth: see lib/cron/_check_enabled.ts → requireCron (timing-safe
+ * Bearer / ?token= against CRON_SECRET; hard-fails when unset).
  *
  * Why daily + idempotent stamping: a 14-day window with a daily
  * scan means each token gets at most two reminders — one when it
@@ -20,6 +20,7 @@
 
 import { NextResponse, type NextRequest } from "next/server";
 
+import { requireCron } from "@/lib/cron/_check_enabled";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendEmail } from "@/lib/email/send";
 import { log } from "@/lib/log";
@@ -49,9 +50,8 @@ interface UserSlim {
 }
 
 export async function GET(req: NextRequest) {
-  if (!isAuthorizedCronCall(req)) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const denied = requireCron(req);
+  if (denied) return denied;
 
   try {
     const admin = createAdminClient();
@@ -260,14 +260,3 @@ function escapeHtml(s: string): string {
     .replace(/'/g, "&#39;");
 }
 
-function isAuthorizedCronCall(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get("authorization");
-    if (auth === `Bearer ${secret}`) return true;
-  }
-  const ua = req.headers.get("user-agent") ?? "";
-  if (ua.toLowerCase().includes("vercel-cron")) return true;
-  if (req.headers.get("x-vercel-cron")) return true;
-  return false;
-}

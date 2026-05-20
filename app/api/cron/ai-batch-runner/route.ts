@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { requireCron } from "@/lib/cron/_check_enabled";
 import { runQueuedAIBatch } from "@/lib/ai/batch";
 
 /* GET /api/cron/ai-batch-runner
@@ -11,9 +12,8 @@ import { runQueuedAIBatch } from "@/lib/ai/batch";
  * the function `maxDuration = 300` (the Vercel ceiling) so we have
  * headroom for 5 sequential jobs of ~30-60s each.
  *
- * Auth follows the same convention as the other cron routes — accepts
- * either `Authorization: Bearer <CRON_SECRET>` or the `vercel-cron`
- * UA / `x-vercel-cron` header.
+ * Auth: see lib/cron/_check_enabled.ts → requireCron (timing-safe
+ * Bearer / ?token= against CRON_SECRET; hard-fails when unset).
  */
 
 export const runtime = "nodejs";
@@ -23,9 +23,8 @@ export const maxDuration = 300;
 const BATCH_LIMIT = 5;
 
 export async function GET(req: NextRequest) {
-  if (!isAuthorizedCronCall(req)) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const denied = requireCron(req);
+  if (denied) return denied;
   try {
     const result = await runQueuedAIBatch(BATCH_LIMIT);
     return NextResponse.json({ ok: true, ...result });
@@ -33,16 +32,4 @@ export async function GET(req: NextRequest) {
     const message = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ ok: false, error: message }, { status: 500 });
   }
-}
-
-function isAuthorizedCronCall(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get("authorization");
-    if (auth === `Bearer ${secret}`) return true;
-  }
-  const ua = req.headers.get("user-agent") ?? "";
-  if (ua.toLowerCase().includes("vercel-cron")) return true;
-  if (req.headers.get("x-vercel-cron")) return true;
-  return false;
 }

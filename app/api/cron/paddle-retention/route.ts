@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 
+import { requireCron } from "@/lib/cron/_check_enabled";
 import { createAdminClient } from "@/lib/supabase/admin";
 
 /* GET /api/cron/paddle-retention
@@ -9,11 +10,9 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * a rerun can still pick them up; only confirmed-processed history is
  * thrown away.
  *
- * Wired in vercel.json to run daily at 05:00 UTC. Same auth pattern as
- * /api/cron/audit-purge:
- *   - `Authorization: Bearer <CRON_SECRET>` (manual / staging)
- *   - `vercel-cron/1.0` user-agent (Vercel scheduled invocation)
- *   - `x-vercel-cron` header set
+ * Wired in vercel.json to run daily at 05:00 UTC. Auth: see
+ * lib/cron/_check_enabled.ts → requireCron (timing-safe Bearer /
+ * ?token= against CRON_SECRET; hard-fails when unset).
  */
 
 export const runtime = "nodejs";
@@ -23,9 +22,8 @@ export const maxDuration = 60;
 const RETENTION_DAYS = 90;
 
 export async function GET(req: NextRequest) {
-  if (!isAuthorizedCronCall(req)) {
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
+  const denied = requireCron(req);
+  if (denied) return denied;
 
   const admin = createAdminClient();
   const { data, error } = await admin.rpc("purge_old_paddle_events", {
@@ -45,16 +43,4 @@ export async function GET(req: NextRequest) {
     retention_days: RETENTION_DAYS,
     deleted,
   });
-}
-
-function isAuthorizedCronCall(req: NextRequest): boolean {
-  const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get("authorization");
-    if (auth === `Bearer ${secret}`) return true;
-  }
-  const ua = req.headers.get("user-agent") ?? "";
-  if (ua.toLowerCase().includes("vercel-cron")) return true;
-  if (req.headers.get("x-vercel-cron")) return true;
-  return false;
 }

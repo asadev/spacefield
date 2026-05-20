@@ -4,6 +4,7 @@ import Anthropic from "@anthropic-ai/sdk";
 
 import { createAdminClient } from "@/lib/supabase/admin";
 import { withAdvisoryLock, AdvisoryLockKeys } from "@/lib/db/advisory-lock";
+import { safeFetch, SafeFetchError } from "@/lib/safe-fetch";
 import {
   busyMessageFor,
   checkBackpressure,
@@ -301,15 +302,29 @@ async function runOne(row: BatchRow): Promise<"done" | "failed"> {
 }
 
 async function fireCallback(url: string, payload: unknown): Promise<void> {
+  // `callback_url` is user-supplied via the batch-job API, so it has to
+  // go through the SSRF guard. safeFetch blocks private IPs, cloud-
+  // metadata addresses, non-http(s) schemes, and the usual loopback
+  // aliases — see lib/safe-fetch.ts. A rejected URL is logged + skipped
+  // so the cron tick continues instead of throwing.
   try {
-    await fetch(url, {
+    await safeFetch(url, {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify(payload),
       // Don't let the callback hang the cron tick.
-      signal: AbortSignal.timeout(10_000),
+      timeoutMs: 10_000,
     });
   } catch (e) {
+    if (e instanceof SafeFetchError) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[ai-batch] callback blocked by SSRF guard:",
+        e.reason,
+        e.message
+      );
+      return;
+    }
     // eslint-disable-next-line no-console
     console.warn(
       "[ai-batch] callback failed:",
