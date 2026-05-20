@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { indexDeal } from "@/lib/crm/search-index";
 import { jsonError, readJson, requireUser } from "../../_helpers";
 import { dealMove } from "../../_schemas";
 
@@ -45,5 +46,6 @@ export async function POST(req: NextRequest) {
     .select("*")
     .single();
   if (error) return jsonError(error.message, 500);
+  await indexDeal(data);
   return NextResponse.json({ item: data });
 }
