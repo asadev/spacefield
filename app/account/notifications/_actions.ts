@@ -22,7 +22,7 @@ export async function updateNotificationPrefs(formData: FormData) {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login?next=/account/notifications");
+    redirect("/signin?next=/account/notifications");
   }
 
   const row = {

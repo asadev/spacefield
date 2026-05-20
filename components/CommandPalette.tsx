@@ -57,22 +57,33 @@ interface Section {
   items: BaseItem[];
 }
 
+/* Static palette entries. Every href below has been verified against
+ * the actual app/ tree (qa-d-cmdk-dead-links). Entries pointing at
+ * routes that don't exist yet were removed rather than left as 404s.
+ * If you add a new route, you can wire it in here. */
 const JUMP_TO: BaseItem[] = [
-  { id: "jump:dashboard",  title: "Dashboard",   subtitle: "Workspace home",     href: "/dashboard",         icon: "🏠" },
-  { id: "jump:tasks",       title: "Tasks",       subtitle: "All tasks",           href: "/tasks",             icon: "✅" },
-  { id: "jump:people",      title: "People",      subtitle: "Team & employees",    href: "/people",            icon: "👥" },
-  { id: "jump:crm",         title: "CRM",         subtitle: "Contacts, deals",     href: "/apps/crm",          icon: "📇" },
-  { id: "jump:files",       title: "Files",       subtitle: "Workspace files",     href: "/files",             icon: "📁" },
-  { id: "jump:shares",      title: "Shared links", subtitle: "toShare links",       href: "/settings/shares",   icon: "🔗" },
-  { id: "jump:admin",       title: "Admin",       subtitle: "Platform admin",      href: "/admin",             icon: "⚙️" },
+  // /  → HomeGate (workspace desktop OS for signed-in users)
+  { id: "jump:dashboard",   title: "Workspace",    subtitle: "Desktop home",        href: "/",                  icon: "🏠" },
+  // /tasks → app/tasks/page.tsx
+  { id: "jump:tasks",       title: "Tasks",        subtitle: "All tasks",           href: "/tasks",             icon: "✅" },
+  // /people → app/people/page.tsx
+  { id: "jump:people",      title: "People",       subtitle: "Team & employees",    href: "/people",            icon: "👥" },
+  // /projects → app/projects/page.tsx
+  { id: "jump:projects",    title: "Projects",     subtitle: "All projects",        href: "/projects",          icon: "📦" },
+  // /inbox → app/inbox/page.tsx
+  { id: "jump:inbox",       title: "Inbox",        subtitle: "Notifications & mentions", href: "/inbox",        icon: "📥" },
+  // /admin → app/admin/page.tsx
+  { id: "jump:admin",       title: "Admin",        subtitle: "Platform admin",      href: "/admin",             icon: "⚙️" },
 ];
 
+/* CREATE_NEW only lists entries with real destination routes. There
+ * is no /tasks/new / /people/new / /projects/new composer page yet —
+ * those flows live inside the list pages — so they're omitted instead
+ * of 404-ing. Re-add here once a composer page exists.
+ */
 const CREATE_NEW: BaseItem[] = [
-  { id: "create:task",     title: "New task",            subtitle: "Open the task composer",     href: "/tasks/new",     icon: "＋" },
-  { id: "create:contact",  title: "New contact",         subtitle: "Add a CRM contact",          href: "/apps/crm/contacts/new", icon: "＋" },
-  { id: "create:employee", title: "New employee",        subtitle: "Add a person to the team",   href: "/people/new",    icon: "＋" },
-  { id: "create:timeoff",  title: "New time-off request",subtitle: "Submit PTO / sick day",      href: "/timeoff/new",   icon: "＋" },
-  { id: "create:project",  title: "New project",         subtitle: "Spin up a project",          href: "/projects/new",  icon: "＋" },
+  // /people/time-off → app/people/time-off/page.tsx (closest match to the original "new time-off request")
+  { id: "create:timeoff",  title: "Time off",            subtitle: "Open the time-off page",     href: "/people/time-off", icon: "＋" },
 ];
 
 export default function CommandPalette({

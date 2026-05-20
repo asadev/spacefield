@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
         { status: 401 },
       );
     }
-    return NextResponse.redirect(new URL("/login?next=/account/email", req.url));
+    return NextResponse.redirect(new URL("/signin?next=/account/email", req.url));
   }
 
   // Parse — be tolerant of either content type.

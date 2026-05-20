@@ -1,3 +1,5 @@
+import Link from "next/link";
+
 import { createAdminClient } from "@/lib/supabase/admin";
 import { fetchAiCostSummary } from "@/lib/ai/cost";
 
@@ -106,12 +108,22 @@ export default async function AICostBudget({
             />
           </div>
           <div className="mt-2 flex items-baseline justify-between text-[11px]">
-            <span className="text-muted">
-              {pct.toFixed(1)}% used
+            <span className="flex items-center gap-2 text-muted">
+              <span>{pct.toFixed(1)}% used</span>
               {overspend ? (
-                <span className="ml-2 rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-medium text-rose-500">
-                  over budget
-                </span>
+                <>
+                  <span className="rounded-full bg-rose-500/15 px-2 py-0.5 text-[10px] font-medium text-rose-500">
+                    over budget
+                  </span>
+                  {/* qa-c-budget-no-cta — surface an upgrade path next to the badge
+                   * whenever the workspace is over its tier's AI allowance. */}
+                  <Link
+                    href="/pricing"
+                    className="inline-flex items-center gap-1 rounded-full bg-rose-500 px-2.5 py-0.5 text-[10px] font-semibold text-white shadow-sm transition-colors hover:bg-rose-600 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-rose-500"
+                  >
+                    Upgrade tier <span aria-hidden>→</span>
+                  </Link>
+                </>
               ) : null}
             </span>
             <span className="font-mono tabular-nums text-faint">
