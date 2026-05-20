@@ -3,6 +3,7 @@ import { getDefaultPipeline, listDeals } from "@/app/tools/crm/_data";
 import type { CrmDealStatus } from "@/app/tools/crm/types";
 import { DEAL_STATUS_VALUES } from "@/app/tools/crm/types";
 import { safeErrorMessage } from "@/lib/safe-error";
+import { indexDeal } from "@/lib/crm/search-index";
 import {
   jsonError,
   readJson,
@@ -92,5 +93,6 @@ export async function POST(req: NextRequest) {
     .select("*")
     .single();
   if (error) return jsonError(error.message, 500);
+  await indexDeal(data);
   return NextResponse.json({ item: data });
 }

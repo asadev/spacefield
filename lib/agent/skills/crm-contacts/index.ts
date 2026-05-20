@@ -2,6 +2,7 @@
 
 import { clampList, runQuery, toolError, toolOk } from "../_helpers";
 import { escapeForLike, escapeForOr } from "@/lib/escape-helpers";
+import { indexContact, unindexContact } from "@/lib/crm/search-index";
 import type { SkillDefinition, ToolDefinition } from "@/lib/agent/runtime/types";
 
 const SELECT =
@@ -119,6 +120,7 @@ const create_contact: ToolDefinition = {
       .select("*")
       .single();
     if (error) return toolError(error.message);
+    await indexContact(data);
     return toolOk(data);
   },
 };
@@ -152,6 +154,7 @@ const update_contact: ToolDefinition = {
       .select("*")
       .maybeSingle();
     if (error) return toolError(error.message);
+    if (data) await indexContact(data);
     return toolOk(data);
   },
 };
@@ -174,6 +177,7 @@ const delete_contact: ToolDefinition = {
       .eq("workspace_id", ctx.workspaceId)
       .eq("id", id);
     if (error) return toolError(error.message);
+    await unindexContact(id);
     return toolOk({ deleted: id });
   },
 };
