@@ -104,10 +104,61 @@ export default function HomeGate() {
   }, [router]);
 
   if (mode === "loading") {
-    return <div className="fixed inset-0 bg-app" aria-hidden="true" />;
+    // SSR + first-paint fallback. Crawlers and JS-disabled visitors see
+    // this static hero — h1 + value-prop + two CTAs — so the homepage
+    // is never an empty <body>. Once the client mounts and decides
+    // between Landing/Desktop, this is replaced; visually it flashes
+    // for ~1 frame and the result is indistinguishable from the
+    // original blank-div loading state on JS-enabled browsers.
+    return <HomeSsrFallback />;
   }
   if (mode === "desktop") {
     return <Desktop />;
   }
   return <Landing />;
+}
+
+/* Static, server-renderable hero for the initial paint + crawlers.
+ * Tokens-only colors so it matches whichever theme the user has.
+ * Kept intentionally tiny — no images, no animations, no third-party
+ * fonts — so it adds <1KB of HTML to the response body. */
+function HomeSsrFallback() {
+  return (
+    <main
+      className="fixed inset-0 bg-app text-app overflow-auto"
+      data-ssr-fallback="home"
+    >
+      <div className="mx-auto flex min-h-screen max-w-3xl flex-col items-center justify-center px-6 py-16 text-center">
+        <h1 className="text-3xl font-semibold tracking-tight sm:text-5xl">
+          Your workspace, the way an operating system should feel.
+        </h1>
+        <p className="mt-5 max-w-xl text-base leading-relaxed text-secondary sm:text-lg">
+          Space Field is a multi-workspace desktop with native apps for real
+          estate, finance, marketing, sales, and the rest of the work you
+          actually do. Create workspaces, install tools, run them like apps,
+          and let one AI assistant move across every one of them.
+        </p>
+        <div className="mt-8 flex flex-wrap items-center justify-center gap-3">
+          <a
+            href="/?signup=1"
+            className="rounded-lg bg-tool-accent px-5 py-2.5 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+          >
+            Sign in
+          </a>
+          <a
+            href="/waitlist"
+            className="rounded-lg border border-app bg-app-elevated px-5 py-2.5 text-sm font-medium transition-colors hover:border-tool-accent"
+          >
+            Join the waitlist
+          </a>
+        </div>
+        <noscript>
+          <p className="mt-8 text-xs text-muted">
+            JavaScript is required for the full desktop experience. The links
+            above still work without it.
+          </p>
+        </noscript>
+      </div>
+    </main>
+  );
 }

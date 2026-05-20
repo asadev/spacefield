@@ -144,6 +144,7 @@ export async function requestAccountDeletion(
           user_id: userData.user.id,
           grace_until: graceUntil,
           reason,
+          kind: "scheduled",
         },
         { dedupeKey: `account-deletion:${userData.user.id}:${minuteBucket}` }
       );
