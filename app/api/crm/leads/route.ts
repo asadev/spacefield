@@ -3,6 +3,7 @@ import { listLeads } from "@/app/tools/crm/_data";
 import type { CrmLeadStatus } from "@/app/tools/crm/types";
 import { LEAD_STATUS_VALUES } from "@/app/tools/crm/types";
 import { safeErrorMessage } from "@/lib/safe-error";
+import { indexLead } from "@/lib/crm/search-index";
 import {
   jsonError,
   readJson,
@@ -72,5 +73,6 @@ export async function POST(req: NextRequest) {
     .select("*")
     .single();
   if (error) return jsonError(error.message, 500);
+  await indexLead(data);
   return NextResponse.json({ item: data });
 }

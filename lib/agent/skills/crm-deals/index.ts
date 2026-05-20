@@ -1,6 +1,7 @@
 /* CRM deals skill — pipeline management. */
 
 import { clampList, runQuery, toolError, toolOk } from "../_helpers";
+import { indexDeal } from "@/lib/crm/search-index";
 import type { SkillDefinition, ToolDefinition } from "@/lib/agent/runtime/types";
 
 const SELECT =
@@ -119,6 +120,7 @@ const create_deal: ToolDefinition = {
       .select("*")
       .single();
     if (error) return toolError(error.message);
+    await indexDeal(data);
     return toolOk(data);
   },
 };
@@ -151,6 +153,7 @@ const update_deal: ToolDefinition = {
       .select("*")
       .maybeSingle();
     if (error) return toolError(error.message);
+    if (data) await indexDeal(data);
     return toolOk(data);
   },
 };
@@ -178,6 +181,7 @@ const move_deal_stage: ToolDefinition = {
       .select("*")
       .maybeSingle();
     if (error) return toolError(error.message);
+    if (data) await indexDeal(data);
     return toolOk(data);
   },
 };
@@ -202,6 +206,7 @@ const close_deal_won: ToolDefinition = {
       .select("*")
       .maybeSingle();
     if (error) return toolError(error.message);
+    if (data) await indexDeal(data);
     return toolOk(data);
   },
 };
@@ -226,6 +231,7 @@ const close_deal_lost: ToolDefinition = {
       .select("*")
       .maybeSingle();
     if (error) return toolError(error.message);
+    if (data) await indexDeal(data);
     return toolOk(data);
   },
 };

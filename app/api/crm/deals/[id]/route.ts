@@ -1,5 +1,6 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { getDealById } from "@/app/tools/crm/_data";
+import { indexDeal, unindexDeal } from "@/lib/crm/search-index";
 import { jsonError, readJson, requireUser } from "../../_helpers";
 import { dealUpdate } from "../../_schemas";
 
@@ -42,6 +43,7 @@ export async function PATCH(
     .select("*")
     .single();
   if (error) return jsonError(error.message, 500);
+  await indexDeal(data);
   return NextResponse.json({ item: data });
 }
 
@@ -57,5 +59,6 @@ export async function DELETE(
     .delete()
     .eq("id", id);
   if (error) return jsonError(error.message, 500);
+  await unindexDeal(id);
   return NextResponse.json({ ok: true });
 }
