@@ -47,7 +47,7 @@ export default async function NotificationsPage() {
   } = await supabase.auth.getUser();
 
   if (!user) {
-    redirect("/login?next=/account/notifications");
+    redirect("/signin?next=/account/notifications");
   }
 
   const { data: row } = await supabase

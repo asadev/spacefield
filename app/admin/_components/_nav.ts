@@ -66,6 +66,7 @@ export const NAV: NavItem[] = [
   { href: "/admin/integrations",   label: "Integrations",             section: "Apps" },
   { href: "/admin/pages",          label: "Custom pages",             section: "Apps" },
   { href: "/admin/templates",      label: "Workspace templates",      section: "Apps" },
+  { href: "/admin/tasks",          label: "Tasks",                    section: "Apps" },
 
   // ── People ──
   { href: "/admin/users",          label: "Users",                    section: "People" },
