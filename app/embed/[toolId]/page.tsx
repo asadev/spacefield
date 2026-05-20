@@ -20,6 +20,10 @@ import MortgageWidget from "../_components/MortgageWidget";
 import RoiWidget from "../_components/RoiWidget";
 
 export const dynamic = "force-static";
+/* Disallow ad-hoc toolIds — anything not in WIDGETS must return a real
+ * 404 status. Combined with notFound() below, an unknown toolId is now
+ * a hard 404 instead of a soft 200 + "not found" body. */
+export const dynamicParams = false;
 
 interface WidgetEntry {
   id: string;

@@ -267,6 +267,8 @@ export const COMPARE_COLUMN_SLUGS = [
   "hubspot",
   "zoho-one",
   "notion",
+  "monday",
+  "clickup",
 ] as const;
 
 export const COMPARE_COLUMN_LABELS: Record<string, string> = {
@@ -275,6 +277,8 @@ export const COMPARE_COLUMN_LABELS: Record<string, string> = {
   hubspot: "HubSpot",
   "zoho-one": "Zoho One",
   notion: "Notion",
+  monday: "monday",
+  clickup: "ClickUp",
 };
 
 /** Feature matrix. Honest: we mark "no" where we don't have parity. */
@@ -287,9 +291,13 @@ export const COMPARE_FEATURES: FeatureRow[] = [
       hubspot: "yes",
       "zoho-one": "yes",
       notion: "partial",
+      monday: "yes",
+      clickup: "partial",
     },
     note: {
       notion: "Notion CRM is a styled database, not a native CRM.",
+      monday: "monday Sales CRM — separate product on a separate plan.",
+      clickup: "Built via custom-field templates, not a dedicated CRM module.",
     },
   },
   {
@@ -300,9 +308,13 @@ export const COMPARE_FEATURES: FeatureRow[] = [
       hubspot: "no",
       "zoho-one": "yes",
       notion: "partial",
+      monday: "no",
+      clickup: "no",
     },
     note: {
       "zoho-one": "Via Zoho People — separate app.",
+      monday: "monday HR is a board template, not a native HR module.",
+      clickup: "Some teams roll HR via custom lists; no native employee directory.",
     },
   },
   {
@@ -313,9 +325,13 @@ export const COMPARE_FEATURES: FeatureRow[] = [
       hubspot: "partial",
       "zoho-one": "yes",
       notion: "yes",
+      monday: "yes",
+      clickup: "yes",
     },
     note: {
       "zoho-one": "Via Zoho Projects.",
+      monday: "Boards are monday's flagship product.",
+      clickup: "ClickUp's core competence — multiple views, custom statuses.",
     },
   },
   {
@@ -326,12 +342,16 @@ export const COMPARE_FEATURES: FeatureRow[] = [
       hubspot: "partial",
       "zoho-one": "partial",
       notion: "partial",
+      monday: "partial",
+      clickup: "partial",
     },
     note: {
       salesforce: "Einstein GPT is a paid add-on.",
       hubspot: "AI features are per-tool and tier-gated.",
       "zoho-one": "Zia is per-app, not workspace-wide.",
       notion: "Notion AI is page-scoped.",
+      monday: "monday AI lives inside columns and automations, not workspace-wide.",
+      clickup: "ClickUp Brain works inside docs/tasks; paid add-on.",
     },
   },
   {
@@ -342,6 +362,8 @@ export const COMPARE_FEATURES: FeatureRow[] = [
       hubspot: "no",
       "zoho-one": "no",
       notion: "no",
+      monday: "no",
+      clickup: "no",
     },
   },
   {
@@ -352,9 +374,13 @@ export const COMPARE_FEATURES: FeatureRow[] = [
       hubspot: "no",
       "zoho-one": "partial",
       notion: "no",
+      monday: "no",
+      clickup: "no",
     },
     note: {
       "zoho-one": "40+ Zoho apps, each a separate product.",
+      monday: "No bundled calculators/generators — workflows only.",
+      clickup: "Whiteboards and docs only — no domain-specific tools.",
     },
   },
   {
@@ -365,6 +391,8 @@ export const COMPARE_FEATURES: FeatureRow[] = [
       hubspot: "no",
       "zoho-one": "no",
       notion: "no",
+      monday: "no",
+      clickup: "no",
     },
   },
   {
@@ -375,9 +403,12 @@ export const COMPARE_FEATURES: FeatureRow[] = [
       hubspot: "no",
       "zoho-one": "no",
       notion: "partial",
+      monday: "no",
+      clickup: "partial",
     },
     note: {
       notion: "Recent notes cached; new data needs sync.",
+      clickup: "Read-only offline mode in the desktop app; web requires connection.",
     },
   },
   {
@@ -388,9 +419,13 @@ export const COMPARE_FEATURES: FeatureRow[] = [
       hubspot: "no",
       "zoho-one": "no",
       notion: "partial",
+      monday: "partial",
+      clickup: "partial",
     },
     note: {
       notion: "Notion workspaces share page tree only.",
+      monday: "Separate workspaces exist but share one global product surface.",
+      clickup: "Workspaces switchable, but the surface is one sidebar — no per-workspace app loadout.",
     },
   },
   {
@@ -401,6 +436,12 @@ export const COMPARE_FEATURES: FeatureRow[] = [
       hubspot: "yes",
       "zoho-one": "yes",
       notion: "partial",
+      monday: "partial",
+      clickup: "yes",
+    },
+    note: {
+      monday: "Attach files to items; no dedicated drive/folder tree.",
+      clickup: "ClickUp Docs + Files within tasks.",
     },
   },
   {
@@ -411,9 +452,13 @@ export const COMPARE_FEATURES: FeatureRow[] = [
       hubspot: "yes",
       "zoho-one": "yes",
       notion: "partial",
+      monday: "no",
+      clickup: "partial",
     },
     note: {
       notion: "Via Notion Sites for public pages only.",
+      monday: "No customer-facing white-label; brand color and logo only.",
+      clickup: "White-label add-on on the Enterprise plan.",
     },
   },
   {
@@ -424,6 +469,12 @@ export const COMPARE_FEATURES: FeatureRow[] = [
       hubspot: "yes",
       "zoho-one": "partial",
       notion: "yes",
+      monday: "yes",
+      clickup: "yes",
+    },
+    note: {
+      monday: "monday Apps Marketplace with hundreds of partner apps.",
+      clickup: "1,000+ integrations via native + Zapier-class connectors.",
     },
   },
   {
@@ -434,9 +485,13 @@ export const COMPARE_FEATURES: FeatureRow[] = [
       hubspot: "yes",
       "zoho-one": "yes",
       notion: "yes",
+      monday: "yes",
+      clickup: "yes",
     },
     note: {
       spacefield: "Audit log, SSO and role matrix shipped — SOX-level depth coming.",
+      monday: "Enterprise plan includes audit log + SAML SSO + custom roles.",
+      clickup: "Enterprise plan adds SAML SSO, custom roles, audit log API.",
     },
   },
   {
@@ -447,6 +502,11 @@ export const COMPARE_FEATURES: FeatureRow[] = [
       hubspot: "no",
       "zoho-one": "yes",
       notion: "yes",
+      monday: "partial",
+      clickup: "yes",
+    },
+    note: {
+      monday: "Per-seat, but feature tiers gate CRM/Dev/Service as separate products.",
     },
   },
   {
@@ -457,9 +517,13 @@ export const COMPARE_FEATURES: FeatureRow[] = [
       hubspot: "partial",
       "zoho-one": "yes",
       notion: "no",
+      monday: "partial",
+      clickup: "yes",
     },
     note: {
       "zoho-one": "Via Zoho Cliq.",
+      monday: "Per-item updates + inbox; no team chat channels.",
+      clickup: "ClickUp Chat — channels + DMs across workspaces.",
     },
   },
 ];

@@ -22,6 +22,12 @@ import {
 
 export const revalidate = 300;
 
+/* Disallow ad-hoc slugs: anything not enumerated by generateStaticParams
+ * must 404 with a real 404 status (not a soft 200 + "not found" body).
+ * Combined with notFound() in the component below, an unknown slug now
+ * returns HTTP 404 to bots and humans. */
+export const dynamicParams = false;
+
 type PageProps = {
   params: Promise<{ slug: string }>;
 };
