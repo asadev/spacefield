@@ -16,6 +16,7 @@
     { "path": "/api/cron/outbox-relay",           "schedule": "19 6 * * *" },
     { "path": "/api/cron/anomaly-check",          "schedule": "24 6 * * *" },
     { "path": "/api/cron/log-retention",          "schedule": "0 4 * * *" },
-    { "path": "/api/cron/api-token-reminder",     "schedule": "27 8 * * *" }
+    { "path": "/api/cron/api-token-reminder",     "schedule": "27 8 * * *" },
+    { "path": "/api/cron/whatsapp-send-runner",   "schedule": "35 6 * * *" }
   ]
 }
