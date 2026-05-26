@@ -29,6 +29,7 @@ type SectionId =
   | "profile"
   // Workspace-scoped (operate on the active workspace)
   | "workspace-info"
+  | "industry"
   | "members"
   | "permissions"
   | "ai"
@@ -74,6 +75,14 @@ const SECTIONS: SectionDef[] = [
     label: "Workspace info",
     description: "Name, description, avatar, default member role.",
     iconPath: TOOL_ICONS.home,
+  },
+  {
+    group: "Workspace",
+    id: "industry",
+    label: "Industry",
+    description:
+      "Business industry — drives default templates and tool recommendations.",
+    iconPath: TOOL_ICONS.briefcase ?? TOOL_ICONS.home,
   },
   {
     group: "Workspace",
@@ -548,6 +557,9 @@ export default function SettingsPanel({
                     fetch + an inline switcher. */}
                 {section === "workspace-info" && (
                   <WorkspaceScopedSection section="general" />
+                )}
+                {section === "industry" && (
+                  <WorkspaceScopedSection section="industry" />
                 )}
                 {section === "members" && (
                   <WorkspaceScopedSection section="members" />
