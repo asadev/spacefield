@@ -19,10 +19,72 @@ import {
   type IndustryKey,
 } from "../_data/industries";
 import { templateForProfession } from "../crm/_templates/registry";
+import IndustryCardGrid from "./workspace-settings/IndustryCardGrid";
+import {
+  ALL_INDUSTRIES as BUSINESS_INDUSTRIES,
+} from "@/lib/industry/registry";
+import { getIndustryConfig } from "@/lib/industry/registry-helpers";
+import type { Industry as BusinessIndustry } from "@/lib/industry/types";
 
 interface Props {
   open: boolean;
   onComplete: (profession: ProfessionKey, installed: string[]) => void;
+}
+
+/* Map a business-industry slug (lib/industry) onto the legacy
+ * onboarding IndustryKey used for role filtering. The legacy enum only
+ * has a few buckets, so most business industries collapse to "other"
+ * (which surfaces the generalist set of roles + tools). RE is the only
+ * one that survives end-to-end since the product started there.
+ *
+ * When we add new buckets to PROFESSIONS / INDUSTRIES, extend this map. */
+function legacyIndustryFor(business: BusinessIndustry): IndustryKey {
+  switch (business) {
+    case "real_estate":
+      return "real-estate";
+    case "marketing_agency":
+      return "marketing";
+    case "professional_services":
+      return "consulting";
+    case "clothing_retail":
+    case "beauty":
+    case "retail_general":
+      return "sales";
+    case "coworking":
+    case "salon":
+    case "restaurant":
+    case "gym":
+    case "fitness":
+    case "automotive":
+    case "education":
+    case "healthcare":
+    case "hospitality":
+    case "generic":
+    default:
+      return "other";
+  }
+}
+
+/* Persist the workspace's business industry to public.workspaces.industry.
+ * Fire-and-forget — onboarding never blocks on the network call. If the
+ * workspace hasn't been materialized yet (personal-only flow), this
+ * silently no-ops. The user can change it later from
+ * Settings → Industry. */
+async function persistBusinessIndustry(
+  workspaceId: string,
+  industry: BusinessIndustry
+): Promise<void> {
+  if (!workspaceId) return;
+  try {
+    await fetch("/api/workspaces/update", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ workspaceId, industry }),
+    });
+  } catch {
+    /* swallow — Settings → Industry is the manual fallback. */
+  }
 }
 
 /* Fire-and-forget: if the chosen profession matches a CRM template and
@@ -60,19 +122,43 @@ async function maybeAutoApplyTemplate(
   }
 }
 
-type Step = "welcome" | "industry" | "profession" | "tools" | "done";
+type Step =
+  | "welcome"
+  | "business"
+  | "industry"
+  | "profession"
+  | "tools"
+  | "done";
 
 export default function Onboarding({ open, onComplete }: Props) {
   const [step, setStep] = useState<Step>("welcome");
   // Pre-select Real Estate — product started as an RE workspace and most
   // visitors still fit that persona. Other industries are one click away.
   const [industry, setIndustry] = useState<IndustryKey>(DEFAULT_INDUSTRY);
+  /* Business industry (public.workspaces.industry — see lib/industry).
+   * Required for new workspaces (the brief), but null-permissive on
+   * legacy ones. We start with null; the "business" step is required
+   * before continuing. */
+  const [businessIndustry, setBusinessIndustry] =
+    useState<BusinessIndustry | null>(null);
   const [profession, setProfession] = useState<ProfessionKey | null>(null);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   // Active team workspace id, used to fire the CRM template auto-apply
   // after the user finishes onboarding. Personal workspaces don't get a
   // template (the apply API rejects non-team workspaces with no member row).
   const { current: activeWorkspace } = useWorkspace();
+
+  const handlePickBusinessIndustry = (key: BusinessIndustry) => {
+    setBusinessIndustry(key);
+    // Persist immediately. Don't block the UI on the network.
+    if (activeWorkspace.kind === "team") {
+      void persistBusinessIndustry(activeWorkspace.id, key);
+    }
+    // Pre-select the matching legacy industry for the next step so the
+    // role list is already filtered correctly.
+    setIndustry(legacyIndustryFor(key));
+    setStep("industry");
+  };
 
   const handlePickIndustry = (key: IndustryKey) => {
     setIndustry(key);
@@ -87,7 +173,19 @@ export default function Onboarding({ open, onComplete }: Props) {
     const initial = isExploring
       ? TOOLS.filter((t) => t.topRated).map((t) => t.slug)
       : p.preinstalled;
-    setSelected(new Set(initial));
+    // Union the business-industry's recommendedApps with the role's
+    // preinstall list — both are signals about what the user actually
+    // needs, and pre-checking is reversible (the user can uncheck in the
+    // tools step). Tool slugs are filtered to those that actually exist
+    // in TOOLS so we don't pre-check ghost apps.
+    const businessRecs =
+      businessIndustry !== null
+        ? getIndustryConfig(businessIndustry).recommendedApps
+        : [];
+    const allKnownSlugs = new Set(TOOLS.map((t) => t.slug));
+    const merged = new Set<string>(initial);
+    for (const slug of businessRecs) if (allKnownSlugs.has(slug)) merged.add(slug);
+    setSelected(merged);
     setStep("tools");
   };
 
@@ -140,14 +238,22 @@ export default function Onboarding({ open, onComplete }: Props) {
               {step === "welcome" && (
                 <StepWelcome
                   key="welcome"
-                  onStart={() => setStep("industry")}
+                  onStart={() => setStep("business")}
+                />
+              )}
+              {step === "business" && (
+                <StepBusinessIndustry
+                  key="business"
+                  selected={businessIndustry}
+                  onBack={() => setStep("welcome")}
+                  onPick={handlePickBusinessIndustry}
                 />
               )}
               {step === "industry" && (
                 <StepIndustry
                   key="industry"
                   selected={industry}
-                  onBack={() => setStep("welcome")}
+                  onBack={() => setStep("business")}
                   onPick={handlePickIndustry}
                 />
               )}
@@ -215,6 +321,66 @@ function StepWelcome({ onStart }: { onStart: () => void }) {
     </motion.div>
   );
 }
+
+function StepBusinessIndustry({
+  selected,
+  onBack,
+  onPick,
+}: {
+  selected: BusinessIndustry | null;
+  onBack: () => void;
+  onPick: (k: BusinessIndustry) => void;
+}) {
+  // The brief recommends a follow-up "want us to install the recommended
+  // apps?" prompt. We surface the list inline once a pick is made — no
+  // auto-install (user stays in control). Picking the same card again
+  // (or any other card) commits the choice and advances.
+  const recommended = selected ? getIndustryConfig(selected) : null;
+  return (
+    <motion.div
+      initial={{ opacity: 0, x: 12 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: -12 }}
+      transition={{ duration: 0.2 }}
+      className="flex flex-1 flex-col overflow-hidden"
+    >
+      <Header
+        title="What kind of business is this for?"
+        subtitle="We'll pick the right templates, pipelines, and tool recommendations. You can change this anytime in Settings → Industry."
+        onBack={onBack}
+      />
+      <div className="flex-1 overflow-y-auto px-6 pb-6">
+        <IndustryCardGrid
+          selected={selected}
+          onPick={onPick}
+        />
+        {recommended && recommended.recommendedApps.length > 0 && (
+          <div className="mt-5 rounded-xl border border-tool-accent-soft bg-tool-accent-soft px-4 py-3">
+            <div className="text-xs font-semibold text-app">
+              Recommended for {recommended.label}
+            </div>
+            <div className="mt-1 text-[11px] text-muted">
+              We&apos;ll suggest these apps in the next step — install
+              whichever you want.
+            </div>
+            <div className="mt-2 flex flex-wrap gap-1">
+              {recommended.recommendedApps.map((slug) => (
+                <span
+                  key={slug}
+                  className="rounded-md border border-app bg-app px-1.5 py-0.5 text-[10px] uppercase tracking-[0.12em] text-secondary"
+                >
+                  {slug.replace(/-/g, " ")}
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+    </motion.div>
+  );
+}
+
+/* The industry-step header used by StepBusinessIndustry + StepIndustry. */
 
 function StepIndustry({
   selected,

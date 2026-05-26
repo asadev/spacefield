@@ -24,6 +24,12 @@ export interface WorkspaceFullRow {
   name: string;
   description: string | null;
   avatar_url: string | null;
+  /**
+   * Industry classification slug. NULL for workspaces created before
+   * the industry feature shipped or whose owner hasn't picked yet.
+   * Helpers in lib/industry treat NULL as 'generic'.
+   */
+  industry: string | null;
   created_at: string;
   archived_at: string | null;
   default_member_role: DefaultMemberRole;
@@ -100,6 +106,7 @@ export interface ActivityEvent {
 
 export type SectionId =
   | "general"
+  | "industry"
   | "storage"
   | "members"
   | "permissions"

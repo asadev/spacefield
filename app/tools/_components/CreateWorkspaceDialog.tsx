@@ -11,6 +11,27 @@ import {
   type TemplateKey,
 } from "./WorkspaceTemplates";
 import { firePushPermissionPrompt } from "@/components/PushPermissionPrompt";
+import { ALL_INDUSTRIES } from "@/lib/industry/registry";
+import type { Industry } from "@/lib/industry/types";
+
+/* Map a workspace template to a sensible default business industry.
+ * Users who pick "Real Estate Agent" almost always want the real_estate
+ * industry; same for marketing → marketing_agency etc. We pre-select
+ * but still show the dropdown so non-matching cases can override.
+ * Personal → no opinion; the user picks one explicitly. */
+function defaultIndustryForTemplate(t: TemplateKey): Industry {
+  switch (t) {
+    case "real-estate":
+      return "real_estate";
+    case "marketing":
+      return "marketing_agency";
+    case "finance-ops":
+      return "professional_services";
+    case "personal":
+    default:
+      return "generic";
+  }
+}
 
 /* Modal dialog for creating a new workspace.
  *
@@ -45,6 +66,15 @@ export default function CreateWorkspaceDialog({ open, onClose }: Props) {
   const { createWorkspace, workspaces } = useWorkspaces();
   const [name, setName] = useState("");
   const [template, setTemplate] = useState<TemplateKey>("personal");
+  /* Business industry slug — picked at creation, sent to
+   * /api/workspaces/ensure so the row lands with the correct industry
+   * from day one. Defaults from the template (real-estate template →
+   * real_estate, etc). User can override or change later from
+   * Settings → Industry. */
+  const [industry, setIndustry] = useState<Industry>(
+    defaultIndustryForTemplate("personal")
+  );
+  const [industryTouched, setIndustryTouched] = useState(false);
   // Tracks whether the user has manually edited the name. Once they have,
   // we stop auto-filling from the template — the autofill is a
   // convenience, not a takeover.
@@ -108,6 +138,8 @@ export default function CreateWorkspaceDialog({ open, onClose }: Props) {
     if (!open) return;
     setName("");
     setTemplate("personal");
+    setIndustry(defaultIndustryForTemplate("personal"));
+    setIndustryTouched(false);
     setNameTouched(false);
     const t = window.setTimeout(() => {
       inputRef.current?.focus();
@@ -125,6 +157,13 @@ export default function CreateWorkspaceDialog({ open, onClose }: Props) {
     if (!tpl) return;
     setName(template === "personal" ? "" : tpl.defaultWorkspaceName);
   }, [template, open, nameTouched]);
+
+  // Mirror template → industry until the user touches the industry
+  // dropdown. Once touched we leave the user in charge.
+  useEffect(() => {
+    if (!open || industryTouched) return;
+    setIndustry(defaultIndustryForTemplate(template));
+  }, [template, open, industryTouched]);
 
   // Esc closes
   useEffect(() => {
@@ -155,7 +194,11 @@ export default function CreateWorkspaceDialog({ open, onClose }: Props) {
     // Apply the template synchronously inside createWorkspace's post-create
     // hook so the new workspace's localStorage namespace is seeded BEFORE
     // the Desktop remounts on activeId — see useWorkspaces.tsx.
-    createWorkspace(trimmed, (id) => applyWorkspaceTemplate(id, template));
+    createWorkspace(
+      trimmed,
+      (id) => applyWorkspaceTemplate(id, template),
+      { industry }
+    );
     // Positive moment: just created a workspace. Fire the push-prompt
     // event — the prompt component decides whether to show (browser
     // support / recently-dismissed gates apply).
@@ -250,6 +293,31 @@ export default function CreateWorkspaceDialog({ open, onClose }: Props) {
                       />
                     </div>
                   </div>
+
+                  <label className="mt-5 block">
+                    <span className="text-[0.72rem] uppercase tracking-[0.14em] text-muted">
+                      Business industry
+                    </span>
+                    <select
+                      value={industry}
+                      onChange={(e) => {
+                        setIndustry(e.target.value as Industry);
+                        setIndustryTouched(true);
+                      }}
+                      disabled={meLoading}
+                      className="mt-1 block w-full rounded-lg border border-app bg-app px-3 py-2 text-sm text-app focus:border-tool-accent focus:outline-none focus:ring-2 focus:ring-tool-accent-soft disabled:opacity-50"
+                    >
+                      {ALL_INDUSTRIES.map((ind) => (
+                        <option key={ind.slug} value={ind.slug}>
+                          {ind.label}
+                        </option>
+                      ))}
+                    </select>
+                    <span className="mt-1 block text-[11px] text-muted">
+                      Drives default templates and tool recommendations.
+                      You can change this from Settings → Industry.
+                    </span>
+                  </label>
 
                   <label className="mt-5 block">
                     <span className="text-[0.72rem] uppercase tracking-[0.14em] text-muted">
