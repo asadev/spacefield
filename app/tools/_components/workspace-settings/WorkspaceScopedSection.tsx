@@ -26,6 +26,7 @@ import {
 import { useAuth } from "../useAuth";
 import { useWorkspaces } from "../useWorkspaces";
 import GeneralSection from "./GeneralSection";
+import IndustrySection from "./IndustrySection";
 import StorageSection from "./StorageSection";
 import MembersSection from "./MembersSection";
 import PermissionsSection from "./PermissionsSection";
@@ -116,7 +117,7 @@ export default function WorkspaceScopedSection({ section }: Props) {
       const { data, error } = await supabase
         .from("workspaces")
         .select(
-          "id, name, description, avatar_url, created_at, archived_at, default_member_role, who_can_invite, who_can_install, who_can_uninstall"
+          "id, name, description, avatar_url, industry, created_at, archived_at, default_member_role, who_can_invite, who_can_install, who_can_uninstall"
         )
         .eq("id", active.id)
         .maybeSingle();
@@ -127,6 +128,7 @@ export default function WorkspaceScopedSection({ section }: Props) {
           name: data.name,
           description: (data.description as string | null) ?? null,
           avatar_url: (data.avatar_url as string | null) ?? null,
+          industry: (data.industry as string | null) ?? null,
           created_at: data.created_at,
           archived_at: (data.archived_at as string | null) ?? null,
           default_member_role:
@@ -288,6 +290,14 @@ export default function WorkspaceScopedSection({ section }: Props) {
               full={full}
               memberCount={memberCount}
               onSaved={onSavedPatch}
+              onError={onError}
+              onSuccess={onSuccess}
+            />
+          )}
+          {section === "industry" && (
+            <IndustrySection
+              workspaceId={active.id}
+              role={role}
               onError={onError}
               onSuccess={onSuccess}
             />
