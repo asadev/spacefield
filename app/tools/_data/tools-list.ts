@@ -430,6 +430,7 @@ export const TOOLS: ToolItem[] = [
   // Agent Tools
   { slug: "sales-offer-generator", title: "Sales Offer Generator", description: "Stop spending 30 minutes formatting offers. Input the deal details and get a structured, ready-to-send sales offer in seconds.", category: "agent", topRated: true, icon: "document", app: () => import("../sales-offer-generator/_app").then((m) => ({ default: m.default })) },
   { slug: "poster-creator", title: "Poster Creator", description: "Generate posters for any industry — real estate, fashion, food, services and more. Industry-keyed templates, drag photos in, download in high res.", category: "agent", topRated: true, icon: "image", app: () => import("../poster-creator/_app").then((m) => ({ default: m.default })) },
+  { slug: "whatsapp", title: "WhatsApp Inbox", description: "Pair your shop number once. Reply to every customer from one inbox, blast price updates to saved lists, manage groups — all metered to stay under WhatsApp's ban threshold.", category: "agent", topRated: true, icon: "message", defaultSize: { w: 1080, h: 720 }, app: () => import("../whatsapp/_app").then((m) => ({ default: m.default })) },
 
   /* ────────────────────────────────────────────────────────────────────────
    *  Cross-industry tools (mirrored from /solutions/_data/tools.ts)
