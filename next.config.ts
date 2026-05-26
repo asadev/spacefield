@@ -146,6 +146,21 @@ const nextConfig: NextConfig = {
         destination: '/?app=launchpad',
         permanent: false,
       },
+      {
+        // (Poster Creator rename, 2026-05-27) Tool renamed from
+        // `property-poster-creator` → `poster-creator` so the tool can
+        // serve every industry, not just real estate. Permanent 308 so
+        // existing share-links, social posts, and bookmarks keep
+        // working.
+        source: '/tools/property-poster-creator',
+        destination: '/tools/poster-creator',
+        permanent: true,
+      },
+      {
+        source: '/tools/property-poster-creator/:path*',
+        destination: '/tools/poster-creator/:path*',
+        permanent: true,
+      },
     ];
   },
   async headers() {

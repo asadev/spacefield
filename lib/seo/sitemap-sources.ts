@@ -55,7 +55,7 @@ export const UAE_TOOL_SLUGS = [
   "offplan-analyzer",
   "portfolio-tracker",
   "property-comparison",
-  "property-poster-creator",
+  "poster-creator",
   "property-valuation",
   "regulation-monitor",
   "rent-vs-buy",
