@@ -162,11 +162,124 @@ const coworking: SeedTemplate = {
   },
 };
 
+/* ─────────────────────── Clothing & Fashion Retail ─────────────────────── */
+//
+// 2026-05-27 Agent E — boutique / apparel / fabric / accessories.
+// Currency-agnostic, country-agnostic, religion-agnostic. The sample
+// data uses generic product names ("Wide-leg trousers", "Silk scarf")
+// that work for any clothing business in any locale. NO PKR or AED, NO
+// Urdu strings, NO bridal-only framing. Workspaces in any country can
+// apply this template and only need to tweak prices.
+//
+// Pairs naturally with: poster-creator (for product flyers), whatsapp
+// (the Send-via-WhatsApp button on each inventory row), crm.
+const clothingRetail: SeedTemplate = {
+  slug: "clothing-retail",
+  name: "Clothing & Fashion Retail",
+  industry: "clothing_retail",
+  description:
+    "Boutique, apparel, fabric, fashion accessories — works for any clothing business, any country, any currency. Sales pipeline + customer tags + inventory categories tuned for fashion retail.",
+  icon: "shopping-bag",
+  body: {
+    summary:
+      "Walk-In → Browsing → Tried On → Purchased → Repeat / Lost pipeline. Five sample customers, ten sample inventory items in clothing categories. WhatsApp + Poster Creator are the recommended companion apps.",
+    tables: {
+      crm_pipelines: [
+        { name: "Sales", is_default: true, position: 0 },
+      ],
+      crm_pipeline_stages: [
+        { pipeline_name: "Sales", name: "Walked In",       kind: "open", position: 0, probability: 10, color: "#94a3b8" },
+        { pipeline_name: "Sales", name: "Browsing",        kind: "open", position: 1, probability: 25, color: "#60a5fa" },
+        { pipeline_name: "Sales", name: "Tried On",        kind: "open", position: 2, probability: 55, color: "#a78bfa" },
+        { pipeline_name: "Sales", name: "Purchased",       kind: "won",  position: 3, probability: 100, color: "#34d399" },
+        { pipeline_name: "Sales", name: "Repeat Customer", kind: "won",  position: 4, probability: 100, color: "#10b981" },
+        { pipeline_name: "Sales", name: "Lost",            kind: "lost", position: 5, probability: 0,   color: "#f87171" },
+      ],
+      crm_companies: [],
+      crm_contacts: [
+        { first_name: "Maya",   last_name: "Kim",       email: "maya@example.com",     phone: "+1-555-100-0001", job_title: "Customer", notes: "Walk-in, prefers neutrals" },
+        { first_name: "Diego",  last_name: "Rivera",    email: "diego@example.com",    phone: "+1-555-100-0002", job_title: "Customer", notes: "Catalogue buyer" },
+        { first_name: "Aiko",   last_name: "Sato",      email: "aiko@example.com",     phone: "+1-555-100-0003", job_title: "Customer", notes: "Bridal inquiry — referred" },
+        { first_name: "Noah",   last_name: "Williams",  email: "noah@example.com",     phone: "+1-555-100-0004", job_title: "Customer", notes: "Wholesale prospect" },
+        { first_name: "Lina",   last_name: "Hassan",    email: "lina@example.com",     phone: "+1-555-100-0005", job_title: "Customer", notes: "Repeat VIP — quarterly" },
+      ],
+      crm_leads: [
+        { first_name: "River",  last_name: "Patel",     email: "river@example.com",    phone: "+1-555-200-0001", source: "instagram", status: "new",     notes: "DM'd about scarf collection" },
+        { first_name: "Sasha",  last_name: "Volkov",    email: "sasha@example.com",    phone: "+1-555-200-0002", source: "whatsapp",  status: "working", notes: "Asked about Eid lookbook" },
+      ],
+      crm_deals: [
+        { pipeline_name: "Sales", stage_name: "Tried On",        name: "Maya — denim jacket + trousers", amount: 240, currency: "USD", status: "open" },
+        { pipeline_name: "Sales", stage_name: "Purchased",       name: "Lina — quarterly capsule",        amount: 1200, currency: "USD", status: "won"  },
+        { pipeline_name: "Sales", stage_name: "Walked In",       name: "Aiko — bridal consult",           amount: 0,    currency: "USD", status: "open" },
+      ],
+      crm_activities: [
+        { kind: "note", subject: "Style preferences — Maya",   body: "Neutrals, size M, prefers wide-leg cuts, no synthetics." },
+        { kind: "note", subject: "Repeat customer playbook",   body: "VIP tier: free hemming, early access to new arrivals, hand-written thank-you card with each order." },
+        { kind: "note", subject: "Inventory restock — basics", body: "Reorder cotton tees + linen shirts monthly. Limited drops for the rest." },
+      ],
+      // Inventory items use the workspace's default currency at apply
+      // time (the apply RPC reads from the row). Until the RPC adds
+      // inventory support these are no-ops; once it lands the template
+      // works end-to-end.
+      crm_inventory_items: [
+        { sku: "TOP-001", name: "Cotton crew tee",          category: "Casual",     price: 28,  currency: "USD", quantity: 80, unit: "pcs", status: "active", custom: { fabric: "100% cotton",     sizes: "XS, S, M, L, XL", color: "white" } },
+        { sku: "TOP-002", name: "Linen button-down shirt",  category: "Casual",     price: 78,  currency: "USD", quantity: 32, unit: "pcs", status: "active", custom: { fabric: "100% linen",      sizes: "S, M, L, XL",     color: "cream" } },
+        { sku: "BOT-001", name: "Wide-leg trousers",        category: "Casual",     price: 95,  currency: "USD", quantity: 24, unit: "pcs", status: "active", custom: { fabric: "viscose blend",   sizes: "S, M, L",         color: "olive" } },
+        { sku: "OUT-001", name: "Denim jacket",             category: "Casual",     price: 145, currency: "USD", quantity: 18, unit: "pcs", status: "active", custom: { fabric: "13oz denim",      sizes: "S, M, L, XL",     color: "indigo" } },
+        { sku: "DRE-001", name: "Wrap midi dress",          category: "Formal",     price: 165, currency: "USD", quantity: 14, unit: "pcs", status: "active", custom: { fabric: "silk-blend",      sizes: "XS, S, M, L",     color: "black" } },
+        { sku: "DRE-002", name: "Embroidered evening gown", category: "Bridal",     price: 480, currency: "USD", quantity: 4,  unit: "pcs", status: "active", custom: { fabric: "tulle + sequins", sizes: "S, M, L",         color: "champagne" } },
+        { sku: "KID-001", name: "Kids' striped tee (pack of 2)", category: "Kids", price: 32,  currency: "USD", quantity: 40, unit: "pcs", status: "active", custom: { fabric: "cotton",          sizes: "2T, 3T, 4T, 5T",  color: "multi" } },
+        { sku: "ACC-001", name: "Silk scarf",               category: "Accessories", price: 65,  currency: "USD", quantity: 36, unit: "pcs", status: "active", custom: { fabric: "100% silk",       sizes: "90cm × 90cm",     color: "rust" } },
+        { sku: "ACC-002", name: "Leather tote",             category: "Accessories", price: 220, currency: "USD", quantity: 12, unit: "pcs", status: "active", custom: { material: "full-grain leather", sizes: "one size",   color: "tan" } },
+        { sku: "FOO-001", name: "Suede loafers",            category: "Footwear",   price: 180, currency: "USD", quantity: 16, unit: "pcs", status: "active", custom: { material: "suede",         sizes: "6–11 (US)",       color: "camel" } },
+      ],
+      crm_tags: [
+        { name: "VIP",            color: "#fbbf24" },
+        { name: "New Customer",   color: "#60a5fa" },
+        { name: "Repeat",         color: "#34d399" },
+        { name: "Wholesale",      color: "#a78bfa" },
+        { name: "Wedding",        color: "#f472b6" },
+        { name: "Seasonal",       color: "#fb923c" },
+        { name: "Catalogue Buyer", color: "#22d3ee" },
+        { name: "Walk-in",        color: "#94a3b8" },
+        { name: "Online",         color: "#818cf8" },
+        { name: "Referral",       color: "#10b981" },
+      ],
+      crm_lead_sources: [
+        { kind: "form",     name: "Walk-in form",      slug: "walk-in" },
+        { kind: "whatsapp", name: "WhatsApp inquiries", slug: "whatsapp" },
+        { kind: "form",     name: "Instagram DM",      slug: "instagram" },
+        { kind: "form",     name: "Facebook lead",     slug: "facebook" },
+        { kind: "form",     name: "Referral",          slug: "referral" },
+        { kind: "form",     name: "Online store",      slug: "online-store" },
+        { kind: "form",     name: "Market visit",      slug: "market-visit" },
+      ],
+    },
+  },
+};
+
 export const SEED_TEMPLATES: SeedTemplate[] = [
   realEstate,
   marketingAgency,
   coworking,
+  clothingRetail,
 ];
+
+/**
+ * Apps that pair naturally with each template's industry. The
+ * onboarding flow + template picker can render these as one-click
+ * "install with template" pills. Slugs match `app/tools/_data/tools-list.ts`.
+ *
+ * Kept as a parallel map rather than a field on `SeedTemplate` so
+ * existing callers (apply_workspace_template, /admin/templates) don't
+ * have to learn a new key.
+ */
+export const TEMPLATE_RECOMMENDED_APPS: Record<string, string[]> = {
+  "real-estate-brokerage": ["property-poster-creator", "crm"],
+  "marketing-agency":      ["crm", "social-posts"],
+  "coworking-space":       ["crm"],
+  "clothing-retail":       ["poster-creator", "whatsapp", "crm"],
+};
 
 export function findSeedTemplate(slug: string): SeedTemplate | undefined {
   return SEED_TEMPLATES.find((t) => t.slug === slug);

@@ -37,6 +37,11 @@ import { collabSkill } from "@/lib/ai-tools/collab";
 import { searchSkill } from "@/lib/ai-tools/search";
 import { extrasSkill } from "@/lib/ai-tools/extras";
 
+// 2026-05-27 overnight build — Inventory captions skill (Agent E).
+// Lets the AI write WhatsApp marketing captions for inventory items in
+// the workspace's currency + locale + industry voice.
+import { inventoryCaptionSkill } from "@/lib/ai/skills/inventory-caption";
+
 export const ALL_SKILLS: SkillDefinition[] = [
   workspaceSkill,
   crmContactsSkill,
@@ -54,6 +59,8 @@ export const ALL_SKILLS: SkillDefinition[] = [
   collabSkill,
   searchSkill,
   extrasSkill,
+  // 2026-05-27 batch
+  inventoryCaptionSkill,
 ];
 
 export function getSkillsByIds(ids: string[]): SkillDefinition[] {
