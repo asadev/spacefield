@@ -7,7 +7,7 @@
  *   <MintShareButton
  *     type="page"
  *     payload={() => ({ title, blocks, ... })}
- *     sourceTool="property-poster-creator"
+ *     sourceTool="poster-creator"
  *     resetKey={`${data.title}|${data.image}`}  // bump → button resets
  *   />
  *

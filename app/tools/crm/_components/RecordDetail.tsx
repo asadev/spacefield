@@ -1362,7 +1362,7 @@ function InventoryHandoffButtons({
       : "";
 
   const goPoster = () => {
-    openApp("property-poster-creator", {
+    openApp("poster-creator", {
       propertyTitle: record.name,
       price: priceStr,
       bedrooms: cf("bedrooms", "beds", "bed"),

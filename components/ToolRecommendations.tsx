@@ -68,9 +68,9 @@ const TOOL_INFO: Record<string, ToolInfo> = {
     name: "Area Comparison",
     description: "Settle the area debate with data across 20+ metrics",
   },
-  "property-poster-creator": {
-    name: "Property Poster Creator",
-    description: "Polished listing posters your clients will share",
+  "poster-creator": {
+    name: "Poster Creator",
+    description: "Industry-aware poster templates — real estate, fashion, food, more",
   },
   "global-market-comparison": {
     name: "Global Market Comparison",
@@ -131,7 +131,7 @@ const RECOMMENDATIONS: Record<string, string[]> = {
   "deal-scoring": ["property-valuation", "roi-calculator", "neighborhood-report"],
   "due-diligence": ["dld-fee-calculator", "regulation-monitor", "golden-visa-checker"],
   affordability: ["mortgage-calculator", "rent-vs-buy", "golden-visa-checker"],
-  "sales-offer-generator": ["commission-calculator", "property-poster-creator", "dld-fee-calculator"],
+  "sales-offer-generator": ["commission-calculator", "poster-creator", "dld-fee-calculator"],
   "roi-calculator": ["cash-flow-modeler", "investment-simulator", "rent-vs-buy"],
   "commission-calculator": ["dld-fee-calculator", "sales-offer-generator", "roi-calculator"],
   "property-comparison": ["deal-scoring", "property-valuation", "area-comparison"],
@@ -142,7 +142,7 @@ const RECOMMENDATIONS: Record<string, string[]> = {
   "investment-simulator": ["roi-calculator", "market-pulse", "global-market-comparison"],
   "golden-visa-checker": ["affordability", "investment-advisor", "dld-fee-calculator"],
   "area-comparison": ["neighborhood-report", "yield-heatmap", "tenant-screening"],
-  "property-poster-creator": ["sales-offer-generator", "commission-calculator", "deal-scoring"],
+  "poster-creator": ["sales-offer-generator", "commission-calculator", "deal-scoring"],
   "global-market-comparison": ["market-pulse", "investment-simulator", "investment-advisor"],
   // New 12
   "mortgage-calculator": ["affordability", "dld-fee-calculator", "rent-vs-buy"],

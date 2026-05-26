@@ -53,7 +53,7 @@ export const WORKSPACE_TEMPLATES: WorkspaceTemplate[] = [
       "market-pulse",
       "property-comparison",
       "sales-offer-generator",
-      "property-poster-creator",
+      "poster-creator",
       // (Files Manager retired Round D — Launchpad covers files now.)
       "documents",
     ],
@@ -63,7 +63,7 @@ export const WORKSPACE_TEMPLATES: WorkspaceTemplate[] = [
       "market-pulse",
       "property-comparison",
       "sales-offer-generator",
-      "property-poster-creator",
+      "poster-creator",
       "documents",
     ],
   },

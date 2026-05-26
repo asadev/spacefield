@@ -73,7 +73,7 @@ export const PROFESSIONS: Profession[] = [
     industry: "real-estate",
     preinstalled: [
       "sales-offer-generator",
-      "property-poster-creator",
+      "poster-creator",
       "commission-calculator",
       "property-valuation",
       "deal-scoring",
@@ -90,7 +90,7 @@ export const PROFESSIONS: Profession[] = [
     industry: "real-estate",
     preinstalled: [
       "sales-offer-generator",
-      "property-poster-creator",
+      "poster-creator",
       "commission-calculator",
       "deal-scoring",
       "market-pulse",

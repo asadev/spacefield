@@ -28,7 +28,7 @@ export const TOOL_TO_COURSES: Record<string, string[]> = {
   "regulation-monitor": ["legal-framework", "rera-certification"],
   "due-diligence": ["due-diligence-masterclass", "legal-framework"],
   "sales-offer-generator": ["client-advisory", "rera-certification"],
-  "property-poster-creator": ["digital-marketing-agents"],
+  "poster-creator": ["digital-marketing-agents"],
 };
 
 export const TOOL_TO_GAMES: Record<string, string[]> = {

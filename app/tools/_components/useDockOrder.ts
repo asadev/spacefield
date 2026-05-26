@@ -12,7 +12,7 @@ export const DEFAULT_PINNED_SLUGS: string[] = [
   "deal-scoring",
   "market-pulse",
   "yield-heatmap",
-  "property-poster-creator",
+  "poster-creator",
   "sales-offer-generator",
 ];
 
