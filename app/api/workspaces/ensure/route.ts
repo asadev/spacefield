@@ -1,9 +1,15 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { ALL_INDUSTRIES } from "@/lib/industry/registry";
+import type { Industry } from "@/lib/industry/types";
+
+const INDUSTRY_SLUGS: ReadonlySet<string> = new Set(
+  ALL_INDUSTRIES.map((i) => i.slug)
+);
 
 /* POST /api/workspaces/ensure
- *   body: { id, name }
+ *   body: { id, name, industry? }
  *
  * Lazy materializer for workspaces. The desktop creates workspaces in
  * localStorage and we mirror them into public.workspaces here.
@@ -41,13 +47,13 @@ export async function POST(req: NextRequest) {
   if (!user)
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
 
-  let body: { id?: string; name?: string };
+  let body: { id?: string; name?: string; industry?: string | null };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }
-  const { id, name } = body;
+  const { id, name, industry: rawIndustry } = body;
   if (!id || typeof id !== "string") {
     return NextResponse.json({ error: "missing id" }, { status: 400 });
   }
@@ -59,11 +65,27 @@ export async function POST(req: NextRequest) {
 
   const safeName = (name ?? "").toString().trim().slice(0, 80) || "Workspace";
 
+  // industry is optional on ensure() to stay backward-compatible with the
+  // existing desktop flow (workspace gets minted before the user picks an
+  // industry from onboarding). When the client does supply one, validate
+  // it against the enum so an invalid slug returns 400 instead of failing
+  // the INSERT with a CHECK-violation message that the UI can't render.
+  let industry: Industry | null = null;
+  if (rawIndustry !== undefined && rawIndustry !== null) {
+    if (typeof rawIndustry !== "string" || !INDUSTRY_SLUGS.has(rawIndustry)) {
+      return NextResponse.json(
+        { error: "industry must be a known slug" },
+        { status: 400 }
+      );
+    }
+    industry = rawIndustry as Industry;
+  }
+
   // Service-role lookup — sees the row regardless of caller's RLS.
   const admin = createAdminClient();
   const { data: existing, error: lookupErr } = await admin
     .from("workspaces")
-    .select("id, user_id, name")
+    .select("id, user_id, name, industry")
     .eq("id", id)
     .maybeSingle();
   if (lookupErr) {
@@ -85,8 +107,18 @@ export async function POST(req: NextRequest) {
           },
           { onConflict: "workspace_id,user_id", ignoreDuplicates: false }
         );
+      // If the caller just learned their industry (e.g. they're
+      // finishing onboarding for an already-materialized workspace),
+      // record it now — but never overwrite a previous choice via this
+      // route. Owners who want to change it go through /update.
+      if (industry && !existing.industry) {
+        await admin
+          .from("workspaces")
+          .update({ industry })
+          .eq("id", id);
+      }
       return NextResponse.json({
-        workspace: existing,
+        workspace: { ...existing, industry: existing.industry ?? industry ?? null },
         role: "owner",
         created: false,
       });
@@ -125,10 +157,22 @@ export async function POST(req: NextRequest) {
   //     `slug` is NOT NULL and globally unique (see 20260428 migration).
   //     We seed it with the UUID so callers don't need to supply one.
   //     Future work can add a "rename slug" admin path.
+  //
+  //     industry is optional — when set, persisted on insert; when
+  //     omitted, the workspace is created with industry = NULL and the
+  //     onboarding/settings UI prompts the user to pick later.
+  const insertRow: Record<string, string | null> = {
+    id,
+    user_id: user.id,
+    name: safeName,
+    slug: id,
+  };
+  if (industry) insertRow.industry = industry;
+
   const { data: created, error: insertErr } = await supabase
     .from("workspaces")
-    .insert({ id, user_id: user.id, name: safeName, slug: id })
-    .select("id, user_id, name, slug")
+    .insert(insertRow)
+    .select("id, user_id, name, slug, industry")
     .single();
   if (insertErr) {
     return NextResponse.json(

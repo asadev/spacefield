@@ -1,10 +1,12 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { ALL_INDUSTRIES } from "@/lib/industry/registry";
+import type { Industry } from "@/lib/industry/types";
 
 /* POST /api/workspaces/update
  *   body: {
  *     workspaceId,
- *     name?, description?, avatar_url?,
+ *     name?, description?, avatar_url?, industry?,
  *     default_member_role?, who_can_invite?, who_can_install?, who_can_uninstall?
  *   }
  *
@@ -17,12 +19,16 @@ import { createClient } from "@/lib/supabase/server";
 
 const PERM_VALUES = new Set(["admins", "members"]);
 const ROLE_VALUES = new Set(["member", "admin"]);
+const INDUSTRY_VALUES: ReadonlySet<string> = new Set(
+  ALL_INDUSTRIES.map((i) => i.slug)
+);
 
 type SettingsBody = {
   workspaceId?: string;
   name?: string;
   description?: string | null;
   avatar_url?: string | null;
+  industry?: Industry | null;
   default_member_role?: "member" | "admin";
   who_can_invite?: "admins" | "members";
   who_can_install?: "admins" | "members";
@@ -34,6 +40,7 @@ type WorkspaceRow = {
   name: string;
   description: string | null;
   avatar_url: string | null;
+  industry: string | null;
   default_member_role: "member" | "admin";
   who_can_invite: string;
   who_can_install: string;
@@ -101,6 +108,25 @@ export async function POST(req: NextRequest) {
     patch.avatar_url =
       body.avatar_url === null ? null : String(body.avatar_url).slice(0, 1000);
   }
+  if (body.industry !== undefined) {
+    if (body.industry === null) {
+      // Owners can explicitly clear back to "unspecified". Downstream
+      // industry-aware tools treat NULL as 'generic', so this is also a
+      // valid steady state.
+      patch.industry = null;
+    } else {
+      if (
+        typeof body.industry !== "string" ||
+        !INDUSTRY_VALUES.has(body.industry)
+      ) {
+        return NextResponse.json(
+          { error: "industry must be a known slug or null" },
+          { status: 400 }
+        );
+      }
+      patch.industry = body.industry;
+    }
+  }
   if (body.default_member_role !== undefined) {
     if (!ROLE_VALUES.has(body.default_member_role)) {
       return NextResponse.json(
@@ -135,7 +161,7 @@ export async function POST(req: NextRequest) {
   const { data: prevRow } = await supabase
     .from("workspaces")
     .select(
-      "id, name, description, avatar_url, default_member_role, who_can_invite, who_can_install, who_can_uninstall"
+      "id, name, description, avatar_url, industry, default_member_role, who_can_invite, who_can_install, who_can_uninstall"
     )
     .eq("id", workspaceId)
     .maybeSingle();

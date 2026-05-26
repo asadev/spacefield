@@ -51,10 +51,16 @@ interface WorkspaceContextValue {
    * `ws:<id>:tools-desktop-install-v1` etc. before the Desktop remounts
    * against the new namespace. We don't import WorkspaceTemplates from
    * here directly to avoid a cycle.
+   *
+   * `options.industry` (optional) is forwarded to /api/workspaces/ensure
+   * so the workspace's row gets the industry slug at creation time —
+   * Settings → Industry still works as the manual fallback for legacy
+   * workspaces that pre-date this.
    */
   createWorkspace: (
     name: string,
-    applyAfter?: (id: string) => void
+    applyAfter?: (id: string) => void,
+    options?: { industry?: string | null }
   ) => string;
   switchWorkspace: (id: string) => void;
   renameWorkspace: (id: string, name: string) => void;
@@ -272,7 +278,11 @@ export function WorkspaceProvider({ children }: ProviderProps) {
   }, [activeId, hydrated]);
 
   const createWorkspace = useCallback(
-    (name: string, applyAfter?: (id: string) => void) => {
+    (
+      name: string,
+      applyAfter?: (id: string) => void,
+      options?: { industry?: string | null }
+    ) => {
       const trimmed = name.trim() || `Workspace ${Date.now()}`;
       const id = uid();
       const ws: Workspace = { id, name: trimmed, createdAt: Date.now() };
@@ -304,10 +314,15 @@ export function WorkspaceProvider({ children }: ProviderProps) {
       // legitimately rejects creates beyond the tier limit, and the
       // dialog already enforces the cap client-side using the local list.
       if (typeof window !== "undefined") {
+        const ensureBody: Record<string, string | null> = {
+          id,
+          name: trimmed,
+        };
+        if (options?.industry) ensureBody.industry = options.industry;
         void fetch("/api/workspaces/ensure", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ id, name: trimmed }),
+          body: JSON.stringify(ensureBody),
         }).catch(() => {
           /* swallow — Files Manager will retry on next open */
         });
