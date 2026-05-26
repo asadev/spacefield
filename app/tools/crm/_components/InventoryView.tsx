@@ -17,6 +17,10 @@ import RecordDetail from "./RecordDetail";
 import { RecordTable, type RecordColumn } from "./RecordTable";
 import { useSectionLabel } from "./useSectionLabel";
 import { InventoryStatusPill } from "./_records/Chips";
+import SendViaWhatsAppButton from "@/components/inventory/SendViaWhatsAppButton";
+import InventoryWhatsAppComposer, {
+  type ComposerItem,
+} from "@/components/inventory/InventoryWhatsAppComposer";
 import {
   formatCurrency,
   formatNumber,
@@ -26,6 +30,36 @@ import {
   renderCustomValue,
 } from "./_records/helpers";
 import { RecIcon } from "./_records/Icon";
+
+/**
+ * Convert a CRM inventory row into the shape the WhatsApp composer
+ * wants. Strips internal fields the composer doesn't need and resolves
+ * the optional image URL (image_id → /api/files/.../download, when
+ * present). The composer is fine with a null image — it shows a
+ * placeholder.
+ */
+function toComposerItem(r: CrmInventoryItem) {
+  const customRecord =
+    r.custom && typeof r.custom === "object"
+      ? (r.custom as Record<string, unknown>)
+      : null;
+  return {
+    id: r.id,
+    sku: r.sku,
+    name: r.name,
+    category: r.category,
+    description: r.description,
+    price: r.price,
+    currency: r.currency,
+    quantity: r.quantity,
+    unit: r.unit,
+    image_url: r.image_id
+      ? `/api/files/download?id=${encodeURIComponent(r.image_id)}`
+      : null,
+    image_id: r.image_id,
+    custom: customRecord,
+  };
+}
 
 interface Props {
   workspaceId: string;
@@ -56,6 +90,11 @@ export default function InventoryView({
   const [statusFilter, setStatusFilter] = useState<CrmInventoryStatus | "">("");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  // WhatsApp composer state — pop the modal for the picked item id when
+  // the row-action menu's "Send via WhatsApp" entry fires. We don't
+  // mount the SendViaWhatsAppButton in the action menu directly (the
+  // menu only supports onClick handlers, not arbitrary nodes).
+  const [waItemId, setWaItemId] = useState<string | null>(null);
 
   const [qaName, setQaName] = useState("");
   const [qaSku, setQaSku] = useState("");
@@ -362,6 +401,7 @@ export default function InventoryView({
   };
 
   const active = activeId ? rows.find((r) => r.id === activeId) ?? null : null;
+  const waItem = waItemId ? rows.find((r) => r.id === waItemId) ?? null : null;
 
   return (
     <>
@@ -379,6 +419,11 @@ export default function InventoryView({
         onRowClick={(r) => setActiveId(r.id)}
         rowActions={(r) => [
           { key: "open", label: "Open", onClick: () => setActiveId(r.id) },
+          {
+            key: "whatsapp",
+            label: "Send via WhatsApp",
+            onClick: () => setWaItemId(r.id),
+          },
           {
             key: "copy",
             label: "Copy id",
@@ -441,6 +486,17 @@ export default function InventoryView({
                     {formatNumber(r.quantity)} {r.unit ?? ""}
                   </span>
                 )}
+              </div>
+              <div
+                className="mt-2"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <SendViaWhatsAppButton
+                  itemId={r.id}
+                  workspaceId={workspaceId}
+                  item={toComposerItem(r) as ComposerItem}
+                  variant="compact"
+                />
               </div>
             </div>
           </div>
@@ -513,6 +569,14 @@ export default function InventoryView({
             setRows((prev) => prev.filter((r) => r.id !== id));
             if (activeId === id) setActiveId(null);
           }}
+        />
+      )}
+      {waItem && (
+        <InventoryWhatsAppComposer
+          itemId={waItem.id}
+          workspaceId={workspaceId}
+          item={toComposerItem(waItem) as ComposerItem}
+          onClose={() => setWaItemId(null)}
         />
       )}
     </>
