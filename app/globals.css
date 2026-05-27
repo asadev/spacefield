@@ -56,6 +56,47 @@
   /* Semantic borders */
   --color-border-subtle: rgba(255, 255, 255, 0.10);
 
+  /* ─── Semantic aliases for new Tailwind utilities ─────────────────────
+   * Extend the handwritten `.bg-app`/`.border-app`/`.text-app` family
+   * (defined further down in @layer utilities) so Tailwind also emits
+   * `text-app-elevated`, `ring-app-elevated`, `bg-app-hover`, `bg-app-muted`,
+   * `from-app-elevated`, `to-app-elevated`, `ring-offset-app-elevated`,
+   * `border-app-elevated`, `text-primary`, `bg-muted`, `bg-faint`,
+   * `bg-secondary`, `placeholder-muted`, `fill-faint`, `fill-secondary`,
+   * etc. without each needing a handwritten companion. Each resolves to
+   * an existing raw-CSS var so it flips correctly under :root[data-theme="light"].
+   * `--color-app` is intentionally NOT defined here: it would generate
+   * `.bg-app/X{var(--text)}` rules that conflict with the handwritten
+   * `.bg-app/X{var(--bg)}` pair. Handwritten `.ring-app`, `.fill-app`,
+   * `.stroke-app`, `.from-app`, `.to-app` cover the SVG/gradient/ring
+   * cases (added in @layer utilities below). Caught 2026-05-27 sweep. */
+  --color-app-elevated: var(--bg-elevated);/* foreground on tool-accent buttons; ring-color for elevated cards */
+  --color-app-hover: var(--surface-hover); /* hover bg used in import/wizard flows */
+  --color-app-muted: var(--surface);       /* hover bg on cookie/PWA/push prompt dismiss buttons */
+  --color-primary: var(--text);            /* `text-primary` alias for `text-app` */
+  --color-secondary: var(--text-secondary);/* `bg-secondary`/`fill-secondary` dot colors */
+  --color-muted: var(--text-muted);        /* `bg-muted` dots + `placeholder-muted` inputs */
+  --color-faint: var(--text-faint);        /* `bg-faint`/`fill-faint` super-subtle markers */
+
+  /* ─── Tool-theme aliases ──────────────────────────────────────────────
+   * Per-page CSS vars (`--tool-accent`, `--tool-accent-soft`) are already
+   * set by [data-tool-theme="…"] blocks below. Aliasing them as Tailwind
+   * color tokens lets `accent-tool-accent`, `caret-tool-accent`,
+   * `decoration-tool-accent`, `outline-tool-accent`, `fill-tool-accent`,
+   * `stroke-tool-accent`, `from-tool-accent`, `to-tool-accent`,
+   * `via-tool-accent`, `border-t-tool-accent`, `border-l-tool-accent`,
+   * `ring-tool-accent-soft`, `from-tool-accent-soft`, `via-tool-accent-soft`,
+   * `divide-tool-accent-soft` all resolve. (Existing handwritten variants
+   * for `bg-tool-accent`, `text-tool-accent`, etc. coexist — same value.)
+   * Fallback to var(--accent) so the utility class still renders
+   * something on pages outside a [data-tool-theme] wrapper. */
+  --color-tool-accent: var(--tool-accent, var(--accent));
+  --color-tool-accent-soft: var(--tool-accent-soft, var(--accent-bg));
+
+  /* Glow shadow for `shadow-tool-accent` — pickup the active tool hue. */
+  --shadow-tool-accent: 0 8px 28px var(--tool-accent-soft, var(--accent-bg)),
+                        0 2px 8px var(--tool-accent-soft, var(--accent-bg));
+
   --font-sans: var(--font-inter);
 }
 
@@ -201,6 +242,24 @@
   --color-accent-glow: rgba(0, 0, 0, 0.06);
   /* Light mode: accent bg is dark (#0a0a0a) → foreground text is white. */
   --color-accent-foreground: #ffffff;
+
+  /* ─── App/primary/muted alias overrides (mirror of @theme block, kept
+   * explicit in case Tailwind bakes the dark-mode var() at build). ─── */
+  --color-app-elevated: var(--bg-elevated);/* pure white in light mode */
+  --color-app-hover: var(--surface-hover); /* darker tint on light bg */
+  --color-app-muted: var(--surface);
+  --color-primary: var(--text);
+  --color-secondary: var(--text-secondary);
+  --color-muted: var(--text-muted);
+  --color-faint: var(--text-faint);
+
+  /* Tool-accent values already cascade through [data-tool-theme="…"] which
+   * is mode-agnostic, but redeclare here so Tailwind's compiled :root
+   * --color-tool-accent isn't stuck on the dark-mode-baked default. */
+  --color-tool-accent: var(--tool-accent, var(--accent));
+  --color-tool-accent-soft: var(--tool-accent-soft, var(--accent-bg));
+  --shadow-tool-accent: 0 8px 28px var(--tool-accent-soft, var(--accent-bg)),
+                        0 2px 8px var(--tool-accent-soft, var(--accent-bg));
 }
 
 /* ─── Shadows ─── Override Tailwind's default shadow-* utilities in LIGHT mode
@@ -1321,6 +1380,29 @@ html[data-tab-hidden="1"] *::after {
   .tool-hero {
     background-image: var(--tool-hero-gradient);
   }
+  /* Alias — `bg-tool-hero` is what new code reaches for; same source as
+   * the long-standing `.tool-hero` utility. Used in sales-offer-generator. */
+  .bg-tool-hero {
+    background-image: var(--tool-hero-gradient);
+  }
+
+  /* ─── Handwritten `X-app` utilities for SVG / ring / gradient cases ──
+   * The handwritten `.bg-app`/`.border-app`/`.text-app` family above
+   * intentionally doesn't include these — and we don't put `--color-app`
+   * in @theme (it would conflict with the `.bg-app{var(--bg)}` rules).
+   * Each variant gets the semantically correct token:
+   *   ring-app    → border color  (hairline ring around panels)
+   *   stroke-app  → border color  (decorative ring tracks at low opacity)
+   *   fill-app    → text color    (SVG text labels on admin/funnel charts)
+   *   from/to-app → page bg       (fade-to-bg gradients)
+   * Added 2026-05-27 sweep. */
+  .ring-app { --tw-ring-color: var(--border); }
+  .ring-app\/50 { --tw-ring-color: color-mix(in srgb, var(--border) 50%, transparent); }
+  .stroke-app { stroke: var(--border); }
+  .fill-app { fill: var(--text); }
+  .fill-app\/40 { fill: color-mix(in srgb, var(--text) 40%, transparent); }
+  .from-app { --tw-gradient-from: var(--bg); --tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to); }
+  .to-app { --tw-gradient-to: var(--bg); }
 
   .font-tool-heading {
     font-family: var(--tool-heading-family);
