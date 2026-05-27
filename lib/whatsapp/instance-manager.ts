@@ -110,6 +110,13 @@ export async function ensureWorkspaceInstance(
   const created = await client.createInstance(instanceName);
 
   // Wire the webhook BEFORE returning so QR / connection events flow.
+  // Hard-fail on webhook bind error: without it, the instance is
+  // useless from Spacefield's perspective (no QR-rotation events, no
+  // pair confirmation, no inbound messages). Old code swallowed the
+  // error silently which is how a busted setWebhook body shape went
+  // unnoticed for weeks. (2026-05-27 fix.) On failure we delete the
+  // Evolution instance to keep state consistent and surface the
+  // error to the caller so the UI can retry.
   try {
     await client.setWebhook(
       instanceName,
@@ -117,13 +124,14 @@ export async function ensureWorkspaceInstance(
       WEBHOOK_EVENTS,
     );
   } catch (e) {
-    // Don't roll back — Evolution still has the instance; admin can
-    // retry the webhook bind later. Just surface to logs.
-    // eslint-disable-next-line no-console
-    console.error(
-      "[whatsapp.instance-manager] setWebhook failed for",
-      instanceName,
-      e,
+    try {
+      await client.deleteInstance(instanceName);
+    } catch {
+      /* best-effort cleanup */
+    }
+    const msg = e instanceof Error ? e.message : String(e);
+    throw new Error(
+      `[whatsapp.instance-manager] setWebhook failed for ${instanceName}: ${msg}`,
     );
   }
 
