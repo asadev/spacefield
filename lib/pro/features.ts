@@ -34,15 +34,33 @@ export function limitFor(key: LimitKey, isPro: boolean): number {
 // ─── isPro (server) ───────────────────────────────────────────────────────
 // Cheap, cacheable-ish lookup. Returns false on any error so callers never
 // need null-check.
+//
+// 2026-05-27 (Agent H walkthrough): the original implementation read
+// `profiles.is_pro` — but that column was never created in the schema
+// (see supabase/migrations/20260427_profiles.sql — only user_id,
+// username, full_name, designation, bio, avatar_url, socials,
+// created_at, updated_at, is_admin exist). So every Pro-gated route
+// returned 402 even for paid users — including the brand-new WhatsApp
+// app's instance/connect API and the AI inventory-caption endpoint.
+//
+// The source of truth for tier is `public.subscriptions` (managed by
+// the Paddle webhook + manual admin grants — see Asad's row
+// `tier_id='pro'` granted via metadata.granted_by='manual_admin_grant').
+// We read tier_id there with a `status='active'` filter so cancelled /
+// past-due subs don't keep granting Pro.
 export async function isPro(userId: string | null | undefined): Promise<boolean> {
   if (!userId) return false;
   const supabase = await createClient();
   const { data } = await supabase
-    .from("profiles")
-    .select("is_pro")
-    .eq("id", userId)
+    .from("subscriptions")
+    .select("tier_id, status")
+    .eq("user_id", userId)
+    .eq("status", "active")
     .maybeSingle();
-  return !!data?.is_pro;
+  if (!data) return false;
+  const tier = data.tier_id;
+  // Any paid tier counts as "pro" for the gate (pro, team, enterprise).
+  return tier === "pro" || tier === "team" || tier === "enterprise";
 }
 
 // ─── Copy ─────────────────────────────────────────────────────────────────
