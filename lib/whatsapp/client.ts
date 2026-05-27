@@ -342,6 +342,56 @@ export class EvolutionClient {
    * Evolution event names the gateway should fan out (e.g.
    * ['MESSAGES_UPSERT','MESSAGES_UPDATE','CONNECTION_UPDATE','QRCODE_UPDATED']).
    */
+  /** Fetch the Baileys contact list for an instance. Returns one entry
+   * per known JID — individuals AND groups. The `remoteJid` field is the
+   * full WhatsApp JID (`<digits>@s.whatsapp.net` for individuals,
+   * `<digits>@g.us` for groups); `pushName` is the human-readable name
+   * (saved-contact name for individuals, group subject for groups);
+   * `isGroup` discriminates. Used by the conversations endpoint to
+   * resolve names instead of showing raw phone numbers / group JIDs. */
+  async findContacts(
+    instanceName: string,
+  ): Promise<
+    Array<{
+      remoteJid: string;
+      pushName: string | null;
+      isGroup: boolean;
+      profilePicUrl?: string | null;
+    }>
+  > {
+    const res = await this.request<unknown>(
+      `/chat/findContacts/${encodeURIComponent(instanceName)}`,
+      { method: "POST", body: { where: {} } },
+    );
+    if (!Array.isArray(res)) return [];
+    return res
+      .map((row) => {
+        if (!row || typeof row !== "object") return null;
+        const r = row as Record<string, unknown>;
+        const remoteJid =
+          typeof r.remoteJid === "string"
+            ? r.remoteJid
+            : typeof r.id === "string"
+              ? r.id
+              : null;
+        if (!remoteJid) return null;
+        const pushName =
+          typeof r.pushName === "string" && r.pushName
+            ? r.pushName
+            : typeof r.name === "string" && r.name
+              ? r.name
+              : null;
+        const isGroup =
+          r.isGroup === true ||
+          r.type === "group" ||
+          remoteJid.endsWith("@g.us");
+        const profilePicUrl =
+          typeof r.profilePicUrl === "string" ? r.profilePicUrl : null;
+        return { remoteJid, pushName, isGroup, profilePicUrl };
+      })
+      .filter((x): x is NonNullable<typeof x> => x !== null);
+  }
+
   async setWebhook(
     instanceName: string,
     url: string,
