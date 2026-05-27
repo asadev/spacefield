@@ -866,8 +866,31 @@ export default function PosterCreatorApp({ width, initialParams, initialParamsKe
 
   return (
     <div data-tool-theme="agent" data-tool="poster-creator" className="tool-shell flex h-full w-full flex-col overflow-hidden bg-app">
-      {/* Top bar: industry picker + template gallery */}
-      <div className="border-b border-app bg-app-elevated px-4 py-3 flex-shrink-0">
+      {/* Top bar: industry picker (prominent) + template gallery */}
+      <div className="border-b border-app bg-app-elevated px-4 py-3 flex-shrink-0 space-y-2">
+        {/* Industry picker — primary control, drives which templates show below */}
+        <div className="flex items-center gap-3">
+          <span className="text-[0.65rem] font-semibold uppercase tracking-[0.18em] text-faint flex-shrink-0">
+            Industry
+          </span>
+          <select
+            value={industry}
+            onChange={(e) => setIndustry(e.target.value as PosterIndustry)}
+            className="flex-shrink-0 rounded-lg border-2 border-tool-accent/40 bg-app px-3 py-1.5 text-[0.8rem] font-medium text-app outline-none focus:border-tool-accent focus:ring-2 focus:ring-tool-accent/30 hover:border-tool-accent transition-colors cursor-pointer"
+            title="Pick your industry — switches the template pack and field schema"
+          >
+            {POSTER_INDUSTRIES.map((i) => (
+              <option key={i.id} value={i.id}>
+                {i.emoji} {i.label}
+              </option>
+            ))}
+          </select>
+          <span className="text-[0.65rem] text-faint hidden sm:inline">
+            {templates.length} template{templates.length === 1 ? "" : "s"} available
+          </span>
+        </div>
+
+        {/* Template gallery for the selected industry */}
         <div className="flex items-center gap-3">
           {!isNarrow && (
             <span className="text-[0.6rem] font-semibold uppercase tracking-[0.18em] text-faint flex-shrink-0">Templates</span>
@@ -889,21 +912,6 @@ export default function PosterCreatorApp({ width, initialParams, initialParamsKe
                 </button>
               );
             })}
-          </div>
-          {/* Industry picker — top-right per spec */}
-          <div className="flex-shrink-0">
-            <select
-              value={industry}
-              onChange={(e) => setIndustry(e.target.value as PosterIndustry)}
-              className="rounded-lg border border-app bg-app px-2.5 py-1.5 text-[0.7rem] text-app outline-none focus:border-tool-accent focus:ring-1 focus:ring-tool-accent"
-              title="Industry — picks which template pack to show"
-            >
-              {POSTER_INDUSTRIES.map((i) => (
-                <option key={i.id} value={i.id}>
-                  {i.emoji} {i.label}
-                </option>
-              ))}
-            </select>
           </div>
         </div>
       </div>
