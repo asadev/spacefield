@@ -3,6 +3,7 @@ import "server-only";
 import { NextResponse } from "next/server";
 import type { SupabaseClient, User } from "@supabase/supabase-js";
 
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { isPro } from "@/lib/pro/features";
 
@@ -101,4 +102,54 @@ export async function requirePro(
     };
   }
   return { ok: true };
+}
+
+/**
+ * App-availability gate. Looks up `public.app_registry` and returns 423
+ * "locked" when an admin has not yet published the row. Use this on
+ * routes that should disappear entirely when the WhatsApp app is
+ * temporarily disabled by ops (e.g. during a billing pause). Cheap
+ * single-row read so it's safe to call from every request.
+ *
+ * Plumbed sparingly — the existing requirePro is enough for the
+ * subscriber gate; this is the second layer for "app is dark for
+ * everyone right now". (K-15)
+ */
+export async function requireAppEnabled(
+  appId: string,
+): Promise<{ ok: true } | { ok: false; response: NextResponse }> {
+  try {
+    const admin = createAdminClient();
+    const { data, error } = await admin
+      .from("app_registry")
+      .select("published")
+      .eq("id", appId)
+      .maybeSingle();
+    if (error) {
+      // Fail open — a registry read error should not take the app down.
+      return { ok: true };
+    }
+    if (!data) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          { error: "app_not_registered", message: "App not registered" },
+          { status: 423 },
+        ),
+      };
+    }
+    if (!(data as { published: boolean }).published) {
+      return {
+        ok: false,
+        response: NextResponse.json(
+          { error: "app_disabled", message: "App temporarily disabled" },
+          { status: 423 },
+        ),
+      };
+    }
+    return { ok: true };
+  } catch {
+    // Fail open on any unexpected error path.
+    return { ok: true };
+  }
 }

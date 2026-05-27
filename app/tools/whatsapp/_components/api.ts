@@ -175,12 +175,105 @@ async function jsonFetch<T>(input: string, init?: RequestInit): Promise<Result<T
   }
 }
 
+/** Convenience around jsonFetch: every server route in /api/whatsapp returns
+ * `{ items: T[] }` for list endpoints. This wrapper unwraps that envelope so
+ * callers consume a bare array. Tolerates a missing/non-array `items` and
+ * returns `[]` so a misbehaving server doesn't blow up the UI. (K-01/K-02:
+ * server response shape drift caused `[...jobs].sort()` crashes when the UI
+ * stored the envelope as the list.) */
+async function jsonFetchItems<T>(input: string, init?: RequestInit): Promise<Result<T[]>> {
+  const res = await jsonFetch<{ items?: T[] } | T[]>(input, init);
+  if (!res.ok) return res;
+  const raw = res.data as unknown;
+  if (Array.isArray(raw)) return ok(raw as T[]);
+  if (raw && typeof raw === "object" && Array.isArray((raw as { items?: T[] }).items)) {
+    return ok((raw as { items: T[] }).items);
+  }
+  return ok([]);
+}
+
+/** Convenience around jsonFetch for create/get-single endpoints. Server returns
+ * `{ item: T }`; we unwrap. Falls back to the raw payload as `T` for legacy
+ * routes that already return a bare object. */
+async function jsonFetchItem<T>(input: string, init?: RequestInit): Promise<Result<T>> {
+  const res = await jsonFetch<{ item?: T } | T>(input, init);
+  if (!res.ok) return res;
+  const raw = res.data as unknown;
+  if (raw && typeof raw === "object" && "item" in (raw as Record<string, unknown>)) {
+    return ok((raw as { item: T }).item);
+  }
+  return ok(raw as T);
+}
+
 // ── instance ────────────────────────────────────────────────────────────
 
-export function fetchInstanceStatus(workspaceId: string): Promise<Result<WaInstance>> {
-  return jsonFetch<WaInstance>(
-    `/api/whatsapp/instance/status?workspace_id=${encodeURIComponent(workspaceId)}`
+interface RawInstanceStatusResponse {
+  instance_id?: string | null;
+  status?: WaInstanceStatus | null;
+  phone_number?: string | null;
+  paired_at?: string | null;
+  qr_code?: string | null;
+  last_seen_at?: string | null;
+  /** Server packs throttle stats under `stats` — we flatten on read so the UI
+   * can keep reading the older `instance.warmup_day / daily_cap / sent_today /
+   * health` shape it was built against. (K-06) */
+  stats?: {
+    warmup_age_days?: number | null;
+    daily_cap?: number | null;
+    sent_last_day?: number | null;
+    sent_last_hour?: number | null;
+  } | null;
+}
+
+export async function fetchInstanceStatus(
+  workspaceId: string,
+): Promise<Result<WaInstance>> {
+  const res = await jsonFetch<RawInstanceStatusResponse>(
+    `/api/whatsapp/instance/status?workspace_id=${encodeURIComponent(workspaceId)}`,
   );
+  if (!res.ok) return res;
+  const raw = res.data;
+  const stats = raw.stats ?? null;
+  const warmupDay =
+    typeof stats?.warmup_age_days === "number" ? stats.warmup_age_days : null;
+  const dailyCap =
+    typeof stats?.daily_cap === "number" ? stats.daily_cap : null;
+  const sentToday =
+    typeof stats?.sent_last_day === "number" ? stats.sent_last_day : null;
+  const sentHour =
+    typeof stats?.sent_last_hour === "number" ? stats.sent_last_hour : null;
+
+  // Synthesize a tiny health hint locally so the UI's Connected card always
+  // shows something useful even before the server starts emitting one.
+  let health: WaInstance["health"] = null;
+  if (raw.status === "banned") health = "banned";
+  else if (raw.status === "connected") {
+    if (warmupDay !== null && warmupDay < 14) health = "warming";
+    else if (dailyCap !== null && sentToday !== null && sentToday >= dailyCap)
+      health = "throttled";
+    else if (
+      dailyCap !== null &&
+      sentToday !== null &&
+      sentToday >= Math.floor(dailyCap * 0.85)
+    )
+      health = "warn";
+    else health = "good";
+  }
+
+  const flat: WaInstance = {
+    status: (raw.status ?? "disconnected") as WaInstanceStatus,
+    phone_number: raw.phone_number ?? null,
+    paired_at: raw.paired_at ?? null,
+    qr_code: raw.qr_code ?? null,
+    last_seen_at: raw.last_seen_at ?? null,
+    warmup_day: warmupDay,
+    daily_cap: dailyCap,
+    hourly_cap: null,
+    sent_today: sentToday,
+    sent_this_hour: sentHour,
+    health,
+  };
+  return ok(flat);
 }
 
 export function createInstance(
@@ -224,14 +317,16 @@ export function fetchJobs(
 ): Promise<Result<WaJob[]>> {
   const q = new URLSearchParams({ workspace_id: workspaceId });
   if (status) q.set("status", status);
-  return jsonFetch<WaJob[]>(`/api/whatsapp/jobs?${q.toString()}`);
+  return jsonFetchItems<WaJob>(`/api/whatsapp/jobs?${q.toString()}`);
 }
 
-export function patchJob(
+export async function patchJob(
   jobId: string,
   patch: { action: "pause" | "resume" | "cancel" }
 ): Promise<Result<WaJob>> {
-  return jsonFetch(`/api/whatsapp/jobs/${encodeURIComponent(jobId)}`, {
+  // Server returns `{ item }` for the patched row — unwrap so the caller can
+  // splice it back into a WaJob[] without an extra `.item` hop.
+  return jsonFetchItem<WaJob>(`/api/whatsapp/jobs/${encodeURIComponent(jobId)}`, {
     method: "PATCH",
     body: JSON.stringify(patch),
   });
@@ -242,7 +337,7 @@ export function fetchJobLog(
   jobId: string
 ): Promise<Result<WaJobLogEntry[]>> {
   const q = new URLSearchParams({ workspace_id: workspaceId });
-  return jsonFetch<WaJobLogEntry[]>(
+  return jsonFetchItems<WaJobLogEntry>(
     `/api/whatsapp/jobs/${encodeURIComponent(jobId)}/log?${q.toString()}`
   );
 }
@@ -252,22 +347,24 @@ export function fetchJobLog(
 export function fetchGroups(workspaceId: string, refresh?: boolean): Promise<Result<WaGroup[]>> {
   const q = new URLSearchParams({ workspace_id: workspaceId });
   if (refresh) q.set("refresh", "1");
-  return jsonFetch<WaGroup[]>(`/api/whatsapp/groups?${q.toString()}`);
+  return jsonFetchItems<WaGroup>(`/api/whatsapp/groups?${q.toString()}`);
 }
 
 export function createGroup(
   workspaceId: string,
   name: string,
   contactIds: string[]
-): Promise<Result<{ group: WaGroup }>> {
-  return jsonFetch("/api/whatsapp/groups", {
+): Promise<Result<WaGroup>> {
+  // K-07: server returns `{ item }`; we unwrap to a bare WaGroup so the caller
+  // doesn't have to remember whether the envelope was `.group` or `.item`.
+  return jsonFetchItem<WaGroup>("/api/whatsapp/groups", {
     method: "POST",
     body: JSON.stringify({ workspace_id: workspaceId, name, contact_ids: contactIds }),
   });
 }
 
 export function fetchLists(workspaceId: string): Promise<Result<WaList[]>> {
-  return jsonFetch<WaList[]>(
+  return jsonFetchItems<WaList>(
     `/api/whatsapp/lists?workspace_id=${encodeURIComponent(workspaceId)}`
   );
 }
@@ -276,8 +373,9 @@ export function createList(
   workspaceId: string,
   name: string,
   contactIds: string[]
-): Promise<Result<{ list: WaList }>> {
-  return jsonFetch("/api/whatsapp/lists", {
+): Promise<Result<WaList>> {
+  // K-08: same as createGroup — unwrap `{ item }` to bare WaList.
+  return jsonFetchItem<WaList>("/api/whatsapp/lists", {
     method: "POST",
     body: JSON.stringify({ workspace_id: workspaceId, name, contact_ids: contactIds }),
   });
@@ -286,8 +384,8 @@ export function createList(
 export function updateList(
   workspaceId: string,
   list: WaList
-): Promise<Result<{ list: WaList }>> {
-  return jsonFetch("/api/whatsapp/lists", {
+): Promise<Result<WaList>> {
+  return jsonFetchItem<WaList>("/api/whatsapp/lists", {
     method: "PUT",
     body: JSON.stringify({ workspace_id: workspaceId, ...list }),
   });
@@ -296,10 +394,16 @@ export function updateList(
 export function deleteList(
   workspaceId: string,
   listId: string
-): Promise<Result<{ deleted: boolean }>> {
-  return jsonFetch("/api/whatsapp/lists", {
+): Promise<Result<{ ok: true }>> {
+  // K-09: server reads id/workspace_id from query string. DELETE bodies are
+  // non-standard and many runtimes drop them silently — mirror the pattern
+  // already used by instance/delete + groups/delete.
+  const q = new URLSearchParams({
+    workspace_id: workspaceId,
+    id: listId,
+  });
+  return jsonFetch(`/api/whatsapp/lists?${q.toString()}`, {
     method: "DELETE",
-    body: JSON.stringify({ workspace_id: workspaceId, id: listId }),
   });
 }
 
@@ -308,7 +412,7 @@ export function deleteList(
 export function fetchContactSummaries(
   workspaceId: string
 ): Promise<Result<WaContactSummary[]>> {
-  return jsonFetch<WaContactSummary[]>(
+  return jsonFetchItems<WaContactSummary>(
     `/api/whatsapp/conversations?workspace_id=${encodeURIComponent(workspaceId)}`
   );
 }
@@ -323,7 +427,7 @@ export function fetchMessages(
   if (contactId) q.set("contact_id", contactId);
   if (phone) q.set("phone", phone);
   if (before) q.set("before", before);
-  return jsonFetch<WaMessage[]>(`/api/whatsapp/messages?${q.toString()}`);
+  return jsonFetchItems<WaMessage>(`/api/whatsapp/messages?${q.toString()}`);
 }
 
 // ── history ─────────────────────────────────────────────────────────────
@@ -352,7 +456,7 @@ export function fetchHistory(
   if (opts?.to) q.set("to", opts.to);
   if (opts?.target_type) q.set("target_type", opts.target_type);
   if (opts?.status) q.set("status", opts.status);
-  return jsonFetch<WaHistoryRow[]>(`/api/whatsapp/history?${q.toString()}`);
+  return jsonFetchItems<WaHistoryRow>(`/api/whatsapp/history?${q.toString()}`);
 }
 
 export function fetchHistoryDetail(
@@ -360,7 +464,7 @@ export function fetchHistoryDetail(
   rowId: string
 ): Promise<Result<WaJobLogEntry[]>> {
   const q = new URLSearchParams({ workspace_id: workspaceId });
-  return jsonFetch<WaJobLogEntry[]>(
+  return jsonFetchItems<WaJobLogEntry>(
     `/api/whatsapp/history/${encodeURIComponent(rowId)}?${q.toString()}`
   );
 }
@@ -389,9 +493,12 @@ export async function fetchSendableContacts(
   if (query) q.set("q", query);
   q.set("has_phone", "1");
 
-  const primary = await jsonFetch<WaCrmContact[]>(`/api/whatsapp/contacts?${q.toString()}`);
+  // Adapter route also returns `{ items }` envelope — unwrap to bare array.
+  const primary = await jsonFetchItems<WaCrmContact>(
+    `/api/whatsapp/contacts?${q.toString()}`,
+  );
   if (primary.ok) return primary;
-  if (primary.error !== "not_found") return primary;
+  if (primary.code !== "not_found") return primary;
 
   // Fallback to CRM endpoint. Its shape is `{ items: CrmContact[] }`, not a bare array —
   // so we use a wider type here and unwrap.

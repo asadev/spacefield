@@ -75,6 +75,10 @@ import Launchpad, { type LaunchpadIntent } from "./Launchpad";
 const STATUS_BAR_HEIGHT = 44;
 const HOME_INDICATOR_HEIGHT = 24;
 const DOCK_HEIGHT = 96;
+// Height of the in-app top affordance (drag handle + close + switcher pills).
+// Computed from `py-1.5` (12px vertical) + 28px-tall pills = 40px. Used to
+// offset the app body so the affordance never overlays app content. (K-11)
+const MOBILE_APP_CHROME_HEIGHT = 40;
 const PAGE_SIZE = 24; // 4 columns x 6 rows
 const EASE = [0.25, 0.46, 0.45, 0.94] as const;
 
@@ -1070,15 +1074,22 @@ function MobileAppHost({
         scale,
       }}
     >
-      {/* App-level top affordance — drag handle + close + switcher */}
+      {/* App-level top affordance — drag handle + close + switcher.
+       *
+       * K-11: this row used to be absolute at z-10 over the app body
+       * (which started at inset-0). On the WhatsApp app's tab strip at
+       * 375×812 that hid the first tabs ("CONNECT" + half of "CHATS").
+       * We bumped z-index higher AND gave the body a hard top offset
+       * (MOBILE_APP_CHROME_HEIGHT) so app content always renders below
+       * the affordance instead of behind it. */}
       <motion.div
         drag="y"
         dragConstraints={{ top: 0, bottom: 240 }}
         dragElastic={0.4}
         onDrag={(_, info) => dragY.set(Math.max(0, info.offset.y))}
         onDragEnd={onDragEnd}
-        className="absolute inset-x-0 top-0 z-10 flex items-center justify-between px-3 py-1.5"
-        style={{ touchAction: "none" }}
+        className="absolute inset-x-0 top-0 z-30 flex items-center justify-between px-3 py-1.5"
+        style={{ touchAction: "none", height: MOBILE_APP_CHROME_HEIGHT }}
       >
         <button
           type="button"
@@ -1150,8 +1161,14 @@ function MobileAppHost({
         </div>
       </motion.div>
 
-      {/* App body — native React component or iframe fallback */}
-      <div className="absolute inset-0">
+      {/* App body — offset by the chrome height so the affordance row
+       * above never overlays the app's own header / tab strip. Inner
+       * App still receives the smaller measurement via `height` so its
+       * responsive layout knows the real estate it actually has. (K-11) */}
+      <div
+        className="absolute inset-x-0 bottom-0"
+        style={{ top: MOBILE_APP_CHROME_HEIGHT }}
+      >
         {tool?.app && App ? (
           <Suspense
             fallback={
@@ -1163,7 +1180,7 @@ function MobileAppHost({
             <App
               windowId={win.id}
               width={innerWidth}
-              height={innerHeight}
+              height={Math.max(0, innerHeight - MOBILE_APP_CHROME_HEIGHT)}
               initialParams={win.initialParams}
               initialParamsKey={win.initialParamsKey}
               resolved={resolved}

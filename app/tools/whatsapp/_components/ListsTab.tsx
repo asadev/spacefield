@@ -301,7 +301,9 @@ function CreateListModal({
         setError(res.error);
         return;
       }
-      onCreated(res.data.list);
+      // K-08: createList unwraps the server `{ item }` envelope and returns
+      // the WaList directly.
+      onCreated(res.data);
     },
     [contactIds, name, onCreated, workspaceId]
   );
