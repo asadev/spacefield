@@ -347,15 +347,24 @@ export class EvolutionClient {
     url: string,
     events: string[],
   ): Promise<void> {
+    // Evolution v2.3.x expects the webhook config NESTED under `webhook`
+    // with camelCase keys. The flat snake_case body we used before 400'd
+    // silently → webhook never bound → Spacefield received zero events
+    // → pairing appeared to hang from the UI even when Evolution had
+    // the phone paired. Caught 2026-05-27. Verified live shape via
+    // /webhook/set then /webhook/find round-trip.
     await this.request<unknown>(
       `/webhook/set/${encodeURIComponent(instanceName)}`,
       {
         method: "POST",
         body: {
-          url,
-          webhook_by_events: false,
-          webhook_base64: true,
-          events,
+          webhook: {
+            enabled: true,
+            url,
+            webhookByEvents: false,
+            webhookBase64: false,
+            events,
+          },
         },
       },
     );
