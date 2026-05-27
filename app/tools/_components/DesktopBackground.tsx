@@ -50,7 +50,16 @@ export default function DesktopBackground() {
   const sx = useSpring(mx, { stiffness: 70, damping: 20, mass: 1.2 });
   const sy = useSpring(my, { stiffness: 70, damping: 20, mass: 1.2 });
 
-  const [wallpaperId, setWallpaperId] = useState<string>(DEFAULT_WALLPAPER_ID);
+  // Start as null (not DEFAULT_WALLPAPER_ID) so SSR + first paint don't
+  // render the wrong wallpaper. The mount effect below reads localStorage
+  // and sets the real wallpaperId — by then we know what to paint. This
+  // avoids the flash Asad caught 2026-05-27 where his chosen wallpaper
+  // (beach) appeared briefly after a default one. With this change the
+  // underlying `bg-app` (solid dark) shows for one render cycle, then
+  // crossfades into the user's actual wallpaper via the existing
+  // framer-motion key-change animation. Much less jarring than two
+  // different photos flickering.
+  const [wallpaperId, setWallpaperId] = useState<string | null>(null);
   const [customs, setCustoms] = useState<CustomWallpaper[]>([]);
 
   useEffect(() => {
@@ -63,13 +72,17 @@ export default function DesktopBackground() {
     return () => window.removeEventListener("pointermove", handle);
   }, [mx, my]);
 
-  // Hydrate selected id from localStorage.
+  // Hydrate selected id from localStorage. Falls back to the
+  // DEFAULT_WALLPAPER_ID if no preference is stored — so users on the
+  // default still see something on first paint, not a permanent void.
   useEffect(() => {
     const read = () => {
       try {
         const id = localStorage.getItem(WALLPAPER_STORAGE_KEY);
-        if (id) setWallpaperId(id);
-      } catch {}
+        setWallpaperId(id || DEFAULT_WALLPAPER_ID);
+      } catch {
+        setWallpaperId(DEFAULT_WALLPAPER_ID);
+      }
     };
     read();
     const onChange = () => read();
@@ -121,7 +134,7 @@ export default function DesktopBackground() {
 
   const entries = useMemo(() => buildUnified(customs), [customs]);
   const entry = useMemo(
-    () => findEntry(wallpaperId, entries),
+    () => findEntry(wallpaperId ?? DEFAULT_WALLPAPER_ID, entries),
     [wallpaperId, entries]
   );
   const background = useMemo(
@@ -140,16 +153,18 @@ export default function DesktopBackground() {
         aria-hidden="true"
         className="pointer-events-none fixed inset-0 z-0 overflow-hidden bg-app"
       >
-        <motion.div
-          key={bgKey}
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.28, ease: "easeOut" }}
-          className="absolute inset-0"
-          style={{ background }}
-          data-wallpaper-id={entry.id}
-          data-wallpaper-theme={resolved}
-        />
+        {wallpaperId !== null && (
+          <motion.div
+            key={bgKey}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ duration: 0.28, ease: "easeOut" }}
+            className="absolute inset-0"
+            style={{ background }}
+            data-wallpaper-id={entry.id}
+            data-wallpaper-theme={resolved}
+          />
+        )}
         {entry.section === "interactive" && entry.interactiveKey && (
           <Suspense fallback={null}>
             <div
