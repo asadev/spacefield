@@ -99,6 +99,22 @@ export function useWorkspace(): {
 
   useEffect(() => {
     let cancelled = false;
+    /* K-12: `loading` previously latched true ~50% of the time because
+     * `supabase.auth.getUser()` could hang silently when the auth refresh
+     * token raced against a network blip. Without a bound, the finally
+     * never fires and the tool's gating UI sits on "loading workspace…"
+     * forever. We install a hard 5s timeout that flips loading=false +
+     * signedIn=false and lets the WhatsAppGate ("Sign in") render — the
+     * user can retry from there. */
+    const watchdog = setTimeout(() => {
+      if (cancelled) return;
+      setLoading((prev) => {
+        if (!prev) return prev;
+        setSignedIn(false);
+        setWorkspaces([]);
+        return false;
+      });
+    }, 5000);
     const load = async () => {
       try {
         const supabase = createClient();
@@ -277,12 +293,17 @@ export function useWorkspace(): {
           setWorkspaces([]);
         }
       } finally {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          // Cancel the watchdog since we resolved the normal path.
+          clearTimeout(watchdog);
+          setLoading(false);
+        }
       }
     };
     load();
     return () => {
       cancelled = true;
+      clearTimeout(watchdog);
     };
   }, []);
 

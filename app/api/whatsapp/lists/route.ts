@@ -107,14 +107,18 @@ export async function PUT(req: NextRequest): Promise<Response> {
   }
 
   const admin = createAdminClient();
+  // K-10: previously `.single()` threw a 500 when the id pointed to a
+  // missing/deleted row (PGRST116 "no rows"). `.maybeSingle()` returns null
+  // so we can shape a clean 404 for the UI's delete-race case.
   const { data, error } = await admin
     .from("whatsapp_lists")
     .update(patch)
     .eq("id", id)
     .eq("workspace_id", workspaceId)
     .select("*")
-    .single();
+    .maybeSingle();
   if (error) return jsonError(error.message, 500);
+  if (!data) return jsonError("list_not_found", 404);
   return NextResponse.json({ item: data });
 }
 

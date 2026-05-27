@@ -267,7 +267,9 @@ function CreateGroupModal({
         setError(res.error);
         return;
       }
-      onCreated(res.data.group);
+      // K-07: createGroup unwraps the server `{ item }` envelope and returns
+      // the WaGroup directly.
+      onCreated(res.data);
     },
     [contactIds, name, onCreated, workspaceId]
   );
