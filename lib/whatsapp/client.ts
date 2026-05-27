@@ -392,6 +392,39 @@ export class EvolutionClient {
       .filter((x): x is NonNullable<typeof x> => x !== null);
   }
 
+  /** Fetch one group's metadata (subject, description, member count) from
+   * Baileys. Evolution's /chat/findContacts returns the latest sender's
+   * pushName for group JIDs (a known data-model quirk), so we MUST hit
+   * this dedicated endpoint to get the real group subject. Returns null
+   * on any error so callers can fall back gracefully. */
+  async findGroupInfo(
+    instanceName: string,
+    groupJid: string,
+  ): Promise<{
+    subject: string | null;
+    description: string | null;
+    pictureUrl: string | null;
+    size: number | null;
+  } | null> {
+    try {
+      const res = await this.request<unknown>(
+        `/group/findGroupInfos/${encodeURIComponent(instanceName)}?groupJid=${encodeURIComponent(groupJid)}`,
+        { method: "GET" },
+      );
+      if (!res || typeof res !== "object") return null;
+      const r = res as Record<string, unknown>;
+      return {
+        subject: typeof r.subject === "string" ? r.subject.trim() : null,
+        description: typeof r.desc === "string" ? r.desc : null,
+        pictureUrl:
+          typeof r.pictureUrl === "string" ? r.pictureUrl : null,
+        size: typeof r.size === "number" ? r.size : null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   async setWebhook(
     instanceName: string,
     url: string,
