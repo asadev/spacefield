@@ -93,6 +93,18 @@
   --chrome-solid-strong: #1f1f25;
   --chrome-titlebar-solid: rgba(255, 255, 255, 0.06);
 
+  /* Card/popover/dialog surface — referenced by WhatsNew, CommandPalette,
+     ShortcutHelp, SavedViewsDropdown, /search. Without this, components
+     fell back to hardcoded #ffffff and rendered white-on-white in dark
+     mode (caught 2026-05-27). */
+  --chrome-solid-bg: var(--chrome-solid);
+  /* Emphasized border (focus rings, active states) — referenced by /search */
+  --chrome-border-strong: rgba(255, 255, 255, 0.32);
+  /* Subtle hover tint on chrome surfaces */
+  --chrome-hover: rgba(255, 255, 255, 0.06);
+  /* Active/pressed tint (stronger than hover) */
+  --chrome-active: rgba(255, 255, 255, 0.10);
+
   /* Edge-fade base for marquees/masks — matches page bg */
   --edge-fade: #0a0a0a;
 }
@@ -135,6 +147,13 @@
   --chrome-solid: #f7f8fa;
   --chrome-solid-strong: #ffffff;
   --chrome-titlebar-solid: rgba(15, 23, 42, 0.04);
+
+  /* Card/popover/dialog surface — light-mode pure white so cards lift off
+     the warm-gray page bg. See dark-mode comment above for why this exists. */
+  --chrome-solid-bg: #ffffff;
+  --chrome-border-strong: rgba(15, 23, 42, 0.30);
+  --chrome-hover: rgba(15, 23, 42, 0.04);
+  --chrome-active: rgba(15, 23, 42, 0.08);
 
   --edge-fade: #f1f2f4;
 
