@@ -142,13 +142,25 @@ export function useWorkspaceSync() {
           }
         } else {
           // Cloud has data — pull down and overwrite local.
-          // 1. Replace workspaces:list:v1 with cloud workspaces.
+          // Track whether anything actually changed so we don't reload
+          // on every mount in an infinite loop. (useRef guard resets
+          // when window.location.reload() runs, so the only way to
+          // break the loop is to detect a no-op and skip the reload.
+          // Asad caught this 2026-05-27 — page was auto-refreshing
+          // constantly on his desktop.)
+          let anythingChanged = false;
+
+          // 1. Replace workspaces:list:v1 with cloud workspaces (only if differs).
           const cloudList = cloudWs.map((w) => ({
             id: w.id,
             name: w.name,
             createdAt: new Date(w.created_at).getTime(),
           }));
-          window.localStorage.setItem(LIST_KEY, JSON.stringify(cloudList));
+          const newListJson = JSON.stringify(cloudList);
+          if (window.localStorage.getItem(LIST_KEY) !== newListJson) {
+            window.localStorage.setItem(LIST_KEY, newListJson);
+            anythingChanged = true;
+          }
 
           // 2. Pull workspace_state rows in batches.
           const ids = cloudWs.map((w) => w.id);
@@ -163,12 +175,23 @@ export function useWorkspaceSync() {
                 typeof row.value === "string"
                   ? row.value
                   : JSON.stringify(row.value);
-              window.localStorage.setItem(k, v);
+              if (window.localStorage.getItem(k) !== v) {
+                window.localStorage.setItem(k, v);
+                anythingChanged = true;
+              }
             }
           }
 
-          // Force a reload so every hook re-hydrates from the new state.
-          if (!cancelled) {
+          // Belt-and-suspenders: a sessionStorage flag prevents the
+          // reload-loop even if a future caller bypasses the diff
+          // check above. Cleared on sign-out / tab close naturally.
+          const RELOAD_GUARD = `spacefield:ws-sync-reloaded:${user.id}`;
+          if (
+            anythingChanged &&
+            !cancelled &&
+            !window.sessionStorage.getItem(RELOAD_GUARD)
+          ) {
+            window.sessionStorage.setItem(RELOAD_GUARD, "1");
             window.location.reload();
           }
         }
