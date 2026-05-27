@@ -33,7 +33,7 @@ export const ALL_INDUSTRIES: IndustryConfig[] = [
       "property-valuation",
       "deal-scoring",
       "market-pulse",
-      "property-poster-creator",
+      "poster-creator",
       "crm",
     ],
     defaultPipeline: [
@@ -51,7 +51,7 @@ export const ALL_INDUSTRIES: IndustryConfig[] = [
     icon: "palette",
     description: "Apparel, fabric, unstitched, boutiques and concept stores.",
     recommendedApps: [
-      "property-poster-creator",
+      "poster-creator",
       "crm",
       "invoice-generator",
       "pricing-calculator",
@@ -116,7 +116,7 @@ export const ALL_INDUSTRIES: IndustryConfig[] = [
       "invoice-generator",
       "team-schedule",
       "pricing-calculator",
-      "property-poster-creator",
+      "poster-creator",
     ],
     defaultPipeline: [
       "New Client",
@@ -136,7 +136,7 @@ export const ALL_INDUSTRIES: IndustryConfig[] = [
       "invoice-generator",
       "team-schedule",
       "pricing-calculator",
-      "property-poster-creator",
+      "poster-creator",
     ],
     defaultPipeline: [
       "Inquiry",
@@ -156,7 +156,7 @@ export const ALL_INDUSTRIES: IndustryConfig[] = [
       "invoice-generator",
       "team-schedule",
       "pricing-calculator",
-      "property-poster-creator",
+      "poster-creator",
     ],
     defaultPipeline: [
       "Trial Lead",
@@ -194,7 +194,7 @@ export const ALL_INDUSTRIES: IndustryConfig[] = [
     description:
       "Skincare brands, makeup labels, fragrance, beauty e-commerce.",
     recommendedApps: [
-      "property-poster-creator",
+      "poster-creator",
       "invoice-generator",
       "pricing-calculator",
       "crm",
@@ -240,7 +240,7 @@ export const ALL_INDUSTRIES: IndustryConfig[] = [
       "crm",
       "invoice-generator",
       "pricing-calculator",
-      "property-poster-creator",
+      "poster-creator",
       "quote-builder",
     ],
     defaultPipeline: [
@@ -304,7 +304,7 @@ export const ALL_INDUSTRIES: IndustryConfig[] = [
       "crm",
       "invoice-generator",
       "team-schedule",
-      "property-poster-creator",
+      "poster-creator",
       "pricing-calculator",
     ],
     defaultPipeline: [
@@ -322,7 +322,7 @@ export const ALL_INDUSTRIES: IndustryConfig[] = [
     icon: "grid",
     description: "Stores, kiosks, Shopify shops, marketplaces, drop-ship.",
     recommendedApps: [
-      "property-poster-creator",
+      "poster-creator",
       "invoice-generator",
       "pricing-calculator",
       "crm",
