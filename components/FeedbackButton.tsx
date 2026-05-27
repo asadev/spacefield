@@ -197,7 +197,7 @@ export default function FeedbackButton() {
                 <button
                   type="submit"
                   disabled={state.status === "submitting" || !text.trim()}
-                  className="rounded-md bg-tool-accent px-3 py-1.5 text-xs font-medium text-app-on-accent disabled:opacity-50"
+                  className="rounded-md bg-tool-accent px-3 py-1.5 text-xs font-medium text-app-elevated disabled:opacity-50"
                 >
                   {state.status === "submitting" ? "Sending…" : "Send"}
                 </button>

@@ -248,7 +248,7 @@ export default async function AdminWorkspaceDetailPage({
           className="grid h-14 w-14 shrink-0 place-items-center rounded-xl border border-app"
           style={{
             backgroundColor:
-              workspace.toshare_brand_color ?? "var(--bg-app)",
+              workspace.toshare_brand_color ?? "var(--bg)",
             color: workspace.toshare_brand_color ? "#fff" : undefined,
           }}
         >
