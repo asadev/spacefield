@@ -75,12 +75,20 @@ export async function ensureWorkspaceInstance(
 ): Promise<WhatsAppInstanceRow> {
   const admin = createAdminClient();
 
-  // Reuse the first non-banned/non-error instance for the workspace.
+  // Reuse only actively-usable instances. Exclude disconnected too —
+  // a "disconnected" row is one where Evolution no longer has the
+  // instance (LOGOUT/REMOVED), so reusing it returns qr_code=null
+  // forever and the UI spins on "waiting for QR..." indefinitely.
+  // When user clicks Start Pairing on a disconnected state, they want
+  // a fresh instance on Evolution — not the dead row. (2026-05-27:
+  // caught this after upgrading Evolution v2.1.1→v2.3.7, the upgrade
+  // fixed QR generation but pre-existing disconnected rows kept
+  // shadowing fresh creates.)
   const { data: existing } = await admin
     .from("whatsapp_instances")
     .select("*")
     .eq("workspace_id", workspaceId)
-    .not("status", "in", "(banned,error)")
+    .in("status", ["pending", "qr_pending", "connected"])
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -88,6 +96,14 @@ export async function ensureWorkspaceInstance(
   if (existing) {
     return existing as WhatsAppInstanceRow;
   }
+
+  // Mark any older non-reusable rows as superseded so we don't pile up
+  // zombie rows across reconnect attempts. (Idempotent — best-effort.)
+  await admin
+    .from("whatsapp_instances")
+    .update({ status: "error", updated_at: new Date().toISOString() })
+    .eq("workspace_id", workspaceId)
+    .in("status", ["disconnected"]);
 
   const instanceName = buildInstanceName(workspaceId);
   const client = getEvolutionClient();
