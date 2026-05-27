@@ -341,7 +341,11 @@ export default function ConversationsTab({ workspaceId, compact }: Props) {
                       // Matches WhatsApp / iMessage / Slack default.
                       // (Old behaviour required Cmd/Ctrl+Enter which
                       // Asad correctly called out as friction.)
-                      if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+                      if (
+                        e.key === "Enter" &&
+                        !e.shiftKey &&
+                        !e.nativeEvent.isComposing
+                      ) {
                         e.preventDefault();
                         handleSend();
                       }
