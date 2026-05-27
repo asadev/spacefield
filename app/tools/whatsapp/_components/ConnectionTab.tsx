@@ -211,8 +211,17 @@ export default function ConnectionTab({ workspaceId, compact }: Props) {
     );
   }
 
-  // No instance yet — first-run pairing
-  if (!instance || instance.status === "disconnected" || instance.status === "error") {
+  // No instance yet — first-run pairing. The status endpoint returns a stub
+  // object `{status: null, phone_number: null, ...}` when no row exists in
+  // whatsapp_instances, so we treat a falsy `status` as "no instance" too
+  // (otherwise the UI falls through to the Connected dashboard and shows
+  // "Unknown number / Paired —" for a non-existent instance).
+  if (
+    !instance ||
+    !instance.status ||
+    instance.status === "disconnected" ||
+    instance.status === "error"
+  ) {
     return (
       <EmptyState
         kicker="whatsapp.pair"
