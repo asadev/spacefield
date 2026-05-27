@@ -201,10 +201,12 @@ export function connectInstance(
 }
 
 export function deleteInstance(workspaceId: string): Promise<Result<{ deleted: boolean }>> {
-  return jsonFetch("/api/whatsapp/instance/delete", {
-    method: "DELETE",
-    body: JSON.stringify({ workspace_id: workspaceId }),
-  });
+  // Backend reads workspace_id from the query string (not body — DELETE bodies
+  // are non-standard and many runtimes drop them silently).
+  return jsonFetch(
+    `/api/whatsapp/instance/delete?workspace_id=${encodeURIComponent(workspaceId)}`,
+    { method: "DELETE" },
+  );
 }
 
 // ── send + jobs ─────────────────────────────────────────────────────────
