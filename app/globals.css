@@ -30,6 +30,12 @@
   --color-accent-light: #e0e0e0;
   --color-accent-dark: #c4c4c4;
   --color-accent-glow: rgba(255, 255, 255, 0.08);
+  /* Foreground text color for `bg-accent` buttons — must contrast with the
+     accent bg. Dark mode: accent is white → foreground is dark. Without
+     this, `text-accent-foreground` resolved to nothing → invisible
+     white-on-white buttons (WhatsNew "Got it", CookieConsent, PWA prompt,
+     etc.). Caught 2026-05-27. Light-mode override below. */
+  --color-accent-foreground: #0a0a0a;
 
   /* Warm highlight */
   --color-highlight: #f59e0b;
@@ -193,6 +199,8 @@
   --color-accent-light: #2a2a2a;
   --color-accent-dark: #3a3a3a;
   --color-accent-glow: rgba(0, 0, 0, 0.06);
+  /* Light mode: accent bg is dark (#0a0a0a) → foreground text is white. */
+  --color-accent-foreground: #ffffff;
 }
 
 /* ─── Shadows ─── Override Tailwind's default shadow-* utilities in LIGHT mode
