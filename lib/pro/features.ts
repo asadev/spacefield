@@ -51,14 +51,28 @@ export function limitFor(key: LimitKey, isPro: boolean): number {
 export async function isPro(userId: string | null | undefined): Promise<boolean> {
   if (!userId) return false;
   const supabase = await createClient();
-  const { data } = await supabase
-    .from("subscriptions")
-    .select("tier_id, status")
-    .eq("user_id", userId)
-    .eq("status", "active")
-    .maybeSingle();
-  if (!data) return false;
-  const tier = data.tier_id;
+
+  // Platform admins (profiles.is_admin = true) auto-pass every Pro gate.
+  // Asad / staff shouldn't have to pay themselves to test or operate the
+  // platform. Single round-trip in parallel with the subscription check.
+  const [{ data: prof }, { data: sub }] = await Promise.all([
+    supabase
+      .from("profiles")
+      .select("is_admin")
+      .eq("user_id", userId)
+      .maybeSingle(),
+    supabase
+      .from("subscriptions")
+      .select("tier_id, status")
+      .eq("user_id", userId)
+      .eq("status", "active")
+      .maybeSingle(),
+  ]);
+
+  if (prof?.is_admin === true) return true;
+
+  if (!sub) return false;
+  const tier = sub.tier_id;
   // Any paid tier counts as "pro" for the gate (pro, team, enterprise).
   return tier === "pro" || tier === "team" || tier === "enterprise";
 }

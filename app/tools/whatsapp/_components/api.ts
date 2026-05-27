@@ -116,12 +116,25 @@ export interface WaSendResult {
   message_id?: string;
 }
 
-export type Result<T> = { ok: true; data: T } | { ok: false; error: string };
+export type Result<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: string; code?: string; status?: number };
 
 const ok = <T>(data: T): Result<T> => ({ ok: true, data });
-const fail = <T>(error: string): Result<T> => ({ ok: false, error });
+const fail = <T>(error: string, opts?: { code?: string; status?: number }): Result<T> => ({
+  ok: false,
+  error,
+  ...(opts?.code ? { code: opts.code } : {}),
+  ...(opts?.status ? { status: opts.status } : {}),
+});
 
-/** Wraps fetch with json + error normalisation. */
+/** Wraps fetch with json + error normalisation.
+ *
+ * Server responses follow `{ error: "machine_code", message: "Human text" }`.
+ * We surface the friendly `message` to users (falling back to `error`) and
+ * keep the machine `code` + HTTP `status` separately so call-sites can branch
+ * (e.g. render an Upgrade-to-Pro card specifically for 402 / pro_required).
+ */
 async function jsonFetch<T>(input: string, init?: RequestInit): Promise<Result<T>> {
   try {
     const res = await fetch(input, {
@@ -133,25 +146,32 @@ async function jsonFetch<T>(input: string, init?: RequestInit): Promise<Result<T
         ...(init?.headers ?? {}),
       },
     });
-    if (res.status === 404) return fail("not_found");
+    if (res.status === 404) return fail("Not found", { code: "not_found", status: 404 });
     const text = await res.text();
     let parsed: unknown = null;
     try {
       parsed = text ? JSON.parse(text) : null;
     } catch {
       // Non-JSON response — propagate text snippet as the error
-      return fail(text.slice(0, 240) || `http_${res.status}`);
+      return fail(text.slice(0, 240) || `http_${res.status}`, { status: res.status });
     }
     if (!res.ok) {
-      const message =
-        (parsed && typeof parsed === "object" && "error" in parsed
-          ? String((parsed as { error?: unknown }).error)
-          : "") || `http_${res.status}`;
-      return fail(message);
+      const obj = (parsed && typeof parsed === "object" ? parsed : {}) as {
+        error?: unknown;
+        message?: unknown;
+      };
+      const code = typeof obj.error === "string" ? obj.error : undefined;
+      const friendly =
+        typeof obj.message === "string"
+          ? obj.message
+          : code || `http_${res.status}`;
+      return fail(friendly, { code, status: res.status });
     }
     return ok((parsed ?? {}) as T);
   } catch (err) {
-    return fail(err instanceof Error ? err.message : "network_error");
+    return fail(err instanceof Error ? err.message : "Network error", {
+      code: "network_error",
+    });
   }
 }
 
