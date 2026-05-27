@@ -1,12 +1,20 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getEvolutionClient } from "@/lib/whatsapp/client";
 import {
   jsonError,
   requirePro,
   requireUser,
   requireWorkspaceMember,
 } from "@/lib/whatsapp/_route-helpers";
+
+/** Strip the `@<server>` suffix from a WhatsApp JID, returning digits-only.
+ *  whatsapp_messages.from_number / .to_number are stored digits-only, but
+ *  Evolution's findContacts returns full JIDs — normalise to compare. */
+function jidToDigits(jid: string): string {
+  return jid.split("@")[0]?.replace(/\D/g, "") ?? jid;
+}
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -72,6 +80,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     contact_id: string | null;
     phone: string;
     name: string | null;
+    is_group: boolean;
     unread_count: number;
     last_message_at: string;
     last_message_preview: string;
@@ -88,11 +97,19 @@ export async function GET(req: NextRequest): Promise<Response> {
     const key = r.contact_id ?? `phone:${phone}`;
     const preview = (r.body ?? "").slice(0, 140);
     const existing = byKey.get(key);
+    // Heuristic: WhatsApp group JIDs are 18+ digits and start with
+    // 120363… (Baileys multi-device era). Real phone numbers max out
+    // around 15 digits. We finalise this with the Evolution lookup
+    // below, but having a default flag means a JID with no contact
+    // record still renders as a group.
+    const looksLikeGroup =
+      phone.length >= 17 || phone.startsWith("120363");
     if (!existing) {
       byKey.set(key, {
         contact_id: r.contact_id,
         phone,
         name: null,
+        is_group: looksLikeGroup,
         // status='read' is the marker the webhook flips when the customer's
         // device reports it read — we count anything else inbound that is
         // newer than the user's last seen as "unread".
@@ -107,7 +124,7 @@ export async function GET(req: NextRequest): Promise<Response> {
     }
   }
 
-  // Hydrate contact names in a single round-trip.
+  // Hydrate contact names in a single round-trip — CRM first.
   const contactIds = Array.from(byKey.values())
     .map((v) => v.contact_id)
     .filter((id): id is string => !!id);
@@ -130,6 +147,53 @@ export async function GET(req: NextRequest): Promise<Response> {
       v.name = name || null;
       if (!v.phone && c.phone) v.phone = c.phone;
     }
+  }
+
+  // Fallback: pull names from the Baileys contact list (saved-contact
+  // names + group subjects). This is what makes group threads show as
+  // "RCT Luxury" instead of "120363419860198862", and 1:1 chats show
+  // the saved name from the user's phone instead of a bare number.
+  // Best-effort: if Evolution is down, we just return phone numbers.
+  // Looked up once per workspace per request — Evolution caches the
+  // contact list so this is cheap.
+  try {
+    const { data: inst } = await admin
+      .from("whatsapp_instances")
+      .select("evolution_instance_name")
+      .eq("workspace_id", workspaceId)
+      .in("status", ["connected", "qr_pending", "pending"])
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    const instanceName = (inst as { evolution_instance_name?: string } | null)
+      ?.evolution_instance_name;
+    if (instanceName) {
+      const client = getEvolutionClient();
+      const evoContacts = await client.findContacts(instanceName);
+      const byDigits = new Map<
+        string,
+        { pushName: string | null; isGroup: boolean }
+      >();
+      for (const c of evoContacts) {
+        const d = jidToDigits(c.remoteJid);
+        if (!d) continue;
+        byDigits.set(d, { pushName: c.pushName, isGroup: c.isGroup });
+      }
+      for (const v of byKey.values()) {
+        const lookup = byDigits.get(v.phone);
+        if (!lookup) continue;
+        // Don't overwrite a CRM-derived name with a saved-contact name.
+        if (!v.name && lookup.pushName) v.name = lookup.pushName;
+        // Group flag is authoritative from Evolution when we have it.
+        v.is_group = lookup.isGroup;
+      }
+    }
+  } catch (e) {
+    // eslint-disable-next-line no-console
+    console.warn(
+      "[whatsapp.conversations] name-hydration failed, falling back to phone numbers:",
+      e instanceof Error ? e.message : String(e),
+    );
   }
 
   const items = Array.from(byKey.values()).sort(
