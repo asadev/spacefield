@@ -148,6 +148,7 @@ export default function ConversationsTab({ workspaceId, compact }: Props) {
 
       const target_id = selected.contact_id ?? selected.phone;
       const res = await sendMessage({
+        workspace_id: workspaceId,
         target_type: "contact",
         target_id,
         message: optimistic.body ?? "",
@@ -336,12 +337,16 @@ export default function ConversationsTab({ workspaceId, compact }: Props) {
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     onKeyDown={(e) => {
-                      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+                      // Enter sends, Shift+Enter inserts newline.
+                      // Matches WhatsApp / iMessage / Slack default.
+                      // (Old behaviour required Cmd/Ctrl+Enter which
+                      // Asad correctly called out as friction.)
+                      if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
                         e.preventDefault();
                         handleSend();
                       }
                     }}
-                    placeholder="Write a reply — Cmd/Ctrl+Enter to send"
+                    placeholder="Write a reply — Enter to send, Shift+Enter for newline"
                     rows={2}
                     className="min-h-[44px] w-full resize-y rounded-md border border-app bg-surface px-2 py-1.5 text-sm text-app outline-none placeholder:text-faint focus:border-tool-accent"
                     aria-label="Message body"
