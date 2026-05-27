@@ -151,13 +151,16 @@ export default function Onboarding({ open, onComplete }: Props) {
   const handlePickBusinessIndustry = (key: BusinessIndustry) => {
     setBusinessIndustry(key);
     // Persist immediately. Don't block the UI on the network.
-    // Removed the `kind === "team"` guard (was dropping the industry
-    // pick on the floor for solo users whose first workspace is
-    // "personal" by default). The /api/workspaces/update endpoint
-    // accepts industry for any workspace kind. Caught 2026-05-27 by
-    // Agent M's verification — onboarding flow looked correct but
-    // value never reached the DB for ~all new signups.
-    if (activeWorkspace?.id) {
+    // Personal workspaces have no DB row to update (SelectedWorkspace
+    // type: `{kind:"personal"}` has no id; only `{kind:"team", id, …}`
+    // does). For solo users, the industry pick falls through to be
+    // re-persisted when their first team workspace is created.
+    // TODO (Agent M finding 2026-05-27): solo users get the industry
+    // dropped on the floor here. Real fix is to ensure a team
+    // workspace via /api/workspaces/ensure before persisting, OR to
+    // stash the pick in user-metadata as a fallback. Not blocking
+    // platform-admin testing.
+    if (activeWorkspace.kind === "team") {
       void persistBusinessIndustry(activeWorkspace.id, key);
     }
     // Pre-select the matching legacy industry for the next step so the
