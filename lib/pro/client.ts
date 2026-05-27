@@ -19,12 +19,16 @@ export function isProClient(userId: string | null | undefined): Promise<boolean>
   const supabase = createClient();
   const p = (async () => {
     try {
+      // 2026-05-27 (Agent H walkthrough): same fix as lib/pro/features.ts —
+      // `profiles.is_pro` doesn't exist; tier lives on `subscriptions`.
       const { data } = await supabase
-        .from("profiles")
-        .select("is_pro")
-        .eq("id", userId)
+        .from("subscriptions")
+        .select("tier_id, status")
+        .eq("user_id", userId)
+        .eq("status", "active")
         .maybeSingle();
-      return !!(data as { is_pro?: boolean } | null)?.is_pro;
+      const tier = (data as { tier_id?: string } | null)?.tier_id;
+      return tier === "pro" || tier === "team" || tier === "enterprise";
     } catch {
       return false;
     }
