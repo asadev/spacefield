@@ -103,6 +103,7 @@ export interface WaContactSummary {
 }
 
 export interface WaSendPayload {
+  workspace_id: string;
   target_type: "contact" | "group" | "list";
   target_id: string;
   message: string;
