@@ -193,6 +193,7 @@ export default function WhatsAppMessageComposer(props: WhatsAppMessageComposerPr
       }
       setSending(true);
       const payload: WaSendPayload = {
+        workspace_id: workspaceId,
         target_type: targetType,
         target_id: targetId,
         message: message.trim(),
