@@ -41,13 +41,27 @@ function load(storageKey: string): InstallState {
         // gone — strip it from any pre-existing workspace install list
         // on hydrate. Workspaces that had it installed get a silent
         // upgrade; the Launchpad already serves every file surface.
-        const stripped = installed.filter((s) => s !== "files-manager");
+        //
+        // Poster Creator rename (2026-05-27): the old slug
+        // `property-poster-creator` was renamed to `poster-creator`
+        // (industry-keyed templates). Remap any saved install entries
+        // so non-owner workspace members don't get a hard "tool not
+        // found" block when opening the renamed tool.
+        const RENAMES: Record<string, string> = {
+          "property-poster-creator": "poster-creator",
+        };
+        const stripped = installed
+          .filter((s) => s !== "files-manager")
+          .map((s) => RENAMES[s] ?? s);
         const next: InstallState = {
           onboarded: !!parsed.onboarded,
           profession: parsed.profession ?? null,
           installed: stripped,
         };
-        if (stripped.length !== installed.length) {
+        const installedChanged =
+          stripped.length !== installed.length ||
+          stripped.some((s, i) => s !== installed[i]);
+        if (installedChanged) {
           // Persist the migration so subsequent loads skip the strip
           // step. Best-effort — ignore quota errors.
           try {

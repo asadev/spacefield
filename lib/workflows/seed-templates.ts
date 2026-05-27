@@ -275,7 +275,7 @@ export const SEED_TEMPLATES: SeedTemplate[] = [
  * have to learn a new key.
  */
 export const TEMPLATE_RECOMMENDED_APPS: Record<string, string[]> = {
-  "real-estate-brokerage": ["property-poster-creator", "crm"],
+  "real-estate-brokerage": ["poster-creator", "crm"],
   "marketing-agency":      ["crm", "social-posts"],
   "coworking-space":       ["crm"],
   "clothing-retail":       ["poster-creator", "whatsapp", "crm"],

@@ -13,6 +13,10 @@ import { applySecurityHeaders, resolveRequestId } from "@/lib/security-headers";
 const LEGACY_TOOL_SLUGS: Record<string, string> = {
   "what-can-i-afford": "affordability",
   "files-manager": "launchpad",
+  // 2026-05-27: Poster Creator renamed from real-estate-specific to
+  // industry-keyed. Old in-shell openApp paths (saved window state,
+  // bookmarked deep-links, cross-tool links) still pass the old slug.
+  "property-poster-creator": "poster-creator",
 };
 
 const TOSHARE_DOMAIN = "toshare.net";
