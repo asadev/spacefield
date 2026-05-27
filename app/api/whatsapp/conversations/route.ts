@@ -149,26 +149,42 @@ export async function GET(req: NextRequest): Promise<Response> {
     }
   }
 
-  // Fallback: pull names from the Baileys contact list (saved-contact
-  // names + group subjects). This is what makes group threads show as
-  // "RCT Luxury" instead of "120363419860198862", and 1:1 chats show
-  // the saved name from the user's phone instead of a bare number.
-  // Best-effort: if Evolution is down, we just return phone numbers.
-  // Looked up once per workspace per request — Evolution caches the
-  // contact list so this is cheap.
+  // Fallback name resolution: pull from Baileys + group-info endpoints.
+  // Three passes:
+  //   (a) /chat/findContacts → pushName for individuals (OK), plus the
+  //       isGroup flag. Evolution's pushName for GROUP JIDs is the
+  //       latest sender's display name, NOT the group subject — a
+  //       known data-model quirk — so we ignore the pushName field
+  //       for groups and resolve them via (c).
+  //   (b) detect "self" (your own paired number) and label as "You".
+  //   (c) for every group JID in the conversation list, call
+  //       /group/findGroupInfos in parallel to get the real subject.
+  //
+  // Best-effort: any Evolution call failure just leaves the row with a
+  // phone number — no regression. Caught 2026-05-27 by Asad's screenshot
+  // where group threads showed sender names instead of group subjects.
   try {
     const { data: inst } = await admin
       .from("whatsapp_instances")
-      .select("evolution_instance_name")
+      .select("evolution_instance_name, phone_number")
       .eq("workspace_id", workspaceId)
       .in("status", ["connected", "qr_pending", "pending"])
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    const instanceName = (inst as { evolution_instance_name?: string } | null)
-      ?.evolution_instance_name;
+    const row = inst as {
+      evolution_instance_name?: string;
+      phone_number?: string | null;
+    } | null;
+    const instanceName = row?.evolution_instance_name;
+    const selfDigits = row?.phone_number
+      ? row.phone_number.replace(/\D/g, "")
+      : null;
+
     if (instanceName) {
       const client = getEvolutionClient();
+
+      // (a) Pull every contact, then build a digits→{name, isGroup} map.
       const evoContacts = await client.findContacts(instanceName);
       const byDigits = new Map<
         string,
@@ -181,11 +197,51 @@ export async function GET(req: NextRequest): Promise<Response> {
       }
       for (const v of byKey.values()) {
         const lookup = byDigits.get(v.phone);
-        if (!lookup) continue;
-        // Don't overwrite a CRM-derived name with a saved-contact name.
-        if (!v.name && lookup.pushName) v.name = lookup.pushName;
-        // Group flag is authoritative from Evolution when we have it.
-        v.is_group = lookup.isGroup;
+        if (lookup) {
+          v.is_group = lookup.isGroup;
+          // Only use pushName for NON-group entries. For groups it's
+          // the latest sender's name (Evolution quirk) — handled in (c).
+          if (!lookup.isGroup && !v.name && lookup.pushName) {
+            v.name = lookup.pushName;
+          }
+        }
+      }
+
+      // (b) Self.
+      if (selfDigits) {
+        for (const v of byKey.values()) {
+          if (v.phone === selfDigits && !v.is_group) {
+            v.name = v.name ?? "You";
+          }
+        }
+      }
+
+      // (c) Group subjects — parallel fetch one per JID.
+      const groupDigits = Array.from(byKey.values())
+        .filter((v) => v.is_group)
+        .map((v) => v.phone);
+      const uniqueGroupDigits = Array.from(new Set(groupDigits));
+      if (uniqueGroupDigits.length > 0) {
+        const groupInfos = await Promise.all(
+          uniqueGroupDigits.map(async (digits) => {
+            const jid = `${digits}@g.us`;
+            const info = await client.findGroupInfo(instanceName, jid);
+            return [digits, info] as const;
+          }),
+        );
+        const subjectByDigits = new Map(
+          groupInfos
+            .filter(
+              (e): e is readonly [string, NonNullable<(typeof e)[1]>] =>
+                e[1] !== null,
+            )
+            .map(([d, info]) => [d, info.subject] as const),
+        );
+        for (const v of byKey.values()) {
+          if (!v.is_group) continue;
+          const subj = subjectByDigits.get(v.phone);
+          if (subj) v.name = subj;
+        }
       }
     }
   } catch (e) {
