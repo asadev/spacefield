@@ -59,7 +59,16 @@ function readNextFromLocation(): string | null {
   }
 }
 
-export default function HomeGate() {
+interface Props {
+  /** Server-side hint that a Supabase auth cookie is present. When true
+   * we skip the marketing hero in the SSR fallback (the user is probably
+   * signed in — showing them a "Sign in" CTA that bounces back through
+   * /?signup=1 → / is broken UX). Doesn't validate the JWT, just
+   * suppresses the wrong-state flash for known-likely-authed visitors. */
+  likelyAuthed?: boolean;
+}
+
+export default function HomeGate({ likelyAuthed = false }: Props) {
   const [mode, setMode] = useState<Mode>("loading");
   const router = useRouter();
 
@@ -104,12 +113,19 @@ export default function HomeGate() {
   }, [router]);
 
   if (mode === "loading") {
-    // SSR + first-paint fallback. Crawlers and JS-disabled visitors see
-    // this static hero — h1 + value-prop + two CTAs — so the homepage
-    // is never an empty <body>. Once the client mounts and decides
-    // between Landing/Desktop, this is replaced; visually it flashes
-    // for ~1 frame and the result is indistinguishable from the
-    // original blank-div loading state on JS-enabled browsers.
+    // SSR + first-paint fallback.
+    //  - If we have a server-side hint the visitor is signed in
+    //    (likelyAuthed), render a neutral background so there's no
+    //    flash of the marketing "Sign in" hero before Desktop takes
+    //    over. (2026-05-27 fix: clicking that flash hero bounced
+    //    users through /?signup=1 → / and felt like the sign-in was
+    //    broken.)
+    //  - Otherwise, paint the marketing hero — crawlers, JS-disabled
+    //    visitors, and genuinely-new arrivals see the value prop +
+    //    CTAs instead of an empty <body>.
+    if (likelyAuthed) {
+      return <div className="fixed inset-0 bg-app" aria-hidden="true" />;
+    }
     return <HomeSsrFallback />;
   }
   if (mode === "desktop") {
