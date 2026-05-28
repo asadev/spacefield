@@ -70,9 +70,9 @@ export async function GET(req: NextRequest): Promise<Response> {
       const client = getEvolutionClient();
       const instances = await client.fetchInstances();
       const live = instances.find(
-        (i) => i.name === inst.evolution_instance_name,
+        (i) => i.instanceName === inst.evolution_instance_name,
       );
-      const liveState = (live?.state ?? "").toLowerCase();
+      const liveState = (live?.status ?? "").toLowerCase();
       if (liveState === "open" || liveState === "connected") {
         const phone = live?.ownerJid
           ? live.ownerJid.split("@")[0]?.replace(/\D/g, "") || null
@@ -84,22 +84,6 @@ export async function GET(req: NextRequest): Promise<Response> {
             phone_number: phone,
             qr_code: null,
             paired_at: inst.paired_at ?? new Date().toISOString(),
-            updated_at: new Date().toISOString(),
-          })
-          .eq("id", inst.id)
-          .select("*")
-          .maybeSingle();
-        if (updated) inst = updated as WhatsAppInstanceRow;
-      } else if (
-        (liveState === "close" || liveState === "" || !live) &&
-        inst.status === "connected"
-      ) {
-        // Inverse drift: DB says connected but Evolution lost the
-        // session. Flip to disconnected so the UI offers re-pair.
-        const { data: updated } = await admin
-          .from("whatsapp_instances")
-          .update({
-            status: "disconnected",
             updated_at: new Date().toISOString(),
           })
           .eq("id", inst.id)
