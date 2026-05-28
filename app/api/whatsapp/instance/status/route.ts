@@ -7,6 +7,7 @@ import {
   requireUser,
   requireWorkspaceMember,
 } from "@/lib/whatsapp/_route-helpers";
+import { getEvolutionClient } from "@/lib/whatsapp/client";
 import { getInstanceSendStats } from "@/lib/whatsapp/throttle";
 import type { WhatsAppInstanceRow } from "@/lib/whatsapp/types";
 
@@ -51,7 +52,66 @@ export async function GET(req: NextRequest): Promise<Response> {
     });
   }
 
-  const inst = row as WhatsAppInstanceRow;
+  let inst = row as WhatsAppInstanceRow;
+
+  // Self-heal: if our DB row isn't "connected" but Evolution actually
+  // has the instance "open", a CONNECTION_UPDATE webhook was missed
+  // (e.g. paired during a webhook outage, or Evolution restarted). Poll
+  // Evolution's real state and reconcile so the UI never gets stranded
+  // on the pair screen while the phone shows the device linked. Cheap —
+  // one fetchInstances call, only when not already connected.
+  // (2026-05-27: Asad hit exactly this — phone linked, UI stuck on QR.)
+  if (
+    inst.status !== "connected" &&
+    inst.status !== "banned" &&
+    inst.evolution_instance_name
+  ) {
+    try {
+      const client = getEvolutionClient();
+      const instances = await client.fetchInstances();
+      const live = instances.find(
+        (i) => i.name === inst.evolution_instance_name,
+      );
+      const liveState = (live?.state ?? "").toLowerCase();
+      if (liveState === "open" || liveState === "connected") {
+        const phone = live?.ownerJid
+          ? live.ownerJid.split("@")[0]?.replace(/\D/g, "") || null
+          : inst.phone_number;
+        const { data: updated } = await admin
+          .from("whatsapp_instances")
+          .update({
+            status: "connected",
+            phone_number: phone,
+            qr_code: null,
+            paired_at: inst.paired_at ?? new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", inst.id)
+          .select("*")
+          .maybeSingle();
+        if (updated) inst = updated as WhatsAppInstanceRow;
+      } else if (
+        (liveState === "close" || liveState === "" || !live) &&
+        inst.status === "connected"
+      ) {
+        // Inverse drift: DB says connected but Evolution lost the
+        // session. Flip to disconnected so the UI offers re-pair.
+        const { data: updated } = await admin
+          .from("whatsapp_instances")
+          .update({
+            status: "disconnected",
+            updated_at: new Date().toISOString(),
+          })
+          .eq("id", inst.id)
+          .select("*")
+          .maybeSingle();
+        if (updated) inst = updated as WhatsAppInstanceRow;
+      }
+    } catch {
+      // Evolution unreachable — return the DB row as-is. No regression.
+    }
+  }
+
   let stats:
     | Awaited<ReturnType<typeof getInstanceSendStats>>
     | null = null;
