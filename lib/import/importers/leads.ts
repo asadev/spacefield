@@ -2,6 +2,7 @@ import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
 import { LEAD_STATUS_VALUES, type CrmLeadStatus } from "@/app/tools/crm/types";
+import { indexLead } from "@/lib/crm/search-index";
 
 import { validateRow } from "../validate";
 import type { ImportResult, ImportRowInput } from "./types";
@@ -66,13 +67,25 @@ export async function importLeads(
           created_by: userId,
         };
 
-        const { error } = await supabase.from("crm_leads").insert(payload);
+        const { data: inserted, error } = await supabase
+          .from("crm_leads")
+          .insert(payload)
+          .select("*")
+          .single();
         if (error) {
           result.skipped += 1;
           result.errors.push({ row: rowIndex, message: error.message });
           return;
         }
         result.imported += 1;
+        // SYNC-01: index the bulk-imported row into global search.
+        // Guarded so an indexer fault can't abort the Promise.all import
+        // batch — search staleness must never block the originating write.
+        try {
+          await indexLead(inserted);
+        } catch {
+          /* best-effort; indexer already logs internally */
+        }
       })
     );
   }
