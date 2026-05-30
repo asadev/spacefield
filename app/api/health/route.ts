@@ -52,9 +52,12 @@ async function probeSupabase(): Promise<Probe> {
     };
   }
   try {
-    // Lightweight: hit the REST root. Supabase returns OpenAPI JSON on
-    // success — we don't care about the body, just the status code.
-    const res = await fetch(`${url}/rest/v1/`, {
+    // Hit the Supabase Auth (GoTrue) liveness endpoint. It returns a
+    // deterministic 200 ("GoTrue is healthy") to a request carrying the anon
+    // key. The PostgREST root (/rest/v1/) replies 401 ("No API key found") to a
+    // bare anon request, which made this liveness probe report a persistent
+    // false 503 and broke every uptime monitor pointed at /api/health.
+    const res = await fetch(`${url}/auth/v1/health`, {
       headers: { apikey: anon, Authorization: `Bearer ${anon}` },
       // Short timeout via AbortController for monitor SLAs
       signal: AbortSignal.timeout(3000),
