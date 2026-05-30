@@ -2,6 +2,7 @@
 
 import { clampList, runQuery, toolError, toolOk } from "../_helpers";
 import { escapeForLike, escapeForOr } from "@/lib/escape-helpers";
+import { indexCompany, unindexCompany } from "@/lib/crm/search-index";
 import type { SkillDefinition, ToolDefinition } from "@/lib/agent/runtime/types";
 
 const SELECT =
@@ -113,6 +114,9 @@ const create_company: ToolDefinition = {
       .select("*")
       .single();
     if (error) return toolError(error.message);
+    // SYNC-01: index into global search (best-effort) so AI-created
+    // companies are findable in Cmd-K, matching REST + import paths.
+    await indexCompany(data);
     return toolOk(data);
   },
 };
@@ -147,6 +151,7 @@ const update_company: ToolDefinition = {
       .select("*")
       .maybeSingle();
     if (error) return toolError(error.message);
+    if (data) await indexCompany(data);
     return toolOk(data);
   },
 };
@@ -169,6 +174,7 @@ const delete_company: ToolDefinition = {
       .eq("workspace_id", ctx.workspaceId)
       .eq("id", id);
     if (error) return toolError(error.message);
+    await unindexCompany(id);
     return toolOk({ deleted: id });
   },
 };
