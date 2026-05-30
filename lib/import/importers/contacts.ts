@@ -1,6 +1,7 @@
 import "server-only";
 
 import { createClient } from "@/lib/supabase/server";
+import { indexContact } from "@/lib/crm/search-index";
 
 import { validateRow } from "../validate";
 import type { ImportResult, ImportRowInput } from "./types";
@@ -66,15 +67,26 @@ export async function importContacts(
           created_by: userId,
         };
 
-        const { error } = await supabase
+        const { data: inserted, error } = await supabase
           .from("crm_contacts")
-          .insert(payload);
+          .insert(payload)
+          .select("*")
+          .single();
         if (error) {
           result.skipped += 1;
           result.errors.push({ row: rowIndex, message: error.message });
           return;
         }
         result.imported += 1;
+        // SYNC-01: index the bulk-imported row into global search so it's
+        // findable in Cmd-K. Guarded so an indexer fault can never abort
+        // the import batch (this runs inside a Promise.all map) — search
+        // staleness must never block or fail the originating write.
+        try {
+          await indexContact(inserted);
+        } catch {
+          /* best-effort; indexer already logs internally */
+        }
       })
     );
   }
