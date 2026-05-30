@@ -43,9 +43,17 @@ function asNumber(v: unknown): number | null {
 
 function jidToNumber(jid: string | null | undefined): string {
   if (!jid) return "";
-  // Strip the WhatsApp suffix(s) and any non-digit characters.
-  // Examples: "923001234567@s.whatsapp.net", "120363026...@g.us"
   const base = jid.split("@")[0] ?? jid;
+  // Group JIDs: keep the local part VERBATIM. WhatsApp has two group shapes
+  // and digit-stripping corrupts one of them:
+  //   - modern:            "120363026...@g.us"          -> "120363026..."
+  //   - legacy phone-style: "971552704745-1460373952@g.us"
+  //                          -> "971552704745-1460373952"
+  // Stripping non-digits would glue the legacy "<creator>-<timestamp>" halves
+  // into one bogus number (e.g. 9715527047451460373952), so the thread keys on
+  // the wrong id and renders as a bare 22-digit number (AUD-03-ingest).
+  if (jid.endsWith("@g.us")) return base;
+  // Individual JIDs ("...@s.whatsapp.net" / "...@c.us"): bare phone number.
   return base.replace(/\D/g, "");
 }
 
