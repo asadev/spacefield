@@ -9,8 +9,8 @@
  *      subtitle = website, body = notes). If live + backfill disagree,
  *      search rows churn on every write.
  *   2. The helpers are best-effort: a failing underlying indexDocument
- *      must NOT throw out of index*/unindex* (search staleness must
- *      never brick the originating CRM write).
+ *      must NOT throw out of the index / unindex helpers (search
+ *      staleness must never brick the originating CRM write).
  *
  * The module mocks @/lib/search/indexer so no DB is touched.
  */
