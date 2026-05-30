@@ -20,10 +20,11 @@
 -- must allow reading the profile of anyone who shares a workspace with the
 -- caller — otherwise the chat roster / members list / directory break.
 --
--- Recursion-safe: public.is_admin() is SECURITY DEFINER (reads profiles as the
--- owner, not through this policy); the workspace_members subquery is itself
--- RLS-limited to the caller's own memberships. Scoping the policy to the
--- `authenticated` role means anon has NO select policy → denied outright.
+-- Recursion-safe: public.admin_caller_is_admin() is SECURITY DEFINER (reads
+-- profiles as the owner, bypassing RLS — NOT through this policy); the
+-- workspace_members subquery is itself RLS-limited to the caller's own
+-- memberships. Scoping the policy to the `authenticated` role means anon has
+-- NO select policy → denied outright.
 --
 -- Idempotent.
 
@@ -35,7 +36,7 @@ create policy "profiles selectable by owner, admin, or co-member"
   to authenticated
   using (
     user_id = auth.uid()
-    or public.is_admin()
+    or public.admin_caller_is_admin()
     or exists (
       select 1
       from public.workspace_members me
