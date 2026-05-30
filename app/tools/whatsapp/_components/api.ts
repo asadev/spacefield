@@ -215,9 +215,18 @@ interface RawInstanceStatusResponse {
   paired_at?: string | null;
   qr_code?: string | null;
   last_seen_at?: string | null;
-  /** Server packs throttle stats under `stats` — we flatten on read so the UI
-   * can keep reading the older `instance.warmup_day / daily_cap / sent_today /
-   * health` shape it was built against. (K-06) */
+  /** Top-level throttle fields the server now emits directly (AUD-02). We
+   * prefer these when present and fall back to the nested `stats` shape for
+   * back-compat. */
+  warmup_day?: number | null;
+  daily_cap?: number | null;
+  hourly_cap?: number | null;
+  sent_today?: number | null;
+  sent_this_hour?: number | null;
+  health?: WaInstance["health"];
+  /** Server also packs throttle stats under `stats` — we flatten on read so the
+   * UI can keep reading the older `instance.warmup_day / daily_cap / sent_today
+   * / health` shape it was built against. (K-06) */
   stats?: {
     warmup_age_days?: number | null;
     daily_cap?: number | null;
@@ -235,30 +244,62 @@ export async function fetchInstanceStatus(
   if (!res.ok) return res;
   const raw = res.data;
   const stats = raw.stats ?? null;
+  // Prefer the server's top-level fields (AUD-02); fall back to the nested
+  // `stats` bundle for back-compat with an older payload shape.
   const warmupDay =
-    typeof stats?.warmup_age_days === "number" ? stats.warmup_age_days : null;
+    typeof raw.warmup_day === "number"
+      ? raw.warmup_day
+      : typeof stats?.warmup_age_days === "number"
+        ? stats.warmup_age_days
+        : null;
   const dailyCap =
-    typeof stats?.daily_cap === "number" ? stats.daily_cap : null;
+    typeof raw.daily_cap === "number"
+      ? raw.daily_cap
+      : typeof stats?.daily_cap === "number"
+        ? stats.daily_cap
+        : null;
+  const hourlyCap =
+    typeof raw.hourly_cap === "number" ? raw.hourly_cap : null;
   const sentToday =
-    typeof stats?.sent_last_day === "number" ? stats.sent_last_day : null;
+    typeof raw.sent_today === "number"
+      ? raw.sent_today
+      : typeof stats?.sent_last_day === "number"
+        ? stats.sent_last_day
+        : null;
   const sentHour =
-    typeof stats?.sent_last_hour === "number" ? stats.sent_last_hour : null;
+    typeof raw.sent_this_hour === "number"
+      ? raw.sent_this_hour
+      : typeof stats?.sent_last_hour === "number"
+        ? stats.sent_last_hour
+        : null;
 
-  // Synthesize a tiny health hint locally so the UI's Connected card always
-  // shows something useful even before the server starts emitting one.
-  let health: WaInstance["health"] = null;
-  if (raw.status === "banned") health = "banned";
-  else if (raw.status === "connected") {
-    if (warmupDay !== null && warmupDay < 14) health = "warming";
-    else if (dailyCap !== null && sentToday !== null && sentToday >= dailyCap)
-      health = "throttled";
-    else if (
-      dailyCap !== null &&
-      sentToday !== null &&
-      sentToday >= Math.floor(dailyCap * 0.85)
-    )
-      health = "warn";
-    else health = "good";
+  // Prefer the server-computed health hint; otherwise synthesize one locally so
+  // the UI's Connected card always shows something useful. The local path also
+  // adds a "warn" state (≥85% of the daily cap) the server doesn't emit.
+  let health: WaInstance["health"] = raw.health ?? null;
+  if (!health) {
+    if (raw.status === "banned") health = "banned";
+    else if (raw.status === "connected") {
+      if (warmupDay !== null && warmupDay < 14) health = "warming";
+      else if (dailyCap !== null && sentToday !== null && sentToday >= dailyCap)
+        health = "throttled";
+      else if (
+        dailyCap !== null &&
+        sentToday !== null &&
+        sentToday >= Math.floor(dailyCap * 0.85)
+      )
+        health = "warn";
+      else health = "good";
+    }
+  } else if (
+    health === "good" &&
+    dailyCap !== null &&
+    sentToday !== null &&
+    sentToday >= Math.floor(dailyCap * 0.85)
+  ) {
+    // Server reports "good" but we're near the daily cap — surface the softer
+    // "warn" so the "Approaching daily cap" banner still fires.
+    health = "warn";
   }
 
   const flat: WaInstance = {
@@ -269,7 +310,7 @@ export async function fetchInstanceStatus(
     last_seen_at: raw.last_seen_at ?? null,
     warmup_day: warmupDay,
     daily_cap: dailyCap,
-    hourly_cap: null,
+    hourly_cap: hourlyCap,
     sent_today: sentToday,
     sent_this_hour: sentHour,
     health,

@@ -8,7 +8,11 @@ import {
   requireWorkspaceMember,
 } from "@/lib/whatsapp/_route-helpers";
 import { getEvolutionClient } from "@/lib/whatsapp/client";
-import { getInstanceSendStats } from "@/lib/whatsapp/throttle";
+import {
+  getInstanceSendStats,
+  MAX_PER_HOUR,
+  WARMUP_DAYS,
+} from "@/lib/whatsapp/throttle";
 import type { WhatsAppInstanceRow } from "@/lib/whatsapp/types";
 
 export const runtime = "nodejs";
@@ -105,6 +109,21 @@ export async function GET(req: NextRequest): Promise<Response> {
     stats = null;
   }
 
+  // Flatten the throttle bundle to top-level fields the Connection dashboard
+  // reads directly (instance.health / warmup_day / daily_cap / sent_today /
+  // sent_this_hour / hourly_cap). We keep `stats` for back-compat with any
+  // older client that still reads the nested shape. (AUD-02: the dashboard
+  // never rendered caps / warm-up / health because the component read
+  // top-level fields the payload only exposed under `stats`.)
+  let health: "good" | "warming" | "throttled" | "banned" | null = null;
+  if (inst.status === "banned") {
+    health = "banned";
+  } else if (stats) {
+    if (stats.warmup_age_days < WARMUP_DAYS) health = "warming";
+    else if (stats.sent_last_hour >= MAX_PER_HOUR) health = "throttled";
+    else health = "good";
+  }
+
   return NextResponse.json({
     instance_id: inst.id,
     status: inst.status,
@@ -112,6 +131,13 @@ export async function GET(req: NextRequest): Promise<Response> {
     paired_at: inst.paired_at,
     qr_code: inst.qr_code,
     last_seen_at: inst.last_seen_at,
+    // Top-level mirrors of the throttle stats (see note above).
+    warmup_day: stats ? stats.warmup_age_days : null,
+    daily_cap: stats ? stats.daily_cap : null,
+    sent_today: stats ? stats.sent_last_day : null,
+    sent_this_hour: stats ? stats.sent_last_hour : null,
+    hourly_cap: stats ? MAX_PER_HOUR : null,
+    health,
     stats,
   });
 }
