@@ -1847,3 +1847,24 @@ html[data-tab-hidden="1"] *::after {
     display: none !important;
   }
 }
+
+
+/* ---------------------------------------------------------------------------
+ * THEME-01/02: tokens referenced by the WhatsApp GroupsTab
+ * (text-[var(--text-tertiary)] x5, bg-[var(--surface-2)] x2) but defined
+ * nowhere → invalid color rules (secondary text vanished) + transparent
+ * chip/picker backgrounds in both themes. Appended as a dedicated trailing
+ * block (rather than inline) because globals.css has several :root blocks and
+ * these vars don't exist elsewhere, so a trailing definition is conflict-free
+ * and wins regardless of source-order. Values sit between --text-muted and
+ * --text-faint / a touch above --surface, matching the existing scale.
+ * ------------------------------------------------------------------------- */
+:root,
+:root[data-theme="dark"] {
+  --text-tertiary: rgba(255, 255, 255, 0.50);
+  --surface-2: rgba(255, 255, 255, 0.08);
+}
+:root[data-theme="light"] {
+  --text-tertiary: rgba(15, 23, 42, 0.55);
+  --surface-2: rgba(15, 23, 42, 0.06);
+}
