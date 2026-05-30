@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { listCompanies } from "@/app/tools/crm/_data";
 import { safeErrorMessage } from "@/lib/safe-error";
+import { indexCompany } from "@/lib/crm/search-index";
 import {
   jsonError,
   readJson,
@@ -64,5 +65,6 @@ export async function POST(req: NextRequest) {
     .select("*")
     .single();
   if (error) return jsonError(error.message, 500);
+  await indexCompany(data);
   return NextResponse.json({ item: data });
 }

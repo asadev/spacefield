@@ -47,6 +47,14 @@ interface DealRow {
   close_date?: string | null;
 }
 
+interface CompanyRow {
+  id: string;
+  workspace_id: string;
+  name?: string | null;
+  website?: string | null;
+  notes?: string | null;
+}
+
 function fullName(first?: string | null, last?: string | null): string {
   const f = (first ?? "").trim();
   const l = (last ?? "").trim();
@@ -124,4 +132,30 @@ export async function indexDeal(row: DealRow): Promise<void> {
 
 export async function unindexDeal(id: string): Promise<void> {
   await unindexDocument({ entityType: "deal", entityId: id });
+}
+
+/**
+ * Company indexer. entity_type / href / icon / field mapping kept
+ * identical to the backfill migration (20260530c): icon `building`,
+ * title falls back to "Untitled company", subtitle = website, body =
+ * notes. Added 2026-05-30 to close the SYNC-01 runtime gap — companies
+ * were searchable per the backfill but had no live indexer, so any
+ * company created/updated after the backfill drifted out of search.
+ */
+export async function indexCompany(row: CompanyRow): Promise<void> {
+  const name = (row.name ?? "").trim();
+  await indexDocument({
+    workspaceId: row.workspace_id,
+    entityType: "company",
+    entityId: row.id,
+    title: name.length > 0 ? name : "Untitled company",
+    subtitle: row.website ?? null,
+    body: row.notes ?? null,
+    href: `/tools/crm/companies/${row.id}`,
+    icon: "building",
+  });
+}
+
+export async function unindexCompany(id: string): Promise<void> {
+  await unindexDocument({ entityType: "company", entityId: id });
 }
