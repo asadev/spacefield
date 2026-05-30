@@ -114,6 +114,32 @@ export interface RedirectPayload {
   notes?: string;
 }
 
+/**
+ * Redirect links bounce visitors from the trusted toshare.net/<slug> origin
+ * to an external destination. Without validation this is an open-redirect /
+ * phishing relay (TOSHARE-01): any signed-in user could mint a link whose
+ * `payload.url` points at an attacker host, or smuggle a `javascript:` /
+ * `data:` scheme through the viewer's `redirect()`.
+ *
+ * This validator is the single source of truth and is enforced at BOTH
+ * mint time (lib/toshare/server.ts) and view time (app/(share)/r/[slug]).
+ * It only accepts absolute http: / https: URLs — relative paths are
+ * meaningless for an external bounce and everything else (javascript:,
+ * data:, vbscript:, file:, mailto:, protocol-relative //host …) is rejected.
+ */
+export function isSafeRedirectUrl(raw: unknown): raw is string {
+  if (typeof raw !== "string") return false;
+  const trimmed = raw.trim();
+  if (!trimmed) return false;
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return false;
+  }
+  return parsed.protocol === "http:" || parsed.protocol === "https:";
+}
+
 export interface FilePayload {
   fileName: string;
   fileSize: number;
