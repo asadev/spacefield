@@ -216,27 +216,71 @@ export async function GET(req: NextRequest): Promise<Response> {
         }
       }
 
-      // (c) Group subjects — parallel fetch one per JID.
-      const groupDigits = Array.from(byKey.values())
-        .filter((v) => v.is_group)
-        .map((v) => v.phone);
-      const uniqueGroupDigits = Array.from(new Set(groupDigits));
+      // (c) Group subjects.
+      //
+      // AUD-01/AUD-03: this used to fire one live findGroupInfo per group JID in
+      // parallel. Under Evolution load that partially failed (modern 120363…
+      // groups came back name:null) and risked a 504. We now resolve subjects
+      // from the whatsapp_groups CACHE first (single workspace-scoped query) and
+      // only fall back to a small, bounded number of live lookups for groups not
+      // yet cached — so this route can never 504 on name resolution.
+      const uniqueGroupDigits = Array.from(
+        new Set(
+          Array.from(byKey.values())
+            .filter((v) => v.is_group)
+            .map((v) => v.phone),
+        ),
+      );
       if (uniqueGroupDigits.length > 0) {
-        const groupInfos = await Promise.all(
-          uniqueGroupDigits.map(async (digits) => {
-            const jid = `${digits}@g.us`;
-            const info = await client.findGroupInfo(instanceName, jid);
-            return [digits, info] as const;
-          }),
+        const subjectByDigits = new Map<string, string>();
+
+        // whatsapp_groups.evolution_group_id stores the FULL JID
+        // ("<localpart>@g.us"); v.phone is the digits-only localpart. Match by
+        // stripping the suffix off the cached JID.
+        const { data: cachedGroups } = await admin
+          .from("whatsapp_groups")
+          .select("evolution_group_id, name")
+          .eq("workspace_id", workspaceId);
+        for (const g of cachedGroups ?? []) {
+          const row = g as { evolution_group_id: string; name: string | null };
+          if (!row.name) continue;
+          const localPart = row.evolution_group_id.split("@")[0];
+          if (!localPart) continue;
+          subjectByDigits.set(localPart, row.name);
+        }
+
+        // Live fallback ONLY for groups missing from the cache, capped so this
+        // route can never 504. The rest keep their phone JID until a Groups-tab
+        // sync populates the cache.
+        const missing = uniqueGroupDigits.filter(
+          (d) => !subjectByDigits.has(d),
         );
-        const subjectByDigits = new Map(
-          groupInfos
-            .filter(
-              (e): e is readonly [string, NonNullable<(typeof e)[1]>] =>
-                e[1] !== null,
-            )
-            .map(([d, info]) => [d, info.subject] as const),
-        );
+        const MAX_LIVE_LOOKUPS = 5;
+        const LIVE_LOOKUP_TIMEOUT_MS = 4_000;
+        if (missing.length > 0) {
+          const toLookup = missing.slice(0, MAX_LIVE_LOOKUPS);
+          const subjects = await Promise.all(
+            toLookup.map(async (digits): Promise<string | null> => {
+              const jid = `${digits}@g.us`;
+              try {
+                const info = await Promise.race([
+                  client.findGroupInfo(instanceName, jid),
+                  new Promise<null>((resolve) =>
+                    setTimeout(() => resolve(null), LIVE_LOOKUP_TIMEOUT_MS),
+                  ),
+                ]);
+                return info?.subject ?? null;
+              } catch {
+                return null;
+              }
+            }),
+          );
+          toLookup.forEach((digits, i) => {
+            const subj = subjects[i];
+            if (subj) subjectByDigits.set(digits, subj);
+          });
+        }
+
         for (const v of byKey.values()) {
           if (!v.is_group) continue;
           const subj = subjectByDigits.get(v.phone);

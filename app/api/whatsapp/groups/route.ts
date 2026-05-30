@@ -40,45 +40,11 @@ export async function GET(req: NextRequest): Promise<Response> {
   if (!member.ok) return member.response;
 
   const admin = createAdminClient();
-  const { data: instRow } = await admin
-    .from("whatsapp_instances")
-    .select("*")
-    .eq("workspace_id", workspaceId)
-    .eq("status", "connected")
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
 
-  // Best-effort: re-sync from Evolution if we have a connected instance.
-  if (instRow) {
-    const inst = instRow as WhatsAppInstanceRow;
-    try {
-      const client = getEvolutionClient();
-      const remote = await client.fetchGroups(inst.evolution_instance_name);
-      for (const g of remote) {
-        await admin
-          .from("whatsapp_groups")
-          .upsert(
-            {
-              workspace_id: workspaceId,
-              instance_id: inst.id,
-              evolution_group_id: g.id,
-              name: g.subject,
-              member_count: g.size ?? 0,
-              members_synced_at: new Date().toISOString(),
-            },
-            { onConflict: "instance_id,evolution_group_id" },
-          );
-      }
-    } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error(
-        "[whatsapp.groups] evolution fetch failed (continuing with cache):",
-        e,
-      );
-    }
-  }
-
+  // AUD-01: this route previously called Evolution fetchGroups (~193 groups)
+  // synchronously on every GET and reliably 504'd in production. The heavy
+  // Evolution fetch now lives in POST /api/whatsapp/groups/sync; this hot path
+  // reads ONLY from the whatsapp_groups cache and returns fast.
   const { data: rows, error } = await admin
     .from("whatsapp_groups")
     .select("id, name, evolution_group_id, member_count, members_synced_at, created_at")
@@ -86,7 +52,13 @@ export async function GET(req: NextRequest): Promise<Response> {
     .order("name", { ascending: true });
 
   if (error) return jsonError(error.message, 500);
-  return NextResponse.json({ items: rows ?? [] });
+
+  const items = rows ?? [];
+  // Empty cache => prompt a first sync rather than show a bare "no groups".
+  if (items.length === 0) {
+    return NextResponse.json({ items: [], needs_sync: true });
+  }
+  return NextResponse.json({ items });
 }
 
 /**
