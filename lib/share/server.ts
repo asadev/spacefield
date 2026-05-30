@@ -13,6 +13,7 @@ import {
   type ShareLinkRow,
   type ShareLinkPayload,
   buildShareUrl,
+  isSafeRedirectUrl,
   SHARE_TYPES,
 } from "./types";
 
@@ -60,6 +61,15 @@ function stripUnsafePayloadBlocks(payload: Record<string, unknown>): Record<stri
 export async function mintLink(input: MintLinkInput): Promise<MintLinkResult> {
   if (!SHARE_TYPES.includes(input.type)) {
     return { ok: false, error: `invalid type: ${input.type}` };
+  }
+
+  // SHARE-01: a `redirect` link bounces visitors from the trusted
+  // share.example.com origin to an external destination. Validate the target at
+  // mint time so an attacker can never persist an open-redirect / phishing
+  // relay (javascript:, data:, or an off-allowlist host). The viewer
+  // re-validates at view time as defence-in-depth for any legacy rows.
+  if (input.type === "redirect" && !isSafeRedirectUrl((input.payload as { url?: unknown }).url)) {
+    return { ok: false, error: "redirect url must be an absolute http(s) URL" };
   }
 
   const supabase = await createClient();
