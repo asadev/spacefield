@@ -43,6 +43,9 @@ interface RequestOpts {
   body?: unknown;
   /** Skip the JSON body parse — useful for endpoints that 204. */
   raw?: boolean;
+  /** Per-attempt abort budget (ms). Defaults to the module TIMEOUT_MS. Used by
+   *  the groups-sync route to keep fetchAllGroups under its function maxDuration. */
+  timeoutMs?: number;
 }
 
 export class EvolutionClient {
@@ -63,9 +66,10 @@ export class EvolutionClient {
     const method = opts.method ?? "GET";
     let lastError: unknown = null;
 
+    const timeoutMs = opts.timeoutMs ?? TIMEOUT_MS;
     for (let attempt = 0; attempt < RETRY_DELAYS_MS.length; attempt++) {
       const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
+      const timer = setTimeout(() => controller.abort(), timeoutMs);
       try {
         const res = await fetch(url, {
           method,
@@ -276,10 +280,16 @@ export class EvolutionClient {
     return { messageId: id };
   }
 
-  /** List all WhatsApp groups visible to this instance. */
-  async fetchGroups(instanceName: string): Promise<EvolutionGroup[]> {
+  /** List all WhatsApp groups visible to this instance.
+   *  `timeoutMs` bounds each HTTP attempt (request() honours opts.timeoutMs) so
+   *  the groups-sync route can keep this heavy call under its maxDuration. */
+  async fetchGroups(
+    instanceName: string,
+    timeoutMs?: number,
+  ): Promise<EvolutionGroup[]> {
     const res = await this.request<unknown>(
       `/group/fetchAllGroups/${encodeURIComponent(instanceName)}?getParticipants=false`,
+      timeoutMs ? { timeoutMs } : {},
     );
     if (!Array.isArray(res)) return [];
     return res
