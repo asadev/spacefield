@@ -14,12 +14,15 @@ const nextConfig: NextConfig = {
   // walking up the directory tree and treating a parent folder as the
   // workspace.
   outputFileTracingRoot: projectRoot,
-  // A2 — emit browser source maps in the prod bundle so Vercel-served
-  // errors land on the original TypeScript line numbers in dev-tools.
-  // No third-party upload (no Sentry release wiring here); the maps
-  // ship alongside the JS chunks and are loaded by the browser on
-  // demand when the dev-tools panel is open.
-  productionBrowserSourceMaps: true,
+  // A2 — browser source maps were enabled for prod debugging, but generating
+  // full source maps for every chunk of a 358-page app forces webpack to hold
+  // all of that map data in memory at once during compile, which was a major
+  // contributor to the build OOM (SIGKILL) on Vercel's fixed 8 GB builder
+  // (custom/larger build machines aren't available on this plan). Disabled to
+  // bring peak build memory under 8 GB. Re-enable once the bundle is smaller or
+  // the plan allows a bigger builder. (Cosmetic only — affects browser
+  // dev-tools source mapping, not runtime behaviour.)
+  productionBrowserSourceMaps: false,
   experimental: {
     optimizePackageImports: ['framer-motion'],
     // Cap server-action / inbound JSON bodies so attackers can't pin a
@@ -30,17 +33,18 @@ const nextConfig: NextConfig = {
       bodySizeLimit: '2mb',
     },
     // The inbox v2 frontend (ConversationsTab.tsx is ~1.3k lines + realtime +
-    // media) pushed the webpack production build past the build container's RAM
-    // and the build worker was OOM-killed (SIGKILL) before it ever reached
-    // type-checking — commits 16281f0 / 052af1d / 07b2535 all failed this way
-    // while the backend-only c0ca37c built fine. Two mitigations, plus the
-    // build machine is bumped to "enhanced" (more RAM/cores) in the Vercel
-    // project's resourceConfig:
+    // media) pushed the webpack production build past Vercel's fixed 8 GB
+    // builder and the build worker was OOM-killed (SIGKILL) before it ever
+    // reached type-checking — commits 16281f0 / 052af1d / 07b2535 all failed
+    // this way while the backend-only c0ca37c built fine. A bigger build
+    // machine isn't available on this plan, so the fix is purely lowering peak
+    // build memory:
     //  1) webpackMemoryOptimizations — lowers peak webpack compile memory.
     //  2) cpus:2 — caps the static-generation worker pool. Each worker is a
-    //     separate Node process that holds the whole app in memory; the default
-    //     (one per core) is what multiplied RSS past the limit. 2 keeps some
-    //     parallelism without the RSS blow-up.
+    //     separate Node process holding the whole app in memory; the default
+    //     (one per core) multiplied RSS past the limit.
+    //  (see also productionBrowserSourceMaps:false above — the biggest single
+    //   reduction, since per-chunk source maps were retained in memory.)
     webpackMemoryOptimizations: true,
     cpus: 2,
   },
