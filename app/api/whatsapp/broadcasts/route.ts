@@ -102,21 +102,20 @@ export async function GET(req: NextRequest): Promise<Response> {
       segName.set((s as { id: string }).id, (s as { name: string }).name);
   }
 
-  const items = (data ?? []).map((r) => {
-    const row = r as Record<string, unknown> & { segment_id: string | null };
-    return {
-      ...row,
-      segment_name: row.segment_id ? segName.get(row.segment_id) ?? null : null,
-    };
-  });
+  const rows = (data ?? []) as Array<Record<string, unknown> & {
+    segment_id: string | null;
+    created_at: string;
+  }>;
+  const items = rows.map((row) => ({
+    ...row,
+    segment_name: row.segment_id ? segName.get(row.segment_id) ?? null : null,
+  }));
 
-  const last = items.length > 0 ? items[items.length - 1] : null;
+  const lastCreatedAt =
+    rows.length === limit ? rows[rows.length - 1].created_at : null;
   return NextResponse.json({
     items,
-    next_cursor:
-      items.length === limit && last
-        ? (last as { created_at: string }).created_at
-        : null,
+    next_cursor: lastCreatedAt,
   });
 }
 
