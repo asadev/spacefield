@@ -204,11 +204,10 @@ export default function WhatsAppApp({ width, initialParams }: NativeAppProps) {
         aria-label="WhatsApp sections"
       >
         {/* workspace header */}
-        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-app px-3 py-2.5">
-          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-app">
+        <div className="shrink-0 border-b border-app px-3 py-2.5">
+          <span className="block truncate text-sm font-semibold text-app">
             {workspaceName || "WhatsApp"}
           </span>
-          <NotificationBell />
         </div>
 
         {/* vertical tab nav */}
@@ -288,6 +287,14 @@ export default function WhatsAppApp({ width, initialParams }: NativeAppProps) {
         {tab === "jobs" && (
           <JobsTab workspaceId={workspaceId} compact={compact} />
         )}
+      </div>
+
+      {/* Floating notifications control (top-right, over content pane).
+          pointer-events wrapper so it never blocks clicks around the bell. */}
+      <div className="pointer-events-none absolute right-2 top-2 z-50">
+        <div className="pointer-events-auto">
+          <NotificationBell />
+        </div>
       </div>
     </div>
   );

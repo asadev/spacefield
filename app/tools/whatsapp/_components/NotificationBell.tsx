@@ -91,7 +91,7 @@ export default function NotificationBell() {
         className="relative rounded-md border border-transparent p-1.5 text-secondary hover:bg-surface hover:text-app"
         aria-label="WhatsApp notifications"
       >
-        <MiniIcon name="inbox" size={16} />
+        <MiniIcon name="bell" size={16} />
         {unread > 0 ? (
           <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[0.55rem] font-semibold text-white">
             {unread > 9 ? "9+" : unread}
