@@ -116,10 +116,12 @@ export default function ConversationsTab({ workspaceId, compact }: Props) {
   const [search, setSearch] = useState("");
 
   // ── Wave 2 filters ───────────────────────────────────────────────────────
-  const [view, setView] = useState<FilterView>("open_mine");
+  // Default to "all" so a solo operator sees every conversation on first open
+  // (nothing is assigned yet, so "open_mine" would render an empty queue).
+  const [view, setView] = useState<FilterView>("all");
   const [labelFilter, setLabelFilter] = useState<string | null>(null);
   const viewRef = useRef<{ view: FilterView; labelFilter: string | null }>({
-    view: "open_mine",
+    view: "all",
     labelFilter: null,
   });
   useEffect(() => {
@@ -1867,14 +1869,14 @@ function Avatar({ conv, size = 36 }: { conv: WaConversation; size?: number }) {
 function ConvEmpty({ compact, view }: { compact: boolean; view: FilterView }) {
   const msg =
     view === "open_mine"
-      ? "Nothing open and assigned to you. Switch to All to see everything."
+      ? "No open conversations assigned to you right now."
       : view === "unassigned"
         ? "No unassigned conversations — every thread has an owner."
         : view === "resolved"
           ? "No resolved conversations yet."
           : view === "pending"
             ? "Nothing pending."
-            : "Inbound messages appear here. Message a contact from any tool to start a thread.";
+            : "Replies from your connected number will appear here.";
   return (
     <div className="p-4">
       <div
@@ -1884,7 +1886,7 @@ function ConvEmpty({ compact, view }: { compact: boolean; view: FilterView }) {
         <div className="font-mono text-[0.6rem] uppercase tracking-[0.2em] text-tool-accent">
           whatsapp.inbox
         </div>
-        <h4 className="mt-2 text-sm font-semibold text-app">No conversations</h4>
+        <h4 className="mt-2 text-sm font-semibold text-app">No conversations yet</h4>
         <p className="mt-1 text-xs text-secondary">{msg}</p>
       </div>
     </div>
