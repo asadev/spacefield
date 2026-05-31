@@ -1,11 +1,18 @@
-import { NextResponse, type NextRequest } from "next/server";
+import { NextResponse, after, type NextRequest } from "next/server";
 import { timingSafeEqual } from "node:crypto";
 
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getEvolutionClient } from "@/lib/whatsapp/client";
+import {
+  recordMessageOnConversation,
+  resolveConversation,
+} from "@/lib/whatsapp/conversations";
+import { rehostInboundMedia } from "@/lib/whatsapp/media";
 import { signInstanceWebhook } from "@/lib/whatsapp/instance-manager";
 import { parseEvolutionEvent } from "@/lib/whatsapp/webhook-parser";
 import type {
   ParsedEvolutionEvent,
+  ParsedWhatsAppMessage,
   WhatsAppInstanceRow,
 } from "@/lib/whatsapp/types";
 
@@ -113,51 +120,117 @@ async function dispatch(
 
   switch (event.type) {
     case "MESSAGES_UPSERT": {
-      // Idempotency — evolution_message_id is the unique key.
       const direction = event.direction;
-      let contactId: string | null = null;
+      const msg = event.message;
+      const isGroup = msg.remoteJid.endsWith("@g.us");
+      const chatType = isGroup ? "group" : "individual";
 
-      if (direction === "inbound" && event.message.remoteNumber) {
-        contactId = await findOrCreateContact(
-          inst.workspace_id,
-          event.message.remoteNumber,
-        );
-      } else if (event.message.remoteNumber) {
-        const { data: existing } = await admin
-          .from("crm_contacts")
-          .select("id")
-          .eq("workspace_id", inst.workspace_id)
-          .eq("phone", event.message.remoteNumber)
-          .maybeSingle();
-        if (existing) contactId = (existing as { id: string }).id;
+      // ── Reactions: never a new bubble. Mutate the target's reactions jsonb. ──
+      if (msg.reactionEmoji !== null && msg.reactionTargetId) {
+        await applyReaction(admin, inst.workspace_id, msg);
+        await admin
+          .from("whatsapp_instances")
+          .update({ last_seen_at: new Date().toISOString() })
+          .eq("id", inst.id);
+        return;
       }
 
+      // Resolve CRM contact. For groups the remoteNumber is the group JID
+      // localpart, not a real phone — only link/auto-create contacts for
+      // individuals so we don't pollute CRM with group "contacts".
+      let contactId: string | null = null;
+      if (!isGroup && msg.remoteNumber) {
+        if (direction === "inbound") {
+          contactId = await findOrCreateContact(
+            inst.workspace_id,
+            msg.remoteNumber,
+          );
+        } else {
+          const { data: existing } = await admin
+            .from("crm_contacts")
+            .select("id")
+            .eq("workspace_id", inst.workspace_id)
+            .eq("phone", msg.remoteNumber)
+            .maybeSingle();
+          if (existing) contactId = (existing as { id: string }).id;
+        }
+      }
+
+      // Resolve (or create) the conversation this message belongs to.
+      const conv = await resolveConversation(admin, {
+        workspaceId: inst.workspace_id,
+        instanceId: inst.id,
+        sourceId: msg.remoteNumber,
+        sourceJid: msg.remoteJid,
+        chatType,
+        contactId,
+        // For groups, the latest sender's pushName is NOT the group subject,
+        // so never seed a group title from pushName. Individual titles come
+        // from CRM hydration in the list route, so leave null here too.
+        title: null,
+      });
+
+      // sender_name / sender_jid are only meaningful inside a group thread,
+      // where multiple participants speak. For 1:1 chats they're redundant.
       const row = {
         workspace_id: inst.workspace_id,
         instance_id: inst.id,
         contact_id: contactId,
+        conversation_id: conv?.id ?? null,
         direction,
-        from_number:
-          direction === "inbound" ? event.message.remoteNumber : null,
-        to_number:
-          direction === "outbound" ? event.message.remoteNumber : null,
-        body: event.message.body,
-        media_url: event.message.mediaUrl,
-        media_type: event.message.mediaType,
+        from_number: direction === "inbound" ? msg.remoteNumber : null,
+        to_number: direction === "outbound" ? msg.remoteNumber : null,
+        body: msg.body,
+        media_url: msg.mediaUrl,
+        media_type: msg.mediaType,
+        media_mime: msg.mimetype,
+        reply_to_message_id: msg.replyToId,
+        sender_name: isGroup ? msg.pushName : null,
+        sender_jid: isGroup ? msg.participant : null,
         status:
           direction === "outbound" ? ("sent" as const) : ("delivered" as const),
-        evolution_message_id: event.message.evolutionMessageId,
-        sent_at: direction === "outbound" ? event.message.timestamp : null,
-        received_at: direction === "inbound" ? event.message.timestamp : null,
+        evolution_message_id: msg.evolutionMessageId,
+        sent_at: direction === "outbound" ? msg.timestamp : null,
+        received_at: direction === "inbound" ? msg.timestamp : null,
       };
 
-      // Upsert by evolution_message_id so retries are idempotent.
-      const { error: upsertErr } = await admin
+      // Upsert by evolution_message_id so retries are idempotent. Return the
+      // row id so we can attach media + update conversation activity.
+      const { data: upserted, error: upsertErr } = await admin
         .from("whatsapp_messages")
-        .upsert(row, { onConflict: "evolution_message_id" });
+        .upsert(row, { onConflict: "evolution_message_id" })
+        .select("id")
+        .single();
       if (upsertErr) {
         // eslint-disable-next-line no-console
         console.error("[whatsapp.webhook] upsert msg failed:", upsertErr.message);
+      }
+      const messageRowId = (upserted as { id: string } | null)?.id ?? null;
+
+      // Roll the conversation activity counters atomically (RPC).
+      if (conv) {
+        try {
+          await recordMessageOnConversation(admin, {
+            conversationId: conv.id,
+            direction,
+            body: msg.body,
+            mediaType: msg.mediaType,
+            createdAt: msg.timestamp,
+          });
+        } catch (e) {
+          // eslint-disable-next-line no-console
+          console.error(
+            "[whatsapp.webhook] record activity failed:",
+            e instanceof Error ? e.message : String(e),
+          );
+        }
+      }
+
+      // Re-host inbound media AFTER acking — the raw media_url is an
+      // undecryptable .enc blob, so we pull the decrypted bytes from
+      // Evolution and stash them in private Storage. Never block the 200.
+      if (conv && messageRowId && msg.mediaType) {
+        scheduleMediaRehost(inst, msg, messageRowId);
       }
 
       await admin
@@ -221,6 +294,99 @@ async function dispatch(
     default:
       // No-op. The event was acked 200 and parsed but we don't model it.
       return;
+  }
+}
+
+/**
+ * Apply a WhatsApp reaction to its target message's `reactions` jsonb.
+ * An empty emoji removes that actor's reaction; otherwise it adds/replaces
+ * the actor's entry. Reactions are stored as
+ *   [{ emoji, fromMe, actor }, ...]
+ * keyed by `actor` (the reactor's number). Best-effort — never throws.
+ */
+async function applyReaction(
+  admin: ReturnType<typeof createAdminClient>,
+  workspaceId: string,
+  msg: ParsedWhatsAppMessage,
+): Promise<void> {
+  const targetId = msg.reactionTargetId;
+  if (!targetId) return;
+  const { data: target, error } = await admin
+    .from("whatsapp_messages")
+    .select("id, reactions")
+    .eq("workspace_id", workspaceId)
+    .eq("evolution_message_id", targetId)
+    .maybeSingle();
+  if (error || !target) return;
+  const row = target as {
+    id: string;
+    reactions: Array<{ emoji: string; fromMe: boolean; actor: string }> | null;
+  };
+  // The reactor: in a group it's the participant; in a 1:1 it's the peer
+  // (remoteNumber) or "self" when fromMe.
+  const actor = msg.fromMe
+    ? "self"
+    : msg.participant
+      ? msg.participant.split("@")[0]?.replace(/\D/g, "") || msg.remoteNumber
+      : msg.remoteNumber;
+  const existing = Array.isArray(row.reactions) ? row.reactions : [];
+  const next = existing.filter((r) => r.actor !== actor);
+  if (msg.reactionEmoji) {
+    next.push({ emoji: msg.reactionEmoji, fromMe: msg.fromMe, actor });
+  }
+  const { error: updErr } = await admin
+    .from("whatsapp_messages")
+    .update({ reactions: next })
+    .eq("id", row.id);
+  if (updErr) {
+    // eslint-disable-next-line no-console
+    console.warn("[whatsapp.webhook] reaction update failed:", updErr.message);
+  }
+}
+
+/**
+ * Re-host inbound media post-response. Uses Next's `after()` so the 200 ack
+ * goes out first; on any failure we swallow + log (media is best-effort and
+ * must never break ingestion). A fresh admin client is created inside the
+ * callback because the request-scoped one may be torn down after the response.
+ */
+function scheduleMediaRehost(
+  inst: WhatsAppInstanceRow,
+  msg: ParsedWhatsAppMessage,
+  messageRowId: string,
+): void {
+  const run = async (): Promise<void> => {
+    try {
+      const admin = createAdminClient();
+      const client = getEvolutionClient();
+      const result = await rehostInboundMedia(admin, client, {
+        instanceName: inst.evolution_instance_name,
+        message: msg,
+        workspaceId: inst.workspace_id,
+        messageRowId,
+      });
+      if (result) {
+        await admin
+          .from("whatsapp_messages")
+          .update({
+            media_storage_path: result.storagePath,
+            media_mime: result.mime,
+          })
+          .eq("id", messageRowId);
+      }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[whatsapp.webhook] media rehost failed:",
+        e instanceof Error ? e.message : String(e),
+      );
+    }
+  };
+  try {
+    after(run());
+  } catch {
+    // `after` unavailable in this context — fall back to fire-and-forget.
+    void run();
   }
 }
 

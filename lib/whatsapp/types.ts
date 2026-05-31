@@ -106,6 +106,8 @@ export type EvolutionWebhookEventType =
   | "SEND_MESSAGE"
   | "UNKNOWN";
 
+export type WhatsAppChatType = "individual" | "group";
+
 /** Single parsed-message representation, shared across upsert + update. */
 export interface ParsedWhatsAppMessage {
   evolutionMessageId: string;
@@ -116,7 +118,20 @@ export interface ParsedWhatsAppMessage {
   body: string;
   mediaUrl: string | null;
   mediaType: string | null;
+  mimetype: string | null;
+  fileName: string | null;
+  pushName: string | null;
+  participant: string | null;
+  replyToId: string | null;
+  reactionEmoji: string | null;
+  reactionTargetId: string | null;
   timestamp: string;
+}
+
+export interface EvolutionMediaBase64 {
+  base64: string;
+  mimetype: string;
+  fileName: string | null;
 }
 
 /** Webhook → parsed payload union. */
