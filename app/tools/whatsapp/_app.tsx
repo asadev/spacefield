@@ -110,25 +110,49 @@ type WaTabKey =
 interface WaTabMeta {
   key: WaTabKey;
   label: string;
-  short: string;
 }
 
 const TABS: WaTabMeta[] = [
-  { key: "connection", label: "Connection", short: "Connect" },
-  { key: "conversations", label: "Conversations", short: "Chats" },
-  { key: "search", label: "Search", short: "Search" },
-  { key: "broadcasts", label: "Broadcasts", short: "Blast" },
-  { key: "automation", label: "Automation", short: "Auto" },
-  { key: "workflows", label: "Workflows", short: "Flows" },
-  { key: "products", label: "Products", short: "Shop" },
-  { key: "status", label: "Status", short: "Status" },
-  { key: "macros", label: "Macros", short: "Macros" },
-  { key: "groups", label: "Groups", short: "Groups" },
-  { key: "team", label: "Team", short: "Team" },
-  { key: "analytics", label: "Analytics", short: "Stats" },
-  { key: "lists", label: "Lists", short: "Lists" },
-  { key: "history", label: "Send history", short: "History" },
-  { key: "jobs", label: "Jobs", short: "Jobs" },
+  { key: "connection", label: "Connection" },
+  { key: "conversations", label: "Conversations" },
+  { key: "search", label: "Search" },
+  { key: "groups", label: "Groups" },
+  { key: "broadcasts", label: "Broadcasts" },
+  { key: "automation", label: "Automation" },
+  { key: "workflows", label: "Workflows" },
+  { key: "status", label: "Status" },
+  { key: "products", label: "Products" },
+  { key: "macros", label: "Macros" },
+  { key: "analytics", label: "Analytics" },
+  { key: "lists", label: "Lists" },
+  { key: "history", label: "Send history" },
+  { key: "jobs", label: "Jobs" },
+  { key: "team", label: "Team" },
+];
+
+const TAB_BY_KEY: Record<WaTabKey, WaTabMeta> = TABS.reduce(
+  (acc, t) => {
+    acc[t.key] = t;
+    return acc;
+  },
+  {} as Record<WaTabKey, WaTabMeta>,
+);
+
+// Left-sidebar groupings (purely cosmetic — every tab still ships).
+const TAB_GROUPS: Array<{ heading: string; keys: WaTabKey[] }> = [
+  {
+    heading: "Inbox",
+    keys: ["connection", "conversations", "search", "groups"],
+  },
+  {
+    heading: "Outreach",
+    keys: ["broadcasts", "automation", "workflows", "status"],
+  },
+  { heading: "Catalog", keys: ["products", "macros"] },
+  {
+    heading: "Insights",
+    keys: ["analytics", "lists", "history", "jobs", "team"],
+  },
 ];
 
 export default function WhatsAppApp({ width, initialParams }: NativeAppProps) {
@@ -172,42 +196,53 @@ export default function WhatsAppApp({ width, initialParams }: NativeAppProps) {
   }
 
   return (
-    <div className="flex h-full flex-col bg-app">
-      <header className="flex shrink-0 items-center justify-between gap-3 border-b border-app bg-app-elevated px-3 py-2">
-        <nav
-          aria-label="WhatsApp sections"
-          className="flex min-w-0 flex-1 gap-1 overflow-x-auto"
-        >
-          {TABS.map((t) => {
-            const active = t.key === tab;
-            return (
-              <button
-                key={t.key}
-                type="button"
-                onClick={() => setTab(t.key)}
-                className={`shrink-0 rounded-md border px-2.5 py-1 font-mono text-[0.6rem] uppercase tracking-[0.16em] transition-colors ${
-                  active
-                    ? "border-tool-accent bg-tool-accent-soft text-tool-accent"
-                    : "border-transparent text-secondary hover:bg-surface hover:text-app"
-                }`}
-                aria-current={active ? "page" : undefined}
-              >
-                {compact ? t.short : t.label}
-              </button>
-            );
-          })}
-        </nav>
-        <div className="flex shrink-0 items-center gap-2">
+    <div className="wa-shell flex h-full flex-row bg-app">
+      <aside
+        className={`flex shrink-0 flex-col overflow-y-auto border-r border-app bg-app-elevated ${
+          compact ? "w-40" : "w-48"
+        }`}
+        aria-label="WhatsApp sections"
+      >
+        {/* workspace header */}
+        <div className="flex shrink-0 items-center justify-between gap-2 border-b border-app px-3 py-2.5">
+          <span className="min-w-0 flex-1 truncate text-sm font-semibold text-app">
+            {workspaceName || "WhatsApp"}
+          </span>
           <NotificationBell />
-          {!compact && workspaceName ? (
-            <div className="truncate font-mono text-[0.6rem] uppercase tracking-[0.18em] text-faint">
-              {workspaceName}
-            </div>
-          ) : null}
         </div>
-      </header>
 
-      <div className="min-h-0 flex-1">
+        {/* vertical tab nav */}
+        <nav className="flex min-h-0 flex-1 flex-col gap-0.5 p-2">
+          {TAB_GROUPS.map((group) => (
+            <div key={group.heading} className="mb-1">
+              <div className="px-3 pb-1 pt-2 text-[0.6rem] font-medium uppercase tracking-[0.14em] text-faint">
+                {group.heading}
+              </div>
+              {group.keys.map((key) => {
+                const meta = TAB_BY_KEY[key];
+                const active = key === tab;
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => setTab(key)}
+                    className={`w-full rounded-md px-3 py-1.5 text-left text-sm transition-colors ${
+                      active
+                        ? "bg-tool-accent-soft font-medium text-tool-accent"
+                        : "text-secondary hover:bg-surface hover:text-app"
+                    }`}
+                    aria-current={active ? "page" : undefined}
+                  >
+                    {meta.label}
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </nav>
+      </aside>
+
+      <div className="min-h-0 flex-1 overflow-hidden">
         {tab === "connection" && (
           <ConnectionTab workspaceId={workspaceId} compact={compact} />
         )}

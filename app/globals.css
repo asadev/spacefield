@@ -1868,3 +1868,8 @@ html[data-tab-hidden="1"] *::after {
   --text-tertiary: rgba(15, 23, 42, 0.55);
   --surface-2: rgba(15, 23, 42, 0.06);
 }
+
+/* WhatsApp tool — native OS system font (powerful, OS-native, zero IP/licensing risk) */
+.wa-shell, .wa-shell * {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
