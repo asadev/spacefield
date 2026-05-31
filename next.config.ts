@@ -23,50 +23,6 @@ const nextConfig: NextConfig = {
   // the plan allows a bigger builder. (Cosmetic only — affects browser
   // dev-tools source mapping, not runtime behaviour.)
   productionBrowserSourceMaps: false,
-  // Wave-3 WhatsApp routes tipped the serverless bundle over Vercel's 250 MB
-  // per-function cap (api/whatsapp/broadcasts/[id] hit 250.06 MB) because
-  // Next's output file trace pulls heavy CLIENT-ONLY deps (3D/canvas/
-  // spreadsheet/doc/image libs) into every Node API function even though server
-  // code never imports them. Exclude them from the /api trace — zero runtime
-  // impact, drops the bundle well under the cap.
-  outputFileTracingExcludes: {
-    // `**/` prefix matches BOTH the top-level symlink (node_modules/<pkg>) AND
-    // pnpm's real nested copy (node_modules/.pnpm/<pkg>@<ver>/node_modules/
-    // <pkg>) — the version-pinned globs alone missed that inner
-    // /node_modules/ segment, so the 250MB overage persisted on 7a619a2.
-    '/api/**': [
-      '**/node_modules/three/**',
-      '**/node_modules/@react-three/**',
-      '**/node_modules/@univerjs/**',
-      '**/node_modules/exceljs/**',
-      '**/node_modules/docx/**',
-      '**/node_modules/html2canvas-pro/**',
-      '**/node_modules/mammoth/**',
-      '**/node_modules/leaflet/**',
-      '**/node_modules/opentype.js/**',
-      '**/node_modules/qrcode/**',
-      '**/node_modules/@tiptap/**',
-      '**/node_modules/prosemirror-*/**',
-      '**/node_modules/framer-motion/**',
-      '**/node_modules/jszip/**',
-      '**/node_modules/@dnd-kit/**',
-      '**/node_modules/react-easy-crop/**',
-      '**/node_modules/postprocessing/**',
-      '**/node_modules/maath/**',
-      '**/node_modules/meshline/**',
-      '**/node_modules/troika-*/**',
-      '**/node_modules/draco3d/**',
-      '**/node_modules/meshoptimizer/**',
-      '**/node_modules/camera-controls/**',
-      '**/node_modules/stats.js/**',
-      '**/node_modules/stats-gl/**',
-      '**/node_modules/n8ao/**',
-      '**/node_modules/tone/**',
-      '**/node_modules/@tailwindcss/**',
-      '**/node_modules/tailwindcss/**',
-      '**/node_modules/lenis/**',
-    ],
-  },
   experimental: {
     optimizePackageImports: ['framer-motion'],
     // Cap server-action / inbound JSON bodies so attackers can't pin a
