@@ -18,6 +18,7 @@
     { "path": "/api/cron/log-retention",          "schedule": "0 4 * * *" },
     { "path": "/api/cron/api-token-reminder",     "schedule": "27 8 * * *" },
     { "path": "/api/cron/whatsapp-send-runner",   "schedule": "35 6 * * *" },
-    { "path": "/api/cron/whatsapp-snooze-waker",  "schedule": "40 6 * * *" }
+    { "path": "/api/cron/whatsapp-snooze-waker",  "schedule": "40 6 * * *" },
+    { "path": "/api/cron/whatsapp-sequence-runner", "schedule": "45 6 * * *" }
   ]
 }

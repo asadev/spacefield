@@ -3,6 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { requireCron } from "@/lib/cron/_check_enabled";
 import { withAdvisoryLock } from "@/lib/db/advisory-lock";
 import { runQueuedWhatsAppJobs } from "@/lib/whatsapp/runner";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { runDueStatusPosts } from "@/lib/whatsapp/status-runner";
 
 /* GET /api/cron/whatsapp-send-runner
  *
@@ -31,7 +33,18 @@ export async function GET(req: NextRequest): Promise<Response> {
   try {
     const gated = await withAdvisoryLock(
       "spacefield:whatsapp-send-runner",
-      async () => runQueuedWhatsAppJobs(RUNNER_LIMIT),
+      async () => {
+        const jobs = await runQueuedWhatsAppJobs(RUNNER_LIMIT);
+        // EPIC-18: drain due scheduled WhatsApp Status posts on the same tick
+        // (also paced through the throttle). Best-effort — never fails the run.
+        let status = { sent: 0, failed: 0 };
+        try {
+          status = await runDueStatusPosts(createAdminClient(), 5);
+        } catch {
+          status = { sent: 0, failed: 0 };
+        }
+        return { ...jobs, status_posts: status };
+      },
     );
     if (!gated.acquired) {
       return NextResponse.json({
