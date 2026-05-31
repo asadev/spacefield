@@ -1,7 +1,7 @@
 "use client";
 
 import { motion, useMotionValue, useSpring } from "framer-motion";
-import { Suspense, lazy, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   DEFAULT_WALLPAPER_ID,
   WALLPAPER_CHANGE_EVENT,
@@ -15,13 +15,6 @@ import {
 import { useWorkspaceKey } from "./useWorkspaces";
 import { useTheme } from "@/components/ThemeProvider";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
-
-/* Interactive wallpapers are lazy-loaded so the 11 canvas components
- * don't bloat the initial desktop bundle. The dispatcher (a single
- * lazy-loaded module) reads the active interactiveKey and mounts the
- * matching canvas. The static-CSS fallback layer renders underneath
- * so a slow first paint still shows a tinted background. */
-const InteractiveBackground = lazy(() => import("./InteractiveBackground"));
 
 /* Animated on-brand background:
  *   1. The user-selected wallpaper, theme-aware (light + dark variants
@@ -165,17 +158,6 @@ export default function DesktopBackground() {
             data-wallpaper-theme={resolved}
           />
         )}
-        {entry.section === "interactive" && entry.interactiveKey && (
-          <Suspense fallback={null}>
-            <div
-              key={`interactive:${entry.interactiveKey}`}
-              className="absolute inset-0"
-              data-wallpaper-canvas={entry.interactiveKey}
-            >
-              <InteractiveBackground interactiveKey={entry.interactiveKey} />
-            </div>
-          </Suspense>
-        )}
         <div className="desktop-glow desktop-glow-1" />
         <div className="desktop-glow desktop-glow-2" />
         <div className="desktop-glow desktop-glow-3" />
@@ -219,7 +201,6 @@ export default function DesktopBackground() {
           );
           top: -10vw;
           left: -10vw;
-          animation: glow-drift-1 22s ease-in-out infinite;
         }
         .desktop-glow-2 {
           background: radial-gradient(
@@ -229,7 +210,6 @@ export default function DesktopBackground() {
           );
           bottom: -15vw;
           right: -10vw;
-          animation: glow-drift-2 26s ease-in-out infinite;
         }
         .desktop-glow-3 {
           background: radial-gradient(
@@ -241,7 +221,6 @@ export default function DesktopBackground() {
           right: 20vw;
           width: 40vw;
           height: 40vw;
-          animation: glow-drift-3 30s ease-in-out infinite;
         }
         :global([data-theme="light"]) .desktop-glow {
           opacity: 0.28;
@@ -288,27 +267,7 @@ export default function DesktopBackground() {
             transparent 75%
           );
         }
-        @keyframes glow-drift-1 {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          33% { transform: translate(6vw, 4vw) scale(1.08); }
-          66% { transform: translate(-4vw, 8vw) scale(0.95); }
-        }
-        @keyframes glow-drift-2 {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          40% { transform: translate(-8vw, -5vw) scale(1.12); }
-          80% { transform: translate(5vw, -10vw) scale(0.92); }
-        }
-        @keyframes glow-drift-3 {
-          0%, 100% { transform: translate(0, 0) scale(1); }
-          50% { transform: translate(-10vw, 8vw) scale(1.15); }
-        }
         @media (prefers-reduced-motion: reduce) {
-          .desktop-glow,
-          .desktop-glow-1,
-          .desktop-glow-2,
-          .desktop-glow-3 {
-            animation: none;
-          }
           .desktop-cursor-glow { display: none; }
         }
       `}</style>
