@@ -22,6 +22,7 @@
    Mobile (<720px): tabs become a horizontal scroll strip.
 ═══════════════════════════════════════════════════════════════════════════ */
 
+import dynamic from "next/dynamic";
 import { useEffect, useMemo, useState } from "react";
 import { useWorkspace } from "@/lib/workspaces/client";
 import type { NativeAppProps } from "../_data/tools-list";
@@ -33,12 +34,33 @@ import SendHistoryTab from "./_components/SendHistoryTab";
 import JobsTab from "./_components/JobsTab";
 import WhatsAppGate from "./_components/WhatsAppGate";
 
+// Wave-3 panels are lazy-loaded so the heavier broadcast composer / segment
+// builder / automation editors stay out of the initial WhatsApp chunk and the
+// webpack compile stays under Vercel's 8GB build ceiling (OOM guard).
+const PanelLoading = () => (
+  <div className="flex h-full w-full items-center justify-center bg-app">
+    <div className="font-mono text-[0.65rem] uppercase tracking-[0.18em] text-faint">
+      loading…
+    </div>
+  </div>
+);
+const BroadcastsPanel = dynamic(() => import("./_components/BroadcastsPanel"), {
+  ssr: false,
+  loading: PanelLoading,
+});
+const AutomationPanel = dynamic(() => import("./_components/AutomationPanel"), {
+  ssr: false,
+  loading: PanelLoading,
+});
+
 const MOBILE_BREAKPOINT = 720;
 
 type WaTabKey =
   | "connection"
   | "conversations"
   | "groups"
+  | "broadcasts"
+  | "automation"
   | "lists"
   | "history"
   | "jobs";
@@ -52,6 +74,8 @@ interface WaTabMeta {
 const TABS: WaTabMeta[] = [
   { key: "connection", label: "Connection", short: "Connect" },
   { key: "conversations", label: "Conversations", short: "Chats" },
+  { key: "broadcasts", label: "Broadcasts", short: "Blast" },
+  { key: "automation", label: "Automation", short: "Auto" },
   { key: "groups", label: "Groups", short: "Groups" },
   { key: "lists", label: "Lists", short: "Lists" },
   { key: "history", label: "Send history", short: "History" },
@@ -137,6 +161,12 @@ export default function WhatsAppApp({ width, initialParams }: NativeAppProps) {
         )}
         {tab === "conversations" && (
           <ConversationsTab workspaceId={workspaceId} compact={compact} />
+        )}
+        {tab === "broadcasts" && (
+          <BroadcastsPanel workspaceId={workspaceId} compact={compact} />
+        )}
+        {tab === "automation" && (
+          <AutomationPanel workspaceId={workspaceId} compact={compact} />
         )}
         {tab === "groups" && (
           <GroupsTab workspaceId={workspaceId} compact={compact} />

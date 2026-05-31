@@ -10,6 +10,9 @@ import {
 import { rehostInboundMedia } from "@/lib/whatsapp/media";
 import { signInstanceWebhook } from "@/lib/whatsapp/instance-manager";
 import { parseEvolutionEvent } from "@/lib/whatsapp/webhook-parser";
+import { detectConsentKeyword, recordOptOut, recordOptIn } from "@/lib/whatsapp/consent";
+import { runInboundAutomation } from "@/lib/whatsapp/automation";
+import type { PersonalizeContact } from "@/lib/whatsapp/personalize";
 import type {
   ParsedEvolutionEvent,
   ParsedWhatsAppMessage,
@@ -233,6 +236,21 @@ async function dispatch(
         scheduleMediaRehost(inst, msg, messageRowId);
       }
 
+      // ── Consent + automation (EPIC-12 + EPIC-09) ──
+      // Only for inbound INDIVIDUAL messages (groups + our own sends excluded).
+      // STOP/START handling runs FIRST (the guardrail), then the automation
+      // engine answers first-timers / keywords / business-hours — all
+      // post-response so the 200 ack is never delayed.
+      if (
+        direction === "inbound" &&
+        !isGroup &&
+        conv &&
+        contactId &&
+        msg.remoteNumber
+      ) {
+        scheduleConsentAndAutomation(inst, conv.id, contactId, msg);
+      }
+
       await admin
         .from("whatsapp_instances")
         .update({ last_seen_at: new Date().toISOString() })
@@ -386,6 +404,101 @@ function scheduleMediaRehost(
     after(run());
   } catch {
     // `after` unavailable in this context — fall back to fire-and-forget.
+    void run();
+  }
+}
+
+/**
+ * Post-response consent (EPIC-12) + automation (EPIC-09) for an inbound
+ * individual message. Runs after the 200 ack via `after()`:
+ *   1. STOP keyword → record opt-out + suppress future broadcasts.
+ *      START keyword → re-subscribe. (No auto-reply to consent messages.)
+ *   2. Otherwise → run the automation engine (welcome / away / keyword /
+ *      menu) which itself respects opt-out + throttle on every send.
+ * Best-effort throughout — a failure here must never break ingestion.
+ */
+function scheduleConsentAndAutomation(
+  inst: WhatsAppInstanceRow,
+  conversationId: string,
+  contactId: string,
+  msg: ParsedWhatsAppMessage,
+): void {
+  const run = async (): Promise<void> => {
+    const admin = createAdminClient();
+    try {
+      // 1. Consent keywords (STOP / START).
+      const consent = detectConsentKeyword(msg.body);
+      if (consent.signal === "opt_out") {
+        await recordOptOut(admin, {
+          workspaceId: inst.workspace_id,
+          contactId,
+          source: "stop_keyword",
+          reason: `matched "${consent.keyword}"`,
+        });
+        return; // never auto-reply to a STOP
+      }
+      if (consent.signal === "opt_in") {
+        await recordOptIn(admin, {
+          workspaceId: inst.workspace_id,
+          contactId,
+          source: "start_keyword",
+          reason: `matched "${consent.keyword}"`,
+          grantConsent: true,
+        });
+        return; // re-subscribe; don't run keyword automation on the same msg
+      }
+
+      // 2. Is this the conversation's first INBOUND message? (welcome gate)
+      //    The just-upserted row is already counted, so "first" = exactly 1
+      //    inbound message exists for the conversation.
+      const { count } = await admin
+        .from("whatsapp_messages")
+        .select("id", { count: "exact", head: true })
+        .eq("conversation_id", conversationId)
+        .eq("direction", "inbound");
+      const isFirstInbound = (count ?? 0) <= 1;
+
+      // 3. CRM contact for personalization.
+      let contact: PersonalizeContact | null = null;
+      const { data: ct } = await admin
+        .from("crm_contacts")
+        .select("first_name, last_name, phone, email, custom")
+        .eq("id", contactId)
+        .eq("workspace_id", inst.workspace_id)
+        .maybeSingle();
+      if (ct) {
+        const row = ct as PersonalizeContact;
+        contact = {
+          first_name: row.first_name,
+          last_name: row.last_name,
+          phone: row.phone,
+          email: row.email,
+          custom: row.custom,
+        };
+      }
+
+      await runInboundAutomation({
+        admin,
+        instance: inst,
+        workspaceId: inst.workspace_id,
+        conversationId,
+        contactId,
+        contact,
+        toNumber: msg.remoteNumber,
+        body: msg.body ?? "",
+        isFirstInbound,
+      });
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[whatsapp.webhook] consent/automation failed:",
+        e instanceof Error ? e.message : String(e),
+      );
+    }
+  };
+  try {
+    after(run());
+  } catch {
     void run();
   }
 }
