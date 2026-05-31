@@ -26,6 +26,43 @@ export const WARMUP_DAYS = 14;
 export const WARMUP_DAILY_CAP = 30;
 export const COOLDOWN_HOURS = 24;
 
+/**
+ * Soft-ban cooldown (EPIC-12). When a real Baileys block signal is observed
+ * (a send rejected with a connection/forbidden/rate signature), the runner
+ * pauses ALL sends for this instance for SOFTBAN_COOLDOWN_MS by stamping
+ * whatsapp_instances.soft_ban_until. The throttle was always the anti-ban
+ * strength but couldn't react to an ACTUAL block until now — this closes
+ * that gap so the queue self-protects instead of hammering a flagged number.
+ */
+export const SOFTBAN_COOLDOWN_MS = 6 * 60 * 60 * 1_000; // 6h pause on a block signal
+
+/**
+ * Error-message signatures that indicate WhatsApp/Baileys pushed back hard
+ * enough that we should stop sending (vs a one-off per-message failure).
+ * Matched case-insensitively against the thrown Evolution error text.
+ */
+const SOFTBAN_SIGNATURES = [
+  "forbidden",
+  "blocked",
+  "ban",
+  "rate limit",
+  "rate-limit",
+  "429",
+  "too many",
+  "connection closed",
+  "not connected",
+  "disconnected",
+  "logged out",
+  "401",
+  "403",
+];
+
+/** Does this send-error text look like a soft-ban / block signal? */
+export function looksLikeSoftBan(errMessage: string): boolean {
+  const m = (errMessage || "").toLowerCase();
+  return SOFTBAN_SIGNATURES.some((s) => m.includes(s));
+}
+
 function ms(hours: number): number {
   return hours * 60 * 60 * 1_000;
 }
@@ -177,4 +214,51 @@ export async function getInstanceSendStats(instanceId: string): Promise<{
     warmup_age_days < WARMUP_DAYS ? WARMUP_DAILY_CAP : MAX_PER_DAY;
 
   return { sent_last_hour, sent_last_day, warmup_age_days, daily_cap };
+}
+
+/**
+ * Is this instance currently soft-ban paused? Reads
+ * whatsapp_instances.soft_ban_until. The runner checks this before draining
+ * (defence-in-depth on top of the schedule-aware claim RPC, which already
+ * skips soft-banned instances).
+ */
+export async function isInstanceSoftBanned(
+  instanceId: string,
+): Promise<boolean> {
+  const admin = createAdminClient();
+  const { data } = await admin
+    .from("whatsapp_instances")
+    .select("soft_ban_until")
+    .eq("id", instanceId)
+    .maybeSingle();
+  const until = (data as { soft_ban_until: string | null } | null)
+    ?.soft_ban_until;
+  return Boolean(until && new Date(until).getTime() > Date.now());
+}
+
+/**
+ * Flag a soft-ban on an instance: pauses sends for SOFTBAN_COOLDOWN_MS via
+ * the whatsapp_softban_pause RPC. Best-effort; logged on failure. Called by
+ * the runner when a send fails with a soft-ban signature.
+ */
+export async function flagSoftBan(
+  instanceId: string,
+  reason: string,
+): Promise<void> {
+  const admin = createAdminClient();
+  const until = new Date(Date.now() + SOFTBAN_COOLDOWN_MS).toISOString();
+  const { error } = await admin.rpc("whatsapp_softban_pause", {
+    p_instance_id: instanceId,
+    p_reason: reason.slice(0, 300),
+    p_until: until,
+  });
+  if (error) {
+    // eslint-disable-next-line no-console
+    console.error("[whatsapp.throttle] flagSoftBan failed:", error.message);
+  } else {
+    // eslint-disable-next-line no-console
+    console.warn(
+      `[whatsapp.throttle] instance ${instanceId} soft-ban paused until ${until}: ${reason.slice(0, 120)}`,
+    );
+  }
 }

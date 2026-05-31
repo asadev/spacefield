@@ -1077,3 +1077,287 @@ export function mediaUrl(workspaceId: string, messageId: string): string {
     messageId
   )}?workspace_id=${encodeURIComponent(workspaceId)}`;
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   Wave 3 — consent + segments + broadcasts + automation + business hours
+   ════════════════════════════════════════════════════════════════════════ */
+
+// ── consent / opt-out (EPIC-12) ──
+export interface WaConsentRow {
+  contact_id: string;
+  name: string;
+  phone: string | null;
+  marketing_consent: boolean;
+  opted_out_at: string | null;
+  opt_out_source: string | null;
+  opted_in_at: string | null;
+}
+export async function fetchOptOuts(
+  workspaceId: string,
+): Promise<Result<{ items: WaConsentRow[]; opted_out_count: number }>> {
+  return jsonFetch(
+    `/api/whatsapp/consent?workspace_id=${encodeURIComponent(workspaceId)}`,
+  );
+}
+export function setConsent(
+  workspaceId: string,
+  contactId: string,
+  action: "opt_out" | "opt_in" | "grant_consent" | "revoke_consent",
+  reason?: string,
+): Promise<Result<{ ok: true }>> {
+  return jsonFetch("/api/whatsapp/consent", {
+    method: "POST",
+    body: JSON.stringify({
+      workspace_id: workspaceId,
+      contact_id: contactId,
+      action,
+      ...(reason ? { reason } : {}),
+    }),
+  });
+}
+
+// ── segments (EPIC-08) ──
+export interface WaSegmentQuery {
+  labels?: string[];
+  lifecycle?: string[];
+  status?: string[];
+  tags?: string[];
+  custom?: Record<string, unknown>;
+  last_contacted?: { op: "before" | "after" | "never"; days?: number };
+  consent_only?: boolean;
+}
+export interface WaSegment {
+  id: string;
+  name: string;
+  description: string | null;
+  query: WaSegmentQuery;
+  created_at: string;
+  updated_at: string;
+}
+export function fetchSegments(workspaceId: string): Promise<Result<WaSegment[]>> {
+  return jsonFetchItems<WaSegment>(
+    `/api/whatsapp/segments?workspace_id=${encodeURIComponent(workspaceId)}`,
+  );
+}
+export function createSegment(
+  workspaceId: string,
+  body: { name: string; description?: string; query: WaSegmentQuery },
+): Promise<Result<WaSegment>> {
+  return jsonFetchItem<WaSegment>("/api/whatsapp/segments", {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId, ...body }),
+  });
+}
+export function updateSegment(
+  workspaceId: string,
+  id: string,
+  body: { name?: string; description?: string; query?: WaSegmentQuery },
+): Promise<Result<WaSegment>> {
+  return jsonFetchItem<WaSegment>("/api/whatsapp/segments", {
+    method: "PATCH",
+    body: JSON.stringify({ workspace_id: workspaceId, id, ...body }),
+  });
+}
+export function deleteSegment(
+  workspaceId: string,
+  id: string,
+): Promise<Result<{ ok: true }>> {
+  return jsonFetch(
+    `/api/whatsapp/segments?workspace_id=${encodeURIComponent(workspaceId)}&id=${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+}
+/** Resolve a segment's recipient count (saved id or ad-hoc query preview). */
+export function previewSegmentCount(
+  workspaceId: string,
+  arg: { id?: string; query?: WaSegmentQuery },
+): Promise<Result<{ count: number }>> {
+  if (arg.id) {
+    return jsonFetch(
+      `/api/whatsapp/segments?workspace_id=${encodeURIComponent(workspaceId)}&id=${encodeURIComponent(arg.id)}&count=1`,
+    );
+  }
+  return jsonFetch("/api/whatsapp/segments", {
+    method: "POST",
+    body: JSON.stringify({
+      workspace_id: workspaceId,
+      preview: true,
+      query: arg.query ?? {},
+    }),
+  });
+}
+
+// ── broadcasts (EPIC-08) ──
+export interface WaBroadcast {
+  id: string;
+  title: string | null;
+  kind: string;
+  status: "queued" | "running" | "paused" | "completed" | "failed" | "cancelled";
+  segment_id: string | null;
+  segment_name?: string | null;
+  list_id: string | null;
+  message_template: string | null;
+  personalization_template: string | null;
+  media_storage_path: string | null;
+  scheduled_for: string | null;
+  recurrence: Record<string, unknown> | null;
+  total_contacts: number;
+  sent_count: number;
+  failed_count: number;
+  started_at: string | null;
+  completed_at: string | null;
+  created_at: string;
+}
+export interface WaBroadcastAnalytics {
+  sent: number;
+  delivered: number;
+  read: number;
+  replied: number;
+  failed: number;
+  pending: number;
+  total: number;
+}
+export interface WaBroadcastRecipient {
+  id: string;
+  to_number: string | null;
+  contact_name: string | null;
+  status: string;
+  replied: boolean;
+  sent_at: string | null;
+}
+export function fetchBroadcasts(
+  workspaceId: string,
+  status?: string,
+): Promise<Result<WaBroadcast[]>> {
+  const q = new URLSearchParams({ workspace_id: workspaceId });
+  if (status) q.set("status", status);
+  return jsonFetchItems<WaBroadcast>(`/api/whatsapp/broadcasts?${q.toString()}`);
+}
+export function createBroadcast(
+  workspaceId: string,
+  body: {
+    title?: string;
+    segment_id?: string | null;
+    list_id?: string | null;
+    message?: string;
+    personalization_template?: string;
+    template_variants?: string[];
+    media_storage_path?: string | null;
+    media_mime?: string | null;
+    scheduled_for?: string | null;
+    recurrence?: Record<string, unknown> | null;
+  },
+): Promise<Result<{ item: { id: string }; total_contacts: number }>> {
+  return jsonFetch("/api/whatsapp/broadcasts", {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId, ...body }),
+  });
+}
+export function fetchBroadcastDetail(
+  workspaceId: string,
+  id: string,
+): Promise<
+  Result<{
+    broadcast: WaBroadcast;
+    analytics: WaBroadcastAnalytics;
+    recipients: WaBroadcastRecipient[];
+  }>
+> {
+  return jsonFetch(
+    `/api/whatsapp/broadcasts/${encodeURIComponent(id)}?workspace_id=${encodeURIComponent(workspaceId)}`,
+  );
+}
+export function patchBroadcast(
+  workspaceId: string,
+  id: string,
+  action: "pause" | "resume" | "cancel" | "resend_failed",
+): Promise<Result<{ item: WaBroadcast }>> {
+  return jsonFetch(`/api/whatsapp/broadcasts/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ workspace_id: workspaceId, action }),
+  });
+}
+
+// ── automation rules (EPIC-09) ──
+export interface WaAutomationAction {
+  type: string;
+  params?: Record<string, unknown>;
+}
+export interface WaAutomationRule {
+  id: string;
+  name: string;
+  event_name: "conversation_created" | "message_created";
+  conditions: {
+    keywords?: string[];
+    match?: "contains" | "starts_with" | "equals" | "any";
+    business_hours?: "inside" | "outside";
+    first_message_only?: boolean;
+  };
+  actions: WaAutomationAction[];
+  active: boolean;
+  priority: number;
+  stop_on_match: boolean;
+  recipe: string | null;
+  created_at: string;
+  updated_at: string;
+}
+export function fetchAutomationRules(
+  workspaceId: string,
+): Promise<Result<WaAutomationRule[]>> {
+  return jsonFetchItems<WaAutomationRule>(
+    `/api/whatsapp/automation?workspace_id=${encodeURIComponent(workspaceId)}`,
+  );
+}
+export function createAutomationRule(
+  workspaceId: string,
+  body: Partial<WaAutomationRule>,
+): Promise<Result<WaAutomationRule>> {
+  return jsonFetchItem<WaAutomationRule>("/api/whatsapp/automation", {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId, ...body }),
+  });
+}
+export function updateAutomationRule(
+  workspaceId: string,
+  id: string,
+  body: Partial<WaAutomationRule>,
+): Promise<Result<WaAutomationRule>> {
+  return jsonFetchItem<WaAutomationRule>("/api/whatsapp/automation", {
+    method: "PATCH",
+    body: JSON.stringify({ workspace_id: workspaceId, id, ...body }),
+  });
+}
+export function deleteAutomationRule(
+  workspaceId: string,
+  id: string,
+): Promise<Result<{ ok: true }>> {
+  return jsonFetch(
+    `/api/whatsapp/automation?workspace_id=${encodeURIComponent(workspaceId)}&id=${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+}
+
+// ── business hours (EPIC-09) ──
+export interface WaBusinessHours {
+  timezone: string;
+  weekly: Record<string, Array<{ open: string; close: string }>>;
+  holidays: string[];
+  away_message: string | null;
+  welcome_message: string | null;
+}
+export function fetchBusinessHours(
+  workspaceId: string,
+): Promise<Result<{ config: WaBusinessHours; open_now: boolean }>> {
+  return jsonFetch(
+    `/api/whatsapp/business-hours?workspace_id=${encodeURIComponent(workspaceId)}`,
+  );
+}
+export function saveBusinessHours(
+  workspaceId: string,
+  config: Partial<WaBusinessHours>,
+): Promise<Result<{ config: WaBusinessHours }>> {
+  return jsonFetch("/api/whatsapp/business-hours", {
+    method: "PUT",
+    body: JSON.stringify({ workspace_id: workspaceId, ...config }),
+  });
+}
