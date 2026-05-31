@@ -1,22 +1,19 @@
 /* Wallpaper catalog for the /tools desktop.
  *
- * Each entry has a `value` (a CSS background-image string for gradients
- * and photos, or an interactive id for canvas placeholders) and a
+ * Each entry has a `value` (a CSS background-image string) and a
  * `preview` string used to render the thumbnail in WallpaperPicker —
- * usually the same as `value` but for `interactive` we fall back to a
- * static gradient so the picker grid stays cheap to render.
+ * usually the same as `value`, but photos/former-interactive entries
+ * use a cheap gradient preview so the picker grid stays cheap to render.
  *
  * No real photo assets exist yet, so the "photo" entries use Unsplash
  * stock URLs as placeholders. Keep that in mind before wiring CDN. */
-export type WallpaperType = "gradient" | "photo" | "interactive";
+export type WallpaperType = "gradient" | "photo";
 
 export interface Wallpaper {
   id: string;
   name: string;
   type: WallpaperType;
-  /* For gradient/photo: a full CSS `background-image` value applied
-   * inline. For interactive: an opaque key the renderer maps to a
-   * canvas component (currently fallback gradients). */
+  /* A full CSS `background-image` value applied inline. */
   value: string;
   /* Cheap CSS background used for the picker thumbnail. Always a
    * gradient string — never an external URL — so the grid renders
@@ -119,49 +116,37 @@ export const WALLPAPERS: Wallpaper[] = [
       "linear-gradient(135deg, #451a03 0%, #b45309 55%, #fcd34d 100%)",
   },
 
-  /* ─── Interactive canvas — animated wallpapers ──────────────────────
-   * Each entry's `value` is a key into INTERACTIVE_COMPONENTS in
-   * `./wallpapers/index.ts`. The DesktopBackground component looks up
-   * the matching React component and mounts it as the live
-   * background; the `preview` gradient is shown in the picker tile. */
-
-  // Premium animated themes — Mamboleoo / particlegalaxy.webflow / etc inspired.
+  /* ─── Former interactive (3D canvas) wallpapers ─────────────────────
+   * These used to mount WebGL canvases (three / react-three). Those
+   * canvases and their deps were removed for performance. The entries
+   * are kept as plain gradients (using each one's former fallback
+   * gradient as the background) so any user who had one selected still
+   * gets a valid, crash-free background — identical on every device. */
   {
     id: "interactive-galaxy",
     name: "Particle Galaxy",
-    type: "interactive",
-    value: "galaxy",
+    type: "gradient",
+    value: "radial-gradient(ellipse at 30% 30%, #1e1b4b 0%, #020617 65%)",
     preview:
       "radial-gradient(ellipse at 30% 30%, #1e1b4b 0%, #020617 65%), radial-gradient(circle at 75% 60%, rgba(124,58,237,0.45) 0%, transparent 55%)",
   },
   {
     id: "interactive-mesh",
     name: "Network Mesh",
-    type: "interactive",
-    value: "mesh",
+    type: "gradient",
+    value: "radial-gradient(circle at 50% 50%, #1a1a2e 0%, #060611 75%)",
     preview:
       "radial-gradient(circle at 50% 50%, #1a1a2e 0%, #060611 75%), repeating-linear-gradient(45deg, rgba(203,213,225,0.04) 0 1px, transparent 1px 36px)",
   },
   {
     id: "interactive-metaballs",
     name: "Liquid Metaballs",
-    type: "interactive",
-    value: "metaballs",
+    type: "gradient",
+    value: "linear-gradient(135deg, #0c0420 0%, #1a0635 100%)",
     preview:
       "radial-gradient(circle at 25% 30%, rgba(217,70,239,0.55) 0%, transparent 45%), radial-gradient(circle at 75% 65%, rgba(6,182,212,0.5) 0%, transparent 50%), linear-gradient(135deg, #0c0420 0%, #1a0635 100%)",
   },
 ];
-
-/* Map of fallback CSS for interactive wallpapers — used while the
- * canvas component lazy-loads. Keys match `value` in WALLPAPERS
- * entries above and `INTERACTIVE_COMPONENTS` in
- * `./wallpapers/index.ts`. The component renders ON TOP of this
- * fallback, so a slow first paint still shows a tinted background. */
-export const INTERACTIVE_FALLBACK: Record<string, string> = {
-  galaxy: "radial-gradient(ellipse at 30% 30%, #1e1b4b 0%, #020617 65%)",
-  mesh: "radial-gradient(circle at 50% 50%, #1a1a2e 0%, #060611 75%)",
-  metaballs: "linear-gradient(135deg, #0c0420 0%, #1a0635 100%)",
-};
 
 /** Suffix only — the actual localStorage key is namespaced per workspace
  *  via useWorkspaceKey(WALLPAPER_STORAGE_SUFFIX). */
@@ -178,12 +163,7 @@ export function getWallpaperById(id: string | null | undefined): Wallpaper {
   return WALLPAPERS.find((w) => w.id === id) ?? WALLPAPERS[0];
 }
 
-/* Resolve the CSS `background` value for a wallpaper. For interactive
- * wallpapers we return the fallback gradient; once real canvases land
- * the renderer can branch on `type` separately. */
+/* Resolve the CSS `background` value for a wallpaper. */
 export function wallpaperBackground(w: Wallpaper): string {
-  if (w.type === "interactive") {
-    return INTERACTIVE_FALLBACK[w.value] ?? WALLPAPERS[0].value;
-  }
   return w.value;
 }

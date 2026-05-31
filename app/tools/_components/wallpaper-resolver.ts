@@ -43,21 +43,15 @@ export interface CustomWallpaper {
 export interface UnifiedWallpaperEntry {
   id: string;
   name: string;
-  /** Section heading: legacy gradient/photo/interactive map to single
-   *  buckets; paired registry adds Light, Dark and Pairs; custom is
-   *  Custom. */
-  section: "gradients" | "photos" | "interactive" | "pairs" | "custom";
+  /** Section heading: legacy gradient/photo map to single buckets;
+   *  paired registry adds Light, Dark and Pairs; custom is Custom. */
+  section: "gradients" | "photos" | "pairs" | "custom";
   /** Resolve the CSS `background` value for the active theme. */
   getBackground: (resolved: "light" | "dark") => string;
   /** Resolve the picker thumbnail CSS background. */
   getPreview: (resolved: "light" | "dark") => string;
   /** Optional badge label (e.g. "Pair", "Light", "Dark"). */
   badge?: string;
-  /** For `section: "interactive"` entries only — the key into
-   *  `INTERACTIVE_COMPONENTS` from `./wallpapers/index.ts`. The
-   *  DesktopBackground uses this to mount the matching canvas
-   *  component instead of painting the static fallback. */
-  interactiveKey?: string;
 }
 
 /** Convert a paired registry entry into the unified form. */
@@ -72,21 +66,15 @@ function fromPaired(p: PairedWallpaper): UnifiedWallpaperEntry {
   };
 }
 
-/** Convert a legacy gradient/photo/interactive entry. */
+/** Convert a legacy gradient/photo entry. */
 function fromLegacy(l: LegacyWallpaper): UnifiedWallpaperEntry {
   const css = wallpaperBackground(l);
   return {
     id: l.id,
     name: l.name,
-    section:
-      l.type === "gradient"
-        ? "gradients"
-        : l.type === "photo"
-          ? "photos"
-          : "interactive",
+    section: l.type === "photo" ? "photos" : "gradients",
     getBackground: () => css,
     getPreview: () => l.preview,
-    interactiveKey: l.type === "interactive" ? l.value : undefined,
   };
 }
 
