@@ -1,6 +1,12 @@
 "use client";
 
+import dynamic from "next/dynamic";
 import { useState, useEffect, useCallback } from "react";
+
+// Wave 4: group-manage panel is lazy so it stays out of the base chunk.
+const GroupManagePanel = dynamic(() => import("./GroupManagePanel"), {
+  ssr: false,
+});
 
 interface WaGroup {
   id: string;
@@ -25,6 +31,7 @@ export default function GroupsTab({ workspaceId }: GroupsTabProps) {
   const [creating, setCreating] = useState(false);
   const [syncing, setSyncing] = useState(false);
   const [needsSync, setNeedsSync] = useState(false);
+  const [manageId, setManageId] = useState<string | null>(null);
 
   const loadGroups = useCallback(async () => {
     setLoading(true);
@@ -248,14 +255,20 @@ export default function GroupsTab({ workspaceId }: GroupsTabProps) {
               key={g.id}
               className="flex items-center justify-between rounded-lg border border-[var(--border)] px-4 py-3"
             >
-              <div>
-                <p className="font-medium text-[var(--text-primary)]">
+              <div className="min-w-0">
+                <p className="truncate font-medium text-[var(--text-primary)]">
                   {g.name || g.evolution_group_id}
                 </p>
                 <p className="text-xs text-[var(--text-tertiary)]">
                   {g.member_count} members
                 </p>
               </div>
+              <button
+                onClick={() => setManageId(g.id)}
+                className="shrink-0 rounded-lg border border-[var(--border)] px-3 py-1.5 text-sm font-medium text-[var(--text-primary)] hover:bg-[var(--surface-2)]"
+              >
+                Manage
+              </button>
             </div>
           ))}
           {groups.length === 0 && !loading && (
@@ -265,6 +278,15 @@ export default function GroupsTab({ workspaceId }: GroupsTabProps) {
           )}
         </div>
       )}
+
+      {manageId ? (
+        <GroupManagePanel
+          workspaceId={workspaceId}
+          groupId={manageId}
+          onClose={() => setManageId(null)}
+          onChanged={loadGroups}
+        />
+      ) : null}
     </div>
   );
 }

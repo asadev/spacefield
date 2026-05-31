@@ -13,13 +13,19 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   addConversationLabel,
+  aiAssist,
   fetchContactBundle,
   fetchLabels,
+  fetchMacros,
   patchConversationAttributes,
   removeConversationLabel,
+  runMacro,
+  type WaAITask,
   type WaContactBundle,
   type WaCustomFieldDef,
   type WaLabel,
+  type WaMacro,
+  type WaTranslateTarget,
 } from "./api";
 import { MiniIcon, formatPhone, formatRelative } from "./ui";
 
@@ -29,6 +35,8 @@ interface Props {
   onClose?: () => void;
   /** Bump to force a reload (e.g. after a lifecycle change in the header). */
   reloadKey?: number;
+  /** When provided, AI "use as draft" pushes the text into the composer. */
+  onInsertDraft?: (text: string) => void;
 }
 
 const LIFECYCLE_STAGES = [
@@ -46,6 +54,7 @@ export default function ContactSidebar({
   conversationId,
   onClose,
   reloadKey = 0,
+  onInsertDraft,
 }: Props) {
   const [bundle, setBundle] = useState<WaContactBundle | null>(null);
   const [labels, setLabels] = useState<WaLabel[]>([]);
@@ -197,6 +206,20 @@ export default function ContactSidebar({
           <div className="text-[0.65rem] text-faint">No linked CRM contact</div>
         ) : null}
       </div>
+
+      {/* AI assist (EPIC-11) + macros (EPIC-14) */}
+      <Section title="AI assist">
+        <AiAssistBlock
+          workspaceId={workspaceId}
+          conversationId={conversationId}
+          onInsertDraft={onInsertDraft}
+        />
+      </Section>
+      <MacrosBlock
+        workspaceId={workspaceId}
+        conversationId={conversationId}
+        onRan={() => void load()}
+      />
 
       {/* labels */}
       <Section title="Labels">
@@ -379,6 +402,226 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       </div>
       {children}
     </div>
+  );
+}
+
+/** AI assist (EPIC-11): draft / summarize / translate. Server-side; degrades
+ *  to a clear "AI not configured" notice when no provider key is set. */
+function AiAssistBlock({
+  workspaceId,
+  conversationId,
+  onInsertDraft,
+}: {
+  workspaceId: string;
+  conversationId: string;
+  onInsertDraft?: (text: string) => void;
+}) {
+  const [busy, setBusy] = useState<string | null>(null);
+  const [result, setResult] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
+  const [lastTask, setLastTask] = useState<WaAITask | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const run = useCallback(
+    async (task: WaAITask) => {
+      setBusy(task);
+      setResult(null);
+      setNotice(null);
+      setLastTask(task);
+      const res = await aiAssist(workspaceId, { task, conversation_id: conversationId });
+      setBusy(null);
+      if (!res.ok) {
+        setNotice(res.error);
+        return;
+      }
+      if (!res.data.ai_configured) {
+        setNotice("AI is not configured for this workspace yet.");
+        return;
+      }
+      if (res.data.error) {
+        setNotice(res.data.error.replace(/_/g, " "));
+        return;
+      }
+      setResult(res.data.result ?? "");
+    },
+    [workspaceId, conversationId],
+  );
+
+  const translateResult = useCallback(
+    async (target: WaTranslateTarget) => {
+      if (!result) return;
+      setBusy("translate" + target);
+      const res = await aiAssist(workspaceId, { task: "translate", text: result, target });
+      setBusy(null);
+      if (res.ok && res.data.ai_configured && res.data.result) {
+        setResult(res.data.result);
+        setLastTask("translate");
+      } else if (res.ok && !res.data.ai_configured) {
+        setNotice("AI is not configured for this workspace yet.");
+      }
+    },
+    [result, workspaceId],
+  );
+
+  const copy = useCallback(() => {
+    if (!result) return;
+    void navigator.clipboard?.writeText(result);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1500);
+  }, [result]);
+
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap gap-1.5">
+        <AiButton busy={busy === "draft"} onClick={() => run("draft")}>
+          ✦ Suggest reply
+        </AiButton>
+        <AiButton busy={busy === "summarize"} onClick={() => run("summarize")}>
+          ❑ Summarize
+        </AiButton>
+      </div>
+      {notice ? (
+        <p className="text-[0.7rem] text-amber-600 dark:text-amber-400">{notice}</p>
+      ) : null}
+      {result ? (
+        <div className="space-y-1.5">
+          <div className="max-h-40 overflow-y-auto whitespace-pre-wrap rounded border border-app bg-app p-2 text-[0.78rem] text-app">
+            {result}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            <MiniBtn onClick={copy}>{copied ? "Copied" : "Copy"}</MiniBtn>
+            {lastTask === "draft" && onInsertDraft ? (
+              <MiniBtn onClick={() => onInsertDraft(result)}>Use as draft</MiniBtn>
+            ) : null}
+            <MiniBtn busy={busy === "translateenglish"} onClick={() => translateResult("english")}>
+              → EN
+            </MiniBtn>
+            <MiniBtn busy={busy === "translateurdu"} onClick={() => translateResult("urdu")}>
+              → اردو
+            </MiniBtn>
+            <MiniBtn
+              busy={busy === "translateroman_urdu"}
+              onClick={() => translateResult("roman_urdu")}
+            >
+              → Roman
+            </MiniBtn>
+          </div>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function AiButton({
+  busy,
+  onClick,
+  children,
+}: {
+  busy: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      className="rounded-md border border-tool-accent bg-tool-accent-soft px-2 py-1 font-mono text-[0.6rem] uppercase tracking-[0.14em] text-tool-accent transition-colors enabled:hover:bg-tool-accent enabled:hover:text-app-elevated disabled:opacity-60"
+    >
+      {busy ? "…" : children}
+    </button>
+  );
+}
+
+function MiniBtn({
+  busy,
+  onClick,
+  children,
+}: {
+  busy?: boolean;
+  onClick: () => void;
+  children: React.ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={busy}
+      className="rounded border border-app bg-surface px-2 py-0.5 font-mono text-[0.55rem] uppercase tracking-[0.14em] text-secondary hover:bg-app-elevated disabled:opacity-60"
+    >
+      {busy ? "…" : children}
+    </button>
+  );
+}
+
+/** Macros (EPIC-14): run a saved one-tap action sequence against this chat. */
+function MacrosBlock({
+  workspaceId,
+  conversationId,
+  onRan,
+}: {
+  workspaceId: string;
+  conversationId: string;
+  onRan: () => void;
+}) {
+  const [macros, setMacros] = useState<WaMacro[]>([]);
+  const [running, setRunning] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    void fetchMacros(workspaceId).then((res) => {
+      if (active && res.ok) setMacros(res.data);
+    });
+    return () => {
+      active = false;
+    };
+  }, [workspaceId]);
+
+  const onRun = useCallback(
+    async (m: WaMacro) => {
+      setRunning(m.id);
+      setFeedback(null);
+      const res = await runMacro(workspaceId, conversationId, m.id);
+      setRunning(null);
+      if (res.ok) {
+        const skipped = res.data.results.filter((r) => r.skipped || !r.ok);
+        setFeedback(
+          skipped.length === 0
+            ? `Ran "${m.name}"`
+            : `Ran "${m.name}" — ${skipped.length} skipped`,
+        );
+        onRan();
+      } else {
+        setFeedback(res.error);
+      }
+      setTimeout(() => setFeedback(null), 3000);
+    },
+    [workspaceId, conversationId, onRan],
+  );
+
+  if (macros.length === 0) return null;
+
+  return (
+    <Section title="Macros">
+      <div className="space-y-1">
+        {macros.map((m) => (
+          <button
+            key={m.id}
+            type="button"
+            onClick={() => void onRun(m)}
+            disabled={running === m.id}
+            className="block w-full truncate rounded border border-app bg-surface px-2 py-1.5 text-left text-xs text-app hover:bg-app-elevated disabled:opacity-60"
+            title={m.description ?? m.name}
+          >
+            {running === m.id ? "Running…" : `▸ ${m.name}`}
+          </button>
+        ))}
+      </div>
+      {feedback ? (
+        <p className="mt-1 text-[0.7rem] text-emerald-600 dark:text-emerald-400">{feedback}</p>
+      ) : null}
+    </Section>
   );
 }
 
