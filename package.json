@@ -4,7 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "next build --webpack",
+    "build": "NODE_OPTIONS=--max-old-space-size=7168 next build --webpack",
     "start": "next start",
     "lint": "eslint",
     "test": "node -e \"try { require.resolve('vitest/package.json'); require('child_process').execSync('npx vitest run', { stdio: 'inherit' }) } catch (e) { console.log('[test] vitest not installed — install with: pnpm add -D vitest @vitest/coverage-v8'); process.exit(0) }\"",

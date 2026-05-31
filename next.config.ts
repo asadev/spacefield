@@ -29,6 +29,14 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: '2mb',
     },
+    // Vercel's production build container is 2 cores / 8 GB. The inbox v2
+    // frontend (ConversationsTab.tsx is ~1.3k lines + realtime + media) pushed
+    // webpack's peak compile memory past that ceiling and the build worker was
+    // OOM-killed (SIGKILL) before it ever reached type-checking — commits
+    // 16281f0 / 052af1d / 07b2535 all failed this way while the backend-only
+    // c0ca37c built fine. This flag trades a little build speed for materially
+    // lower peak webpack memory so the build fits in 8 GB.
+    webpackMemoryOptimizations: true,
   },
   images: {
     remotePatterns: [
