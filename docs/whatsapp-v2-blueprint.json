@@ -1,0 +1,359 @@
+{
+ "vision": "A WhatsApp inbox that turns a busy one-number firehose into a calm, shared work queue: every chat is a first-class conversation with a status, an owner, labels and notes; product photos, voice notes and payment screenshots render and send both ways in realtime; the same number quietly answers FAQs 24/7, captures leads, and blasts segmented new-arrival drops through the existing anti-ban runner. respond.io-class lifecycle + automation, but free over self-hosted Baileys and simple enough that a shopkeeper's wife runs it from her phone.",
+ "epics": [
+  {
+   "id": "EPIC-01",
+   "title": "Conversations as a first-class entity",
+   "priority": "must",
+   "scope": "Introduce a whatsapp_conversations table (one row per instance_id + contact_id/source_id) and backfill from the 7050 existing whatsapp_messages. Add whatsapp_messages.conversation_id FK + backfill. Rewrite /api/whatsapp/conversations to page off this table (last_message_at DESC) instead of folding the newest 2000 messages in memory \u2014 this stops the active thread loss. Server-side cursor pagination for both the list and the per-chat history. Per-conversation read cursor so unread actually clears.",
+   "why": "DB-verified root cause: there is no conversations table, the list derives from newest 2000 of 7050 rows so oldest threads are already dropping in prod, and unread never clears because read_total=0. Every other inbox feature (status, assign, labels, notes, filters, reports) has nothing to attach to until this exists. This is the keystone.",
+   "effort": "L",
+   "depends_on": []
+  },
+  {
+   "id": "EPIC-02",
+   "title": "Inbound media render + outbound media composer",
+   "priority": "must",
+   "scope": "Inbound: a worker decrypts the raw .enc Baileys media_url (via Evolution get-base64-from-media), re-hosts to Supabase Storage, writes media_storage_path + thumbnail; chat bubbles render image/video/document/sticker/voice from the hosted URL. Outbound: composer gains attach buttons wired to sendMedia (image/video/document), sendWhatsAppAudio (true PTT voice bubble), reply-quote (quoted param), and emoji reactions (sendReaction, updates target bubble \u2014 no new row). Inbound voice notes get a transcribe action.",
+   "why": "DB-verified: ~1873 media messages (27% of traffic), media_url is the raw encrypted URL never downloaded, so inbound images render nothing and NO composer can attach media. For a clothing shop whose chats ARE product photos, size charts and payment screenshots, the most-used path is invisible both ways. Highest single-feature value and 100% Baileys-feasible.",
+   "effort": "L",
+   "depends_on": [
+    "EPIC-01"
+   ]
+  },
+  {
+   "id": "EPIC-03",
+   "title": "Conversation lifecycle: status, assignee, snooze, priority",
+   "priority": "must",
+   "scope": "Add status (0=open/1=resolved/2=pending/3=snoozed), snoozed_until, assignee_id (FK to workspace user), priority enum, last_activity_at, first_reply_at, waiting_since to whatsapp_conversations. Inbound on a resolved/snoozed convo auto-reopens. A cron (already have infra) wakes snoozed_until; 'snooze until next reply' handled by the inbound webhook. Status/assign/snooze/priority actions in the list + chat header. Default queue = Open & mine.",
+   "why": "The single biggest upgrade over raw WhatsApp: turns a noisy feed into 'what still needs me' vs done vs later, and gives a 2-person shop (wife + helper + owner) clean ownership so no double-replies. Cheap columns on top of EPIC-01; the state machine is the core mental model everything else (counts, filters, reports) hangs off.",
+   "effort": "M",
+   "depends_on": [
+    "EPIC-01"
+   ]
+  },
+  {
+   "id": "EPIC-04",
+   "title": "Labels + internal notes + @mentions",
+   "priority": "must",
+   "scope": "whatsapp_labels (workspace-scoped: title, color) + polymorphic whatsapp_taggings (label_id, taggable_type conversation|contact, taggable_id) so one label table serves both. Internal notes via whatsapp_messages.is_private boolean (never sent to customer, rendered distinctly) with @mention parsing that notifies + adds the mentioned user as a participant. whatsapp_conversation_participants join for watchers. Filter the list by label.",
+   "why": "Labels are the operator's lightweight CRM and the segmentation backbone for broadcasts ('message all Wholesale'). Private notes keep 'ask the husband about wholesale pricing' attached to the chat instead of leaking to the customer or a side WhatsApp group. All trivial schema, outsized utility; is_private is a one-column add.",
+   "effort": "M",
+   "depends_on": [
+    "EPIC-01"
+   ]
+  },
+  {
+   "id": "EPIC-05",
+   "title": "Quick replies / canned responses with {{vars}}",
+   "priority": "must",
+   "scope": "whatsapp_canned_responses (workspace_id, short_code, content). Type '/' + short_code in the composer to insert; interpolate {{contact.firstName}}, {{city}} and other CRM/custom fields with fallbacks. Manage list in a settings tab.",
+   "why": "Highest day-1 ROI for a non-technical operator answering the same 10 questions 50x/day (price, delivery, COD, sizes, bank account). Cross-cited as the top 'magical' inbox feature by all three SaaS researchers. Trivial table, big perceived polish, and a concrete reason to reply in-app instead of on the phone (currently only 16 of 7034 replies go through the tool).",
+   "effort": "S",
+   "depends_on": [
+    "EPIC-01"
+   ]
+  },
+  {
+   "id": "EPIC-06",
+   "title": "Realtime inbox (replace polling)",
+   "priority": "must",
+   "scope": "Add whatsapp_messages + whatsapp_conversations to the supabase_realtime publication; subscribe the inbox to Postgres Changes for new messages, status/tick updates, assignment changes. Keep a slow poll as fallback. Wire MESSAGES_UPDATE status transitions (sent->delivered->read) to per-bubble ticks and FIX the read path (verify Evolution emits read events; mark-message-as-read on open).",
+   "why": "DB-verified: supabase_realtime publication contains NO whatsapp table; app polls 5s/15s/3-30s. read_total=0 across all 7050 rows means no blue-tick signal and broadcast 'read' analytics are always zero. Realtime + working ticks is the difference between a live shared inbox and a laggy single-user tool, and is a prerequisite for multi-agent collaboration feeling instant.",
+   "effort": "M",
+   "depends_on": [
+    "EPIC-01"
+   ]
+  },
+  {
+   "id": "EPIC-07",
+   "title": "Contact sidebar + custom fields + WA enrichment",
+   "priority": "must",
+   "scope": "Side panel in the conversation showing CRM identity, avatar/about (fetch-profile-picture-url), labels, lifecycle stage, recent activity timeline and notes. Admin-defined custom fields via whatsapp_custom_attribute_definitions (display_name, key, type text|number|currency|date|list|checkbox, model conversation|contact) with values stored as JSONB custom_attributes on the conversation/contact. Lifecycle stage single-select on contact.",
+   "why": "Operator sees who they're talking to and history at a glance instead of flipping to a spreadsheet. Custom fields (size, fabric, city, last order, COD-ok) turn the inbox into a shop-tailored CRM and are the backbone of segmentation + personalization. The definition-driven-JSONB pattern gives non-technical users custom fields with zero migrations.",
+   "effort": "M",
+   "depends_on": [
+    "EPIC-01",
+    "EPIC-04"
+   ]
+  },
+  {
+   "id": "EPIC-08",
+   "title": "Segmented + scheduled broadcasts with personalization + analytics",
+   "priority": "must",
+   "scope": "Build the broadcast UI on the EXISTING whatsapp_send_jobs/whatsapp_send_log + runner + throttle (proven anti-ban: 50/hr, 200/day, warm-up, jitter, cooldown). Audience = saved segment (labels + custom fields + lifecycle + last-contacted) resolved at send time, not just a frozen contact_ids[] array. Per-message {{var}} personalization with fallbacks. Media broadcasts (reuse EPIC-02). Send-later + recurring scheduling. Per-broadcast analytics (sent/delivered/read/replied/failed) with a recipient drawer + one-click resend-to-failed. MUST validate the engine against real delivery (currently 0 jobs ever ran).",
+   "why": "Core revenue driver for a clothing shop and the feature respond.io/ManyChat charge per-message for \u2014 here it's free over Baileys as true 1:1 sends so replies come back individually. The whole engine is already wired but DB-verified never used (send_jobs=0, send_log=0); v2 adds segmentation + personalization + analytics and proves it works. 'Replied' derives from inbound matching; delivered/read from ACKs once EPIC-06 fixes the read path.",
+   "effort": "L",
+   "depends_on": [
+    "EPIC-04",
+    "EPIC-02",
+    "EPIC-12"
+   ]
+  },
+  {
+   "id": "EPIC-09",
+   "title": "Simple automation layer: keyword auto-reply, welcome, away, business hours",
+   "priority": "must",
+   "scope": "App-side rule engine on the inbound MESSAGES_UPSERT webhook. whatsapp_automation_rules (event, JSONB conditions, JSONB actions, active) + whatsapp_business_hours (per-day open/close, holidays, timezone). Built-in recipes: welcome message on first contact, away/out-of-office message outside business hours, keyword auto-reply (contains/starts-with -> send canned reply or media), and a numbered TEXT menu router ('Reply 1 for prices, 2 for hours, 3 for human'). Default fallback so no first-timer is left on read. All outbound through the throttle. Actions reuse the canned-response + label + status vocabulary. NO native buttons/lists.",
+   "why": "DB-verified largest gap: across 7034 inbound messages every one needed a human and got few replies. This is the ManyChat/respond.io core promise (24/7 FAQ deflection + lead capture) and directly fixes the firehose-with-no-replies pattern the data shows. Scoped to numbered text menus because native tappable buttons are unreliable over Baileys. Shares the JSONB conditions/actions model so the action executor is built once and reused by macros + workflows later.",
+   "effort": "L",
+   "depends_on": [
+    "EPIC-05",
+    "EPIC-03",
+    "EPIC-04"
+   ]
+  },
+  {
+   "id": "EPIC-10",
+   "title": "Group inbox + manage + broadcast/schedule to groups",
+   "priority": "should",
+   "scope": "Extend whatsapp_groups sync to store participants + is_admin (not just subject+count). Add create/leave, add/remove/promote/demote (handle 'invite-only' fallback), subject/description/icon, announce-only + locked-info toggles, invite-link get/revoke. Show group threads in the inbox with per-sender labels. Broadcast + schedule to selected groups via the runner. FIX the broken create-group contact search (GroupsTab calls /api/whatsapp/contacts which is not in the route tree).",
+   "why": "Genuine Baileys advantage that Cloud-API rivals (respond.io/Wati/ManyChat) LACK \u2014 Pakistani shops run VIP/wholesaler groups heavily. DB-verified 65 groups already cached but read-mostly, and there's a dangling broken dependency to fix. An announce-only group is effectively a free broadcast channel. Differentiator, but secondary to fixing the 1:1 inbox.",
+   "effort": "M",
+   "depends_on": [
+    "EPIC-01",
+    "EPIC-02"
+   ]
+  },
+  {
+   "id": "EPIC-11",
+   "title": "AI assist in the inbox (draft, summarize, translate, transcribe)",
+   "priority": "should",
+   "scope": "Reuse Spacefield's existing AI infra (pgvector/skills). One-click: suggest reply from thread + contact context (agent edits before send), summarize a long haggling thread, translate Urdu<->English/Roman-Urdu, and transcribe inbound voice notes to text. Inbox-side only, no WhatsApp-protocol dependency beyond read+sendText. Pair transcription with EPIC-02 voice handling.",
+   "why": "Safest, highest-ROI AI: lets a non-native-English operator clear the inbound firehose fast and politely without the AI taking over. Urdu/English translate + voice transcription are directly relevant to a Pakistani shop. Lower-risk than a fully autonomous AI agent, so ship assist first.",
+   "effort": "M",
+   "depends_on": [
+    "EPIC-01",
+    "EPIC-02"
+   ]
+  },
+  {
+   "id": "EPIC-12",
+   "title": "Opt-out / consent + soft-ban awareness",
+   "priority": "should",
+   "scope": "marketing_consent flag + opted_out_at on contact; STOP-keyword handler in the inbound webhook auto-sets opt-out; suppression filter applied to EVERY broadcast/automation send; opt-out audit log. Wire the existing-but-unused cooldownMs / soft-ban detection so the throttle reacts to a real Baileys block signal (pause sends, alert owner).",
+   "why": "Messaging opt-outs is the fastest path to a ban and directly contradicts the app's own anti-ban positioning \u2014 DB-verified there is no STOP handling, consent flag, or suppression list. The throttle is a real strength but currently can't react to an actual soft-ban. Small, and it protects the whole broadcast investment; gates EPIC-08.",
+   "effort": "M",
+   "depends_on": [
+    "EPIC-01"
+   ]
+  },
+  {
+   "id": "EPIC-13",
+   "title": "Inbox search, filters & saved views",
+   "priority": "should",
+   "scope": "Server-side full-text search over message bodies + contacts across ALL history (Postgres tsvector or trigram on whatsapp_messages.body). Filter the conversation list by status, assignee, label, priority, unread, lifecycle. Save filter combos as named views via whatsapp_saved_views (name, JSONB query, user_id) \u2014 e.g. 'My open wholesale', 'Unassigned today'.",
+   "why": "DB-verified: search is client-side over only the loaded 2000-row window, so finding an older thread across the 7050 messages is impossible. Once status/label/assignee/priority exist (EPIC-03/04) this is mostly UI + one index, and it turns volume into focus for an operator handling 200+ chats/week.",
+   "effort": "M",
+   "depends_on": [
+    "EPIC-03",
+    "EPIC-04"
+   ]
+  },
+  {
+   "id": "EPIC-14",
+   "title": "Macros (one-tap multi-action) + click-to-WA links/QR",
+   "priority": "should",
+   "scope": "whatsapp_macros (name, JSONB actions array, visibility global|personal) reusing the EPIC-09 action executor: e.g. 'Order confirmed' = send confirmation + add 'paid' label + set pending + snooze 3 days. Run from the chat sidebar. Plus a pure wa.me/QR generator (number + prefilled text, optional ref param that auto-tags source) for posters, packaging, IG bio \u2014 pairs with Spacefield's existing poster tools.",
+   "why": "Macros let the operator codify her routine into one button without code, sharing the same JSONB-actions model as automation so it's cheap once that exists. Click-to-WA QR/links are zero-cost, ban-safe top-of-funnel (inbound-initiated chats are the safest kind on Baileys) and trivial URL construction.",
+   "effort": "M",
+   "depends_on": [
+    "EPIC-09"
+   ]
+  },
+  {
+   "id": "EPIC-15",
+   "title": "Analytics via append-only reporting events",
+   "priority": "should",
+   "scope": "Emit named events to whatsapp_reporting_events (event, value, value_in_business_hours, conversation_id/contact_id/user_id, started_at/ended_at) on create/first-reply/resolve/reply. Build Overview (open/unassigned/today, busiest hours) + Conversation Volume (new convos, in/out counts, first-response & resolution time) first; defer per-agent/team reports to multi-operator scale. CSV export.",
+   "why": "DB-verified: no analytics beyond raw logs. The reporting-events pattern (emit, don't compute ad-hoc) gives FRT/resolution/volume almost for free and is future-proof for new metrics. For the owner, Overview + Volume is the legible 'are we answering fast enough / is the messaging driving customers' truth. Per-agent reports only matter once there's a team.",
+   "effort": "L",
+   "depends_on": [
+    "EPIC-03"
+   ]
+  },
+  {
+   "id": "EPIC-16",
+   "title": "Notifications (assignment, mention, new message)",
+   "priority": "should",
+   "scope": "Typed notifications (conversation_assignment, conversation_mention, assigned_conversation_new_message, participating_new_message) with read_at, driving an in-app bell + reuse Spacefield's existing PWA push so the phone-first operator gets pinged without keeping the tab open.",
+   "why": "Closes the collaboration loop: an operator shouldn't have to refresh \u2014 they get pinged when assigned, @mentioned, or their owned chat gets a reply. Essential for responsiveness once assignment + mentions exist; the typed-notification taxonomy is reusable platform-wide.",
+   "effort": "M",
+   "depends_on": [
+    "EPIC-03",
+    "EPIC-04",
+    "EPIC-06"
+   ]
+  },
+  {
+   "id": "EPIC-17",
+   "title": "Faster broadcast cadence (sub-daily runner)",
+   "priority": "should",
+   "scope": "Move the whatsapp-send-runner off the once-daily Vercel Hobby cron ('35 6 * * *') to a sub-minute/minute trigger via QStash (or a small external worker / paid cron) so a queued blast actually drains at the 50/hr throttle instead of ~25 recipients per day. Keep the existing claim-1-job/drain-<=25-per-tick runner logic.",
+   "why": "DB-verified correction: the cron IS registered but runs once daily, so a 150-person blast takes days. The growth lever is throttled to uselessness by cadence, not code. Cheap infra change that unlocks the entire broadcast epic in practice.",
+   "effort": "S",
+   "depends_on": [
+    "EPIC-08"
+   ]
+  },
+  {
+   "id": "EPIC-18",
+   "title": "WhatsApp Status posting + in-app product picker",
+   "priority": "could",
+   "scope": "Schedule/post text/image/video Status via sendStatus (POST-only; reading others' status is out of scope). Own a lightweight products table (image+price+desc, feeding existing poster/inventory + /api/inventory/[id]/whatsapp-caption) and an in-inbox product picker: tap a product to send image+caption+price(+wa.me order link). Optionally hydrate from the WA catalog where the endpoint exists (verify live). NO native catalog/cart/checkout.",
+   "why": "Status is a free daily storefront Pakistani shops already use; doing it scheduled+branded from Spacefield beats the plain WhatsApp Business app. A product picker is a big operator-speed win and reuses catalog data the platform already has. 'Could' because it's additive polish, not a fix for a measured gap.",
+   "effort": "L",
+   "depends_on": [
+    "EPIC-02",
+    "EPIC-07"
+   ]
+  },
+  {
+   "id": "EPIC-19",
+   "title": "Visual workflow builder + drip sequences + AI-in-flow",
+   "priority": "could",
+   "scope": "A node-based canvas (trigger -> branch -> action) on top of the EPIC-09 action executor, with prebuilt clonable recipes (welcome, lead qualification, FAQ bot, CSAT 'reply 1-5'). Multi-step time-delayed drip sequences (whatsapp_sequences + enrollments) with exit-on-reply, all paced through the throttle and gated by opt-in/consent. Optional AI step (classify intent / extract size+color / route). Menus stay numbered text, not buttons.",
+   "why": "The 'magical' ManyChat-grade differentiator that makes automation visible as boxes-and-arrows for a non-technical operator \u2014 but it's two XL builds (engine UI + runtime) and risky over Baileys (drips can land outside the 24h window, ban exposure). Deliberately deferred: EPIC-09 delivers ~80% of the automation value first; this is the ceiling-raiser once the foundation is proven and consent/throttle are hardened.",
+   "effort": "XL",
+   "depends_on": [
+    "EPIC-09",
+    "EPIC-12",
+    "EPIC-11"
+   ]
+  },
+  {
+   "id": "EPIC-20",
+   "title": "Multi-number + teams + auto-assignment + roles",
+   "priority": "could",
+   "scope": "Relax the UNIQUE(workspace_id) one-instance constraint to allow multiple Evolution instances (sales/support lines) with per-number routing. Add whatsapp_teams + team_members, agent presence/availability (online/away/on-duty), round-robin + capacity-limited + presence-aware auto-assignment, and role-based access (reuse Spacefield's admin roles matrix) so the owner can give a helper inbox access without broadcast/billing controls.",
+   "why": "DB-verified single-number-by-construction; growing shops want separate lines and real routing. But the shopkeeper persona is 1-2 operators, so the value is deferred \u2014 auto-assignment is a no-op at single-operator scale and needs a presence model we don't have. Build the scaffolding last; manual single-assignee (EPIC-03) covers the near-term need.",
+   "effort": "XL",
+   "depends_on": [
+    "EPIC-03",
+    "EPIC-16"
+   ]
+  }
+ ],
+ "schema_changes": [
+  {
+   "change": "CREATE TABLE whatsapp_conversations",
+   "detail": "Keystone. Columns: id uuid pk, workspace_id, instance_id FK whatsapp_instances, contact_id FK crm_contacts, source_id text (the WhatsApp JID/phone \u2014 dedupe key), display_id bigint (per-workspace human number), status smallint default 0 (0=open,1=resolved,2=pending,3=snoozed), priority smallint default 0 (0=none..4=urgent), assignee_id FK workspace user nullable, team_id nullable, snoozed_until timestamptz, last_message_at timestamptz, last_activity_at, first_reply_at, waiting_since, unread_count int default 0, read_cursor_message_id nullable, custom_attributes jsonb default '{}', additional_attributes jsonb default '{}', is_pinned boolean default false, is_archived boolean default false, created_at. UNIQUE(instance_id, source_id). Indexes: (workspace_id, status, last_message_at DESC), (assignee_id, status), (snoozed_until) WHERE status=3. RLS workspace-gated like existing tables. Backfill one row per distinct (instance_id, contact source) from the 7050 whatsapp_messages."
+  },
+  {
+   "change": "ALTER TABLE whatsapp_messages",
+   "detail": "Add conversation_id uuid FK whatsapp_conversations (backfill from instance_id+contact), is_private boolean default false (internal notes), reply_to_message_id text nullable (quoted), reactions jsonb default '[]' (emoji+actor, updated in place \u2014 not new rows), media_storage_path text (re-hosted Supabase Storage path after decrypting the .enc URL), media_thumbnail_path text, transcription text nullable (voice notes), is_starred boolean default false, edited_at timestamptz, deleted_at timestamptz (revoke tombstone). Index (conversation_id, created_at). Add GIN tsvector/trigram index on body for full-text search."
+  },
+  {
+   "change": "CREATE TABLE whatsapp_labels + whatsapp_taggings",
+   "detail": "whatsapp_labels: id, workspace_id, title, color, show_on_sidebar boolean, created_at; UNIQUE(workspace_id, title). whatsapp_taggings: id, label_id FK, taggable_type text ('conversation'|'contact'), taggable_id uuid; UNIQUE(label_id, taggable_type, taggable_id); index (taggable_type, taggable_id). One polymorphic tag table serves both conversations and contacts."
+  },
+  {
+   "change": "CREATE TABLE whatsapp_canned_responses",
+   "detail": "id, workspace_id, short_code text, content text, created_by, created_at; UNIQUE(workspace_id, short_code). Content supports {{var}} placeholders interpolated at insert time."
+  },
+  {
+   "change": "CREATE TABLE whatsapp_conversation_participants",
+   "detail": "id, conversation_id FK, user_id FK, created_at; UNIQUE(conversation_id, user_id). Watchers/collaborators beyond the single assignee; @mention auto-adds a row."
+  },
+  {
+   "change": "CREATE TABLE whatsapp_custom_attribute_definitions",
+   "detail": "id, workspace_id, display_name, attribute_key text, attribute_type text (text|number|currency|percent|link|date|list|checkbox), attribute_model text (conversation|contact), attribute_values jsonb (for list type), created_at; UNIQUE(workspace_id, attribute_model, attribute_key). Values live in the custom_attributes jsonb on whatsapp_conversations / crm_contacts."
+  },
+  {
+   "change": "CREATE TABLE whatsapp_automation_rules + whatsapp_business_hours",
+   "detail": "whatsapp_automation_rules: id, workspace_id, name, event_name text (conversation_created|message_created), conditions jsonb, actions jsonb, active boolean, priority int, created_at. whatsapp_business_hours: id, workspace_id, timezone text, weekly jsonb (per-day open/close ranges), holidays jsonb (date list), away_message text, welcome_message text. Both consumed by the inbound webhook; actions reuse the shared executor."
+  },
+  {
+   "change": "CREATE TABLE whatsapp_macros",
+   "detail": "id, workspace_id, name, actions jsonb (ordered [{action_name, action_params}]), visibility text (global|personal), created_by, created_at. Same action vocabulary as automation rules; run manually from the chat sidebar."
+  },
+  {
+   "change": "CREATE TABLE whatsapp_segments + extend whatsapp_lists",
+   "detail": "whatsapp_segments: id, workspace_id, name, query jsonb (labels + custom_attrs + lifecycle + last_contacted filters), created_at \u2014 resolved to recipients at send time (dynamic), unlike the existing frozen whatsapp_lists.contact_ids[]. Extend whatsapp_lists with optional CSV/paste import + a members view; keep contact_ids[] for static lists. Broadcasts accept either a segment_id or a list_id."
+  },
+  {
+   "change": "ALTER TABLE whatsapp_send_jobs (broadcast metadata)",
+   "detail": "Add segment_id nullable FK, personalization_template text ({{var}} body), media_storage_path nullable, scheduled_for timestamptz, recurrence jsonb nullable, kind text (broadcast|automation|sequence|status). Keep existing queue/runner/throttle untouched. Per-recipient delivered/read/replied/failed already derivable via whatsapp_send_log + MESSAGES_UPDATE once the read path is fixed."
+  },
+  {
+   "change": "Consent + opt-out columns on crm_contacts (or whatsapp_contact_state)",
+   "detail": "Add marketing_consent boolean default false, opted_out_at timestamptz, opt_out_source text. Plus whatsapp_opt_out_log (contact_id, action, reason, created_at) for audit. Suppression filter applied to every broadcast/automation send. (If touching crm_contacts is undesirable, mirror in a small whatsapp_contact_state table keyed by contact_id.)"
+  },
+  {
+   "change": "CREATE TABLE whatsapp_reporting_events",
+   "detail": "id, workspace_id, event_name text (conversation_created|conversation_resolved|first_response|reply_time|conversation_reopened), value numeric, value_in_business_hours numeric, conversation_id, contact_id, user_id, inbox/instance_id, started_at, ended_at, created_at. Indexes (workspace_id, event_name, created_at). All reports aggregate over this single append-only table."
+  },
+  {
+   "change": "CREATE TABLE whatsapp_saved_views + whatsapp_sequences (+ enrollments)",
+   "detail": "whatsapp_saved_views: id, workspace_id, user_id, name, query jsonb (status/assignee/label/priority/lifecycle). whatsapp_sequences (deferred/EPIC-19): id, workspace_id, name, steps jsonb (relative delay + message/action), exit_conditions jsonb, active; whatsapp_sequence_enrollments: id, sequence_id, contact_id, current_step, next_run_at, status, enrolled_at \u2014 drip steps drained through the throttle."
+  },
+  {
+   "change": "Realtime + groups extension",
+   "detail": "Add whatsapp_messages + whatsapp_conversations to the supabase_realtime PUBLICATION. Extend whatsapp_groups with participants jsonb (number + is_admin) and last_synced_at so group management/listing works (currently stores only subject + member_count). Optional whatsapp_group_messages link or reuse conversation_id for group threads."
+  }
+ ],
+ "build_order": [
+  {
+   "wave": 1,
+   "epics": [
+    "EPIC-01",
+    "EPIC-02",
+    "EPIC-06"
+   ],
+   "rationale": "Foundation + the two measured production failures. EPIC-01 (conversations table) stops the active thread loss (7050>2000 in-memory fold) and gives every later feature something to attach to. EPIC-02 fixes the ~27% media blackout that makes a clothing-shop inbox useless. EPIC-06 makes it realtime and fixes the dead read path (read_total=0). Independently shippable and immediately makes the inbox feel like a real product \u2014 directly attacks the 16-of-7034 in-app-reply problem."
+  },
+  {
+   "wave": 2,
+   "epics": [
+    "EPIC-03",
+    "EPIC-04",
+    "EPIC-05",
+    "EPIC-07"
+   ],
+   "rationale": "The conversation-lifecycle layer that is the single biggest upgrade over raw WhatsApp: status/assign/snooze/priority + labels/notes/@mentions + quick replies + the contact sidebar with custom fields. All sit on the Wave-1 conversations table, are mostly cheap columns/join tables, and together give the operator a real work queue and concrete reasons to reply in-app. Deployable as a coherent 'shared team inbox' release."
+  },
+  {
+   "wave": 3,
+   "epics": [
+    "EPIC-12",
+    "EPIC-08",
+    "EPIC-17",
+    "EPIC-09"
+   ],
+   "rationale": "Turn the inbox into a growth + automation engine, safely. Consent/opt-out (EPIC-12) ships FIRST as the guardrail, then segmented+scheduled+personalized broadcasts on the already-built-but-never-run engine (EPIC-08), then the sub-daily cadence fix (EPIC-17) that actually makes blasts drain, then the keyword/welcome/away/business-hours automation (EPIC-09) that answers the inbound firehose 24/7. This wave depends on Wave 2's labels/custom-fields/canned-responses and delivers the revenue + 'never miss a lead' story."
+  },
+  {
+   "wave": 4,
+   "epics": [
+    "EPIC-10",
+    "EPIC-11",
+    "EPIC-13",
+    "EPIC-14",
+    "EPIC-15",
+    "EPIC-16"
+   ],
+   "rationale": "Differentiators + polish + visibility, each independently valuable: group inbox/management (a real Baileys edge over Cloud-API rivals, plus fixes the broken create-group search), inbox AI assist (draft/summarize/translate/transcribe), full-history search + saved views, macros + click-to-WA QR, the reporting-events analytics (Overview + Volume), and notifications. Built on Waves 1-3 primitives; can be sequenced or parallelized in worktrees."
+  },
+  {
+   "wave": 5,
+   "epics": [
+    "EPIC-18",
+    "EPIC-19",
+    "EPIC-20"
+   ],
+   "rationale": "Ceiling-raisers deferred until the foundation is proven: Status posting + product picker, the visual workflow builder + drip sequences + AI-in-flow (two XL builds with real Baileys ban exposure, only worth it after EPIC-09 validates the action executor and EPIC-12 hardens consent), and multi-number + teams + auto-assignment + roles (a no-op at the 1-2-operator shopkeeper scale, needs a presence model). These are 'could' and explicitly not required for a great v2."
+  }
+ ],
+ "risks": [
+  "Backfilling whatsapp_conversations from 7050 existing messages must be idempotent and correctly group by (instance_id, source JID) \u2014 a bad backfill fragments or merges threads. Run it as a tested migration with a dry-run count, since the inbox depends entirely on this table.",
+  "The read path is the linchpin of ticks AND broadcast 'read' analytics but read_total=0 today \u2014 must verify live that Evolution is actually emitting/forwarding MESSAGES_UPDATE read events before promising blue-tick or read-rate metrics. If Evolution doesn't forward them, read stays best-effort and analytics should hide rather than show zeros.",
+  "Media decryption/re-hosting is version-dependent on Evolution's get-base64-from-media endpoint and adds Storage cost + a worker on the hot path; needs retry/dead-letter handling and a fallback so a failed decrypt doesn't block message ingestion.",
+  "Broadcast engine has NEVER run in production (send_jobs=0, send_log=0) \u2014 first real blast is the genuine anti-ban test. Validate with a tiny warm segment, watch for soft-ban signals, and ship EPIC-12 consent + soft-ban detection BEFORE any large send.",
+  "Sub-daily cadence (EPIC-17) likely needs QStash or a paid cron \u2014 Vercel Hobby caps cron at daily, so without infra spend the broadcast UX stays broken even after EPIC-08. Confirm the deploy tier/budget early.",
+  "LABELS and CATALOG as first-class Evolution REST endpoints are version-dependent (researcher flagged 'verify live + keep an app-side fallback'). Always keep the Postgres label/tag + products tables as source of truth so the feature works regardless of the Evolution build.",
+  "Native interactive buttons/lists, official templates (24h-window), green-tick verification and WhatsApp commerce/cart/checkout are Cloud-API-only and DROPPED \u2014 any UI hinting at them must be badged 'requires official WhatsApp API (future tier)' to avoid setting false expectations.",
+  "Automation + drip sequences can message users outside the 24h window with free-form text (no template safety net), which carries ban risk \u2014 every automated/sequence send MUST route through the throttle, respect opt-out, and prefer reply-triggered sends; this is why EPIC-19 is deferred behind hardened consent.",
+  "Persona tension: the shopkeeper's-wife user is phone-first and non-technical, so desktop-centric polish (Cmd+K, keyboard shortcuts) and the visual workflow canvas are low priority vs mobile reply speed, media, quick replies and assignment \u2014 keep the must-haves mobile-PWA-first.",
+  "Adding whatsapp tables to supabase_realtime increases broadcast load on the DB; scope the publication to the two needed tables and confirm RLS still gates realtime payloads per workspace so one tenant can't subscribe to another's messages."
+ ]
+}
