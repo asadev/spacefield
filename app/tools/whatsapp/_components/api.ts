@@ -472,6 +472,389 @@ export function fetchMessages(
   return jsonFetchItems<WaMessage>(`/api/whatsapp/messages?${q.toString()}`);
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+   Inbox v2 — conversation-centric API (Wave 1)
+   ────────────────────────────────────────────────────────────────────────
+   Consumes the new backend contracts:
+     GET  /api/whatsapp/conversations?workspace_id=&cursor=&limit=
+     GET  /api/whatsapp/messages?workspace_id=&conversation_id=&before=&limit=
+     POST /api/whatsapp/conversations/[id]/read
+     POST /api/whatsapp/send            (text, now persists a message row)
+     POST /api/whatsapp/send/media      (media + voice + quote)
+     POST /api/whatsapp/messages/[id]/react
+     GET  /api/whatsapp/media/[id]?workspace_id=   (302 → signed URL)
+   ════════════════════════════════════════════════════════════════════════ */
+
+export type WaChatType = "contact" | "group";
+export type WaMediaKind = "image" | "video" | "document" | "audio";
+
+export interface WaReaction {
+  emoji: string;
+  fromMe?: boolean;
+  actor?: string;
+}
+
+/** A row from the conversations list (inbox source of truth). */
+export interface WaConversation {
+  id: string;
+  contact_id: string | null;
+  source_id: string | null;
+  phone: string | null;
+  name: string | null;
+  chat_type: WaChatType | null;
+  is_group: boolean;
+  unread_count: number;
+  last_message_at: string | null;
+  last_message_preview: string | null;
+  last_direction: "inbound" | "outbound" | null;
+  status: string | null;
+  assignee_id: string | null;
+}
+
+/** A message row in a conversation thread (v2 shape). */
+export interface WaThreadMessage {
+  id: string;
+  direction: "inbound" | "outbound";
+  body: string | null;
+  status: "queued" | "sent" | "delivered" | "read" | "failed";
+  created_at: string;
+  media_type: WaMediaKind | string | null;
+  media_mime: string | null;
+  media_storage_path: string | null;
+  reactions: WaReaction[] | null;
+  reply_to_message_id: string | null;
+  sender_name: string | null;
+  is_private: boolean | null;
+  evolution_message_id: string | null;
+  /** Optimistic-only client fields (not from server). */
+  _optimistic?: boolean;
+}
+
+export interface WaConversationsPage {
+  items: WaConversation[];
+  next_cursor: string | null;
+}
+
+export interface WaMessagesPage {
+  items: WaThreadMessage[];
+  next_cursor: string | null;
+  has_more: boolean;
+}
+
+/** Fetch one page of conversations (newest activity first). */
+export async function fetchConversations(
+  workspaceId: string,
+  opts?: { cursor?: string | null; limit?: number }
+): Promise<Result<WaConversationsPage>> {
+  const q = new URLSearchParams({ workspace_id: workspaceId });
+  if (opts?.cursor) q.set("cursor", opts.cursor);
+  if (opts?.limit) q.set("limit", String(opts.limit));
+  const res = await jsonFetch<{ items?: WaConversation[]; next_cursor?: string | null }>(
+    `/api/whatsapp/conversations?${q.toString()}`
+  );
+  if (!res.ok) return res;
+  return ok({
+    items: Array.isArray(res.data.items) ? res.data.items : [],
+    next_cursor: res.data.next_cursor ?? null,
+  });
+}
+
+/** Fetch one NEWEST-FIRST page of messages for a conversation. */
+export async function fetchThreadMessages(
+  workspaceId: string,
+  conversationId: string,
+  opts?: { before?: string | null; limit?: number }
+): Promise<Result<WaMessagesPage>> {
+  const q = new URLSearchParams({
+    workspace_id: workspaceId,
+    conversation_id: conversationId,
+  });
+  if (opts?.before) q.set("before", opts.before);
+  if (opts?.limit) q.set("limit", String(opts.limit));
+  const res = await jsonFetch<{
+    items?: WaThreadMessage[];
+    next_cursor?: string | null;
+    has_more?: boolean;
+  }>(`/api/whatsapp/messages?${q.toString()}`);
+  if (!res.ok) return res;
+  return ok({
+    items: Array.isArray(res.data.items) ? res.data.items : [],
+    next_cursor: res.data.next_cursor ?? null,
+    has_more: !!res.data.has_more,
+  });
+}
+
+/** Clear unread + send blue ticks for a conversation. */
+export function markConversationRead(
+  workspaceId: string,
+  conversationId: string
+): Promise<Result<{ ok: true }>> {
+  return jsonFetch(
+    `/api/whatsapp/conversations/${encodeURIComponent(conversationId)}/read`,
+    {
+      method: "POST",
+      body: JSON.stringify({ workspace_id: workspaceId }),
+    }
+  );
+}
+
+/** Send a text message into a conversation (persists a row + optional quote). */
+export function sendConversationText(payload: {
+  workspace_id: string;
+  conversation_id?: string;
+  phone?: string;
+  message: string;
+  quoted_message_id?: string;
+}): Promise<Result<{ ok: true; id?: string | null; message_id?: string | null }>> {
+  // The send route resolves by recipient; for a contact thread we pass the
+  // phone as target_id (it accepts a raw phone). Group threads pass the jid.
+  const target_type =
+    payload.phone && payload.phone.includes("@g.us") ? "group" : "contact";
+  return jsonFetch("/api/whatsapp/send", {
+    method: "POST",
+    body: JSON.stringify({
+      workspace_id: payload.workspace_id,
+      target_type,
+      target_id: payload.phone ?? payload.conversation_id ?? "",
+      message: payload.message,
+      ...(payload.quoted_message_id
+        ? { quoted_message_id: payload.quoted_message_id }
+        : {}),
+    }),
+  });
+}
+
+/** Send media (image/video/document) or a voice note (kind: "audio"). */
+export function sendConversationMedia(payload: {
+  workspace_id: string;
+  conversation_id?: string;
+  to?: string;
+  phone?: string;
+  media: { base64: string; mime: string; fileName?: string; kind: WaMediaKind };
+  caption?: string;
+  quoted_message_id?: string;
+}): Promise<
+  Result<{ ok: true; id?: string | null; message_id?: string | null; conversation_id?: string }>
+> {
+  return jsonFetch("/api/whatsapp/send/media", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Add (or, with an empty emoji, remove) our reaction to a message. */
+export function reactToMessage(
+  workspaceId: string,
+  messageId: string,
+  emoji: string
+): Promise<Result<{ ok: true; reactions: WaReaction[] }>> {
+  return jsonFetch(
+    `/api/whatsapp/messages/${encodeURIComponent(messageId)}/react`,
+    {
+      method: "POST",
+      body: JSON.stringify({ workspace_id: workspaceId, emoji }),
+    }
+  );
+}
+
+/** Build the media src/href for a message (302-redirects to a signed URL). */
+export function mediaUrl(workspaceId: string, messageId: string): string {
+  return `/api/whatsapp/media/${encodeURIComponent(
+    messageId
+  )}?workspace_id=${encodeURIComponent(workspaceId)}`;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Inbox v2 — conversation-centric API (Wave 1)
+   ────────────────────────────────────────────────────────────────────────
+   Consumes the new backend contracts:
+     GET  /api/whatsapp/conversations?workspace_id=&cursor=&limit=
+     GET  /api/whatsapp/messages?workspace_id=&conversation_id=&before=&limit=
+     POST /api/whatsapp/conversations/[id]/read
+     POST /api/whatsapp/send            (text, now persists a message row)
+     POST /api/whatsapp/send/media      (media + voice + quote)
+     POST /api/whatsapp/messages/[id]/react
+     GET  /api/whatsapp/media/[id]?workspace_id=   (302 → signed URL)
+   ════════════════════════════════════════════════════════════════════════ */
+
+export type WaChatType = "contact" | "group";
+export type WaMediaKind = "image" | "video" | "document" | "audio";
+
+export interface WaReaction {
+  emoji: string;
+  fromMe?: boolean;
+  actor?: string;
+}
+
+/** A row from the conversations list (inbox source of truth). */
+export interface WaConversation {
+  id: string;
+  contact_id: string | null;
+  source_id: string | null;
+  phone: string | null;
+  name: string | null;
+  chat_type: WaChatType | null;
+  is_group: boolean;
+  unread_count: number;
+  last_message_at: string | null;
+  last_message_preview: string | null;
+  last_direction: "inbound" | "outbound" | null;
+  status: string | null;
+  assignee_id: string | null;
+}
+
+/** A message row in a conversation thread (v2 shape). */
+export interface WaThreadMessage {
+  id: string;
+  direction: "inbound" | "outbound";
+  body: string | null;
+  status: "queued" | "sent" | "delivered" | "read" | "failed";
+  created_at: string;
+  media_type: WaMediaKind | string | null;
+  media_mime: string | null;
+  media_storage_path: string | null;
+  reactions: WaReaction[] | null;
+  reply_to_message_id: string | null;
+  sender_name: string | null;
+  is_private: boolean | null;
+  evolution_message_id: string | null;
+  /** Optimistic-only client fields (not from server). */
+  _optimistic?: boolean;
+}
+
+export interface WaConversationsPage {
+  items: WaConversation[];
+  next_cursor: string | null;
+}
+
+export interface WaMessagesPage {
+  items: WaThreadMessage[];
+  next_cursor: string | null;
+  has_more: boolean;
+}
+
+/** Fetch one page of conversations (newest activity first). */
+export async function fetchConversations(
+  workspaceId: string,
+  opts?: { cursor?: string | null; limit?: number }
+): Promise<Result<WaConversationsPage>> {
+  const q = new URLSearchParams({ workspace_id: workspaceId });
+  if (opts?.cursor) q.set("cursor", opts.cursor);
+  if (opts?.limit) q.set("limit", String(opts.limit));
+  const res = await jsonFetch<{ items?: WaConversation[]; next_cursor?: string | null }>(
+    `/api/whatsapp/conversations?${q.toString()}`
+  );
+  if (!res.ok) return res;
+  return ok({
+    items: Array.isArray(res.data.items) ? res.data.items : [],
+    next_cursor: res.data.next_cursor ?? null,
+  });
+}
+
+/** Fetch one NEWEST-FIRST page of messages for a conversation. */
+export async function fetchThreadMessages(
+  workspaceId: string,
+  conversationId: string,
+  opts?: { before?: string | null; limit?: number }
+): Promise<Result<WaMessagesPage>> {
+  const q = new URLSearchParams({
+    workspace_id: workspaceId,
+    conversation_id: conversationId,
+  });
+  if (opts?.before) q.set("before", opts.before);
+  if (opts?.limit) q.set("limit", String(opts.limit));
+  const res = await jsonFetch<{
+    items?: WaThreadMessage[];
+    next_cursor?: string | null;
+    has_more?: boolean;
+  }>(`/api/whatsapp/messages?${q.toString()}`);
+  if (!res.ok) return res;
+  return ok({
+    items: Array.isArray(res.data.items) ? res.data.items : [],
+    next_cursor: res.data.next_cursor ?? null,
+    has_more: !!res.data.has_more,
+  });
+}
+
+/** Clear unread + send blue ticks for a conversation. */
+export function markConversationRead(
+  workspaceId: string,
+  conversationId: string
+): Promise<Result<{ ok: true }>> {
+  return jsonFetch(
+    `/api/whatsapp/conversations/${encodeURIComponent(conversationId)}/read`,
+    {
+      method: "POST",
+      body: JSON.stringify({ workspace_id: workspaceId }),
+    }
+  );
+}
+
+/** Send a text message into a conversation (persists a row + optional quote). */
+export function sendConversationText(payload: {
+  workspace_id: string;
+  conversation_id?: string;
+  phone?: string;
+  message: string;
+  quoted_message_id?: string;
+}): Promise<Result<{ ok: true; id?: string | null; message_id?: string | null }>> {
+  // The send route resolves by recipient; for a contact thread we pass the
+  // phone as target_id (it accepts a raw phone). Group threads pass the jid.
+  const target_type = payload.phone && payload.phone.includes("@g.us") ? "group" : "contact";
+  return jsonFetch("/api/whatsapp/send", {
+    method: "POST",
+    body: JSON.stringify({
+      workspace_id: payload.workspace_id,
+      target_type,
+      target_id: payload.phone ?? payload.conversation_id ?? "",
+      message: payload.message,
+      ...(payload.quoted_message_id
+        ? { quoted_message_id: payload.quoted_message_id }
+        : {}),
+    }),
+  });
+}
+
+/** Send media (image/video/document) or a voice note (kind: "audio"). */
+export function sendConversationMedia(payload: {
+  workspace_id: string;
+  conversation_id?: string;
+  to?: string;
+  phone?: string;
+  media: { base64: string; mime: string; fileName?: string; kind: WaMediaKind };
+  caption?: string;
+  quoted_message_id?: string;
+}): Promise<
+  Result<{ ok: true; id?: string | null; message_id?: string | null; conversation_id?: string }>
+> {
+  return jsonFetch("/api/whatsapp/send/media", {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+/** Add (or, with an empty emoji, remove) our reaction to a message. */
+export function reactToMessage(
+  workspaceId: string,
+  messageId: string,
+  emoji: string
+): Promise<Result<{ ok: true; reactions: WaReaction[] }>> {
+  return jsonFetch(
+    `/api/whatsapp/messages/${encodeURIComponent(messageId)}/react`,
+    {
+      method: "POST",
+      body: JSON.stringify({ workspace_id: workspaceId, emoji }),
+    }
+  );
+}
+
+/** Build the media src/href for a message (302-redirects to a signed URL). */
+export function mediaUrl(workspaceId: string, messageId: string): string {
+  return `/api/whatsapp/media/${encodeURIComponent(messageId)}?workspace_id=${encodeURIComponent(
+    workspaceId
+  )}`;
+}
+
 // ── history ─────────────────────────────────────────────────────────────
 
 export interface WaHistoryRow {

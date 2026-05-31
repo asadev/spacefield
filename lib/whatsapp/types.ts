@@ -181,6 +181,8 @@ export interface SendRequestBody {
   message: string;
   media_url?: string;
   template_variants?: string[];
+  /** Optional Evolution message id to quote/reply to (inbox v2). */
+  quoted_message_id?: string;
 }
 
 /** Outbound media payload (job + immediate). */

@@ -37,6 +37,18 @@ export const ICONS: Record<string, string> = {
     "M9 3v1H4v2h16V4h-5V3H9zm-3 5l1 13h10l1-13H6zm3 2h2v9H9v-9zm4 0h2v9h-2v-9z",
   inbox:
     "M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm0 2v9h4a3 3 0 006 0h4V5H5zm0 11v3h14v-3h-4a5 5 0 01-10 0H5z",
+  // Inbox v2 — composer + bubble affordances
+  mic: "M12 2a3 3 0 00-3 3v6a3 3 0 006 0V5a3 3 0 00-3-3zm-7 9a7 7 0 0014 0h-2a5 5 0 01-10 0H5zm6 7.93V22h2v-3.07A9 9 0 0011 18.93z",
+  reply:
+    "M10 9V5l-7 7 7 7v-4.1c5 0 8.5 1.6 11 5.1-1-5-4-10-11-11z",
+  download:
+    "M5 20h14v-2H5v2zM12 4v9.17l3.59-3.58L17 11l-5 5-5-5 1.41-1.41L11 13.17V4h1z",
+  file: "M6 2h8l6 6v14H6V2zm7 1.5V9h5.5L13 3.5z",
+  image:
+    "M4 4h16v16H4V4zm2 2v8.59l3-3 2.5 2.5L16 10l3 3V6H6zm2.5 1.5a1.5 1.5 0 100 3 1.5 1.5 0 000-3z",
+  back: "M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z",
+  smile:
+    "M12 2a10 10 0 100 20 10 10 0 000-20zm0 2a8 8 0 110 16 8 8 0 010-16zm-3 6a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm6 0a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm-7.5 5.5a5.5 5.5 0 009 0L16 17a4.5 4.5 0 01-8 0l-1.5-1.5z",
 };
 
 export function MiniIcon({ name, size = 14 }: { name: string; size?: number }) {
