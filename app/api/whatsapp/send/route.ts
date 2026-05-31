@@ -3,6 +3,10 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getEvolutionClient } from "@/lib/whatsapp/client";
 import {
+  recordMessageOnConversation,
+  resolveConversation,
+} from "@/lib/whatsapp/conversations";
+import {
   canSendToContact,
   variateTemplate,
 } from "@/lib/whatsapp/throttle";
@@ -63,6 +67,7 @@ export async function POST(req: NextRequest): Promise<Response> {
     message,
     media_url: mediaUrl,
     template_variants: templateVariants,
+    quoted_message_id: quotedId,
   } = body.body;
 
   if (!workspaceId) return jsonError("workspace_id required", 400);
@@ -157,34 +162,61 @@ export async function POST(req: NextRequest): Promise<Response> {
             groupJid,
             mediaUrl,
             final,
+            "image",
+            quotedId ? { quotedId } : undefined,
           )
         : await client.sendText(
             inst.evolution_instance_name,
             groupJid,
             final,
+            quotedId ? { quotedId } : undefined,
           );
+      const evolutionMessageId = sent.messageId || null;
+      const nowISO = new Date().toISOString();
       await admin.from("whatsapp_send_log").insert({
         workspace_id: workspaceId,
         instance_id: inst.id,
         to_number: groupJid,
         body: final,
         status: "sent",
-        evolution_message_id: sent.messageId || null,
+        evolution_message_id: evolutionMessageId,
+      });
+      // Resolve the group conversation so the inbox thread + list update.
+      const conv = await resolveConversation(admin, {
+        workspaceId,
+        instanceId: inst.id,
+        sourceId: groupJid.replace(/@g\.us$/, ""),
+        sourceJid: groupJid,
+        chatType: "group",
       });
       await admin.from("whatsapp_messages").insert({
         workspace_id: workspaceId,
         instance_id: inst.id,
+        conversation_id: conv?.id ?? null,
         direction: "outbound",
         to_number: groupJid,
         body: final,
         media_url: mediaUrl ?? null,
         status: "sent",
-        evolution_message_id: sent.messageId || null,
-        sent_at: new Date().toISOString(),
+        evolution_message_id: evolutionMessageId,
+        reply_to_message_id: quotedId ?? null,
+        sent_at: nowISO,
       });
+      if (conv) {
+        try {
+          await recordMessageOnConversation(admin, {
+            conversationId: conv.id,
+            direction: "outbound",
+            body: final,
+            createdAt: nowISO,
+          });
+        } catch {
+          // best-effort — send already succeeded
+        }
+      }
       return NextResponse.json({
         ok: true,
-        evolution_message_id: sent.messageId,
+        evolution_message_id: evolutionMessageId,
       });
     } catch (e) {
       const errMsg = e instanceof Error ? e.message : "send_failed";
@@ -246,11 +278,14 @@ export async function POST(req: NextRequest): Promise<Response> {
           toNumber,
           mediaUrl,
           final,
+          "image",
+          quotedId ? { quotedId } : undefined,
         )
       : await client.sendText(
           inst.evolution_instance_name,
           toNumber,
           final,
+          quotedId ? { quotedId } : undefined,
         );
 
     const evolutionMessageId = sent.messageId || null;
@@ -265,23 +300,52 @@ export async function POST(req: NextRequest): Promise<Response> {
       status: "sent",
       evolution_message_id: evolutionMessageId,
     });
+
+    // Resolve the conversation so the inbox thread + list update (v2 inbox
+    // reads messages by conversation_id). source_id is the digits-only number;
+    // source_jid is the full WhatsApp JID.
+    const conv = await resolveConversation(admin, {
+      workspaceId,
+      instanceId: inst.id,
+      sourceId: toNumber,
+      sourceJid: `${toNumber}@s.whatsapp.net`,
+      chatType: "individual",
+      contactId,
+    });
+
     await admin.from("whatsapp_messages").insert({
       workspace_id: workspaceId,
       instance_id: inst.id,
       contact_id: contactId,
+      conversation_id: conv?.id ?? null,
       direction: "outbound",
       to_number: toNumber,
       body: final,
       media_url: mediaUrl ?? null,
       status: "sent",
       evolution_message_id: evolutionMessageId,
+      reply_to_message_id: quotedId ?? null,
       sent_at: sentAt,
     });
+
+    if (conv) {
+      try {
+        await recordMessageOnConversation(admin, {
+          conversationId: conv.id,
+          direction: "outbound",
+          body: final,
+          createdAt: sentAt,
+        });
+      } catch {
+        // best-effort — send already succeeded
+      }
+    }
 
     return NextResponse.json({
       ok: true,
       evolution_message_id: evolutionMessageId,
       contact_id: contactId,
+      conversation_id: conv?.id ?? null,
     });
   } catch (e) {
     const errMsg = e instanceof Error ? e.message : "send_failed";

@@ -270,15 +270,17 @@ export class EvolutionClient {
     return { messageId: id };
   }
 
-  /** Send media (image/video/document) with optional caption. Pass
-   *  `opts.quotedId` to reply to a message. */
+  /** Send media (image/video/document) with optional caption. `media` may be
+   *  a URL or a base64 string. Pass `opts.quotedId` to reply to a message,
+   *  `opts.fileName` (shown to the recipient for documents) and `opts.mimetype`
+   *  (so Evolution doesn't have to sniff a base64 payload). */
   async sendMedia(
     instanceName: string,
     to: string,
     mediaUrl: string,
     caption?: string,
     mediaType: "image" | "video" | "audio" | "document" = "image",
-    opts?: { quotedId?: string },
+    opts?: { quotedId?: string; fileName?: string; mimetype?: string },
   ): Promise<{ messageId: string }> {
     const res = await this.request<EvolutionSendResult>(
       `/message/sendMedia/${encodeURIComponent(instanceName)}`,
@@ -289,6 +291,8 @@ export class EvolutionClient {
           mediatype: mediaType,
           media: mediaUrl,
           caption: caption ?? "",
+          ...(opts?.fileName ? { fileName: opts.fileName } : {}),
+          ...(opts?.mimetype ? { mimetype: opts.mimetype } : {}),
           ...(opts?.quotedId ? { quoted: { key: { id: opts.quotedId } } } : {}),
         },
       },
