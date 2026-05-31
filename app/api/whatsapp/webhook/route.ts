@@ -12,11 +12,17 @@ import { signInstanceWebhook } from "@/lib/whatsapp/instance-manager";
 import { parseEvolutionEvent } from "@/lib/whatsapp/webhook-parser";
 import { detectConsentKeyword, recordOptOut, recordOptIn } from "@/lib/whatsapp/consent";
 import { runInboundAutomation } from "@/lib/whatsapp/automation";
+import {
+  emitConversationCreated,
+  emitConversationReopened,
+} from "@/lib/whatsapp/reporting";
+import { notifyConversationNewMessage } from "@/lib/whatsapp/wa-notifications";
 import type { PersonalizeContact } from "@/lib/whatsapp/personalize";
 import type {
   ParsedEvolutionEvent,
   ParsedWhatsAppMessage,
   WhatsAppInstanceRow,
+  WhatsAppMessageDirection,
 } from "@/lib/whatsapp/types";
 
 export const runtime = "nodejs";
@@ -236,6 +242,23 @@ async function dispatch(
         scheduleMediaRehost(inst, msg, messageRowId);
       }
 
+      // ── Reporting events (EPIC-15) + new-message notifications (EPIC-16) ──
+      // Emit + notify post-response so the 200 ack is never delayed. All
+      // best-effort. conversation_created fires once on a brand-new thread;
+      // conversation_reopened when an inbound lands on a resolved/snoozed convo
+      // (status 1 or 3 BEFORE this message reopened it via the RPC).
+      if (conv) {
+        const wasClosed = conv.status === 1 || conv.status === 3;
+        scheduleReportingAndNotify(inst, conv.id, conv.isNew, wasClosed, {
+          direction,
+          isGroup,
+          contactId,
+          title: isGroup ? msg.pushName : null,
+          fallbackTitle: msg.remoteNumber,
+          preview: msg.body || (msg.mediaType ? `[${msg.mediaType}]` : ""),
+        });
+      }
+
       // ── Consent + automation (EPIC-12 + EPIC-09) ──
       // Only for inbound INDIVIDUAL messages (groups + our own sends excluded).
       // STOP/START handling runs FIRST (the guardrail), then the automation
@@ -404,6 +427,70 @@ function scheduleMediaRehost(
     after(run());
   } catch {
     // `after` unavailable in this context — fall back to fire-and-forget.
+    void run();
+  }
+}
+
+/**
+ * Post-response reporting events (EPIC-15) + new-message notifications
+ * (EPIC-16). Runs after the 200 ack via `after()`. Best-effort throughout.
+ *   - conversation_created  : once, on a brand-new conversation row.
+ *   - conversation_reopened : an inbound landing on a resolved/snoozed convo.
+ *   - new-message bell      : notify the assignee + watchers on inbound.
+ */
+function scheduleReportingAndNotify(
+  inst: WhatsAppInstanceRow,
+  conversationId: string,
+  isNew: boolean,
+  wasClosed: boolean,
+  msg: {
+    direction: WhatsAppMessageDirection;
+    isGroup: boolean;
+    contactId: string | null;
+    title: string | null;
+    fallbackTitle: string;
+    preview: string;
+  },
+): void {
+  const run = async (): Promise<void> => {
+    const admin = createAdminClient();
+    try {
+      if (isNew) {
+        await emitConversationCreated(admin, {
+          workspaceId: inst.workspace_id,
+          conversationId,
+          contactId: msg.contactId,
+          instanceId: inst.id,
+        });
+      }
+      if (msg.direction === "inbound") {
+        if (wasClosed && !isNew) {
+          await emitConversationReopened(admin, {
+            workspaceId: inst.workspace_id,
+            conversationId,
+            contactId: msg.contactId,
+            instanceId: inst.id,
+          });
+        }
+        // Notify assignee + watchers (de-duped on unread per conversation).
+        await notifyConversationNewMessage(admin, {
+          workspaceId: inst.workspace_id,
+          conversationId,
+          title: msg.title || msg.fallbackTitle,
+          preview: msg.preview,
+        });
+      }
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.warn(
+        "[whatsapp.webhook] reporting/notify failed:",
+        e instanceof Error ? e.message : String(e),
+      );
+    }
+  };
+  try {
+    after(run());
+  } catch {
     void run();
   }
 }

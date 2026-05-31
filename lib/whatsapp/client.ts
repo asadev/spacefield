@@ -465,6 +465,217 @@ export class EvolutionClient {
     return this.sendText(instanceName, groupId, body);
   }
 
+  // ── Group management (EPIC-10) ──────────────────────────────────────────
+  // Evolution exposes these under /group/*?instance=...&groupJid=... . Action
+  // bodies are { action, participants } for membership and dedicated keys for
+  // subject/description/setting. We surface only what the UI drives. Each is
+  // best-effort-typed; callers handle the "invite-only" / "not-admin" failures
+  // by inspecting the thrown error text.
+
+  /** Add participants (E164 digits) to a group. */
+  async addGroupParticipants(
+    instanceName: string,
+    groupJid: string,
+    participants: string[],
+  ): Promise<void> {
+    await this.request<unknown>(
+      `/group/updateParticipant/${encodeURIComponent(instanceName)}?groupJid=${encodeURIComponent(groupJid)}`,
+      { method: "POST", body: { action: "add", participants } },
+    );
+  }
+
+  /** Remove participants from a group. */
+  async removeGroupParticipants(
+    instanceName: string,
+    groupJid: string,
+    participants: string[],
+  ): Promise<void> {
+    await this.request<unknown>(
+      `/group/updateParticipant/${encodeURIComponent(instanceName)}?groupJid=${encodeURIComponent(groupJid)}`,
+      { method: "POST", body: { action: "remove", participants } },
+    );
+  }
+
+  /** Promote participants to admin. */
+  async promoteGroupParticipants(
+    instanceName: string,
+    groupJid: string,
+    participants: string[],
+  ): Promise<void> {
+    await this.request<unknown>(
+      `/group/updateParticipant/${encodeURIComponent(instanceName)}?groupJid=${encodeURIComponent(groupJid)}`,
+      { method: "POST", body: { action: "promote", participants } },
+    );
+  }
+
+  /** Demote admins back to members. */
+  async demoteGroupParticipants(
+    instanceName: string,
+    groupJid: string,
+    participants: string[],
+  ): Promise<void> {
+    await this.request<unknown>(
+      `/group/updateParticipant/${encodeURIComponent(instanceName)}?groupJid=${encodeURIComponent(groupJid)}`,
+      { method: "POST", body: { action: "demote", participants } },
+    );
+  }
+
+  /** Update the group subject (name). */
+  async updateGroupSubject(
+    instanceName: string,
+    groupJid: string,
+    subject: string,
+  ): Promise<void> {
+    await this.request<unknown>(
+      `/group/updateGroupSubject/${encodeURIComponent(instanceName)}?groupJid=${encodeURIComponent(groupJid)}`,
+      { method: "POST", body: { subject } },
+    );
+  }
+
+  /** Update the group description. */
+  async updateGroupDescription(
+    instanceName: string,
+    groupJid: string,
+    description: string,
+  ): Promise<void> {
+    await this.request<unknown>(
+      `/group/updateGroupDescription/${encodeURIComponent(instanceName)}?groupJid=${encodeURIComponent(groupJid)}`,
+      { method: "POST", body: { description } },
+    );
+  }
+
+  /** Update the group picture from a URL/base64 image. */
+  async updateGroupPicture(
+    instanceName: string,
+    groupJid: string,
+    image: string,
+  ): Promise<void> {
+    await this.request<unknown>(
+      `/group/updateGroupPicture/${encodeURIComponent(instanceName)}?groupJid=${encodeURIComponent(groupJid)}`,
+      { method: "POST", body: { image } },
+    );
+  }
+
+  /**
+   * Toggle group settings. setting:
+   *   'announcement'    — only admins can send (announce-only)
+   *   'not_announcement'— everyone can send
+   *   'locked'          — only admins can edit group info
+   *   'unlocked'        — everyone can edit group info
+   */
+  async updateGroupSetting(
+    instanceName: string,
+    groupJid: string,
+    setting: "announcement" | "not_announcement" | "locked" | "unlocked",
+  ): Promise<void> {
+    await this.request<unknown>(
+      `/group/updateSetting/${encodeURIComponent(instanceName)}?groupJid=${encodeURIComponent(groupJid)}`,
+      { method: "POST", body: { action: setting } },
+    );
+  }
+
+  /** Leave a group. */
+  async leaveGroup(instanceName: string, groupJid: string): Promise<void> {
+    await this.request<unknown>(
+      `/group/leaveGroup/${encodeURIComponent(instanceName)}?groupJid=${encodeURIComponent(groupJid)}`,
+      { method: "DELETE" },
+    );
+  }
+
+  /** Fetch the group's current invite code (last path segment of the link). */
+  async fetchGroupInviteCode(
+    instanceName: string,
+    groupJid: string,
+  ): Promise<string | null> {
+    try {
+      const res = await this.request<{ inviteUrl?: string; inviteCode?: string }>(
+        `/group/inviteCode/${encodeURIComponent(instanceName)}?groupJid=${encodeURIComponent(groupJid)}`,
+        { method: "GET" },
+      );
+      if (res.inviteCode) return res.inviteCode;
+      if (res.inviteUrl) return res.inviteUrl.split("/").pop() ?? null;
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** Revoke + reissue the group invite code; returns the new code. */
+  async revokeGroupInviteCode(
+    instanceName: string,
+    groupJid: string,
+  ): Promise<string | null> {
+    try {
+      const res = await this.request<{ inviteUrl?: string; inviteCode?: string }>(
+        `/group/revokeInviteCode/${encodeURIComponent(instanceName)}?groupJid=${encodeURIComponent(groupJid)}`,
+        { method: "POST", body: {} },
+      );
+      if (res.inviteCode) return res.inviteCode;
+      if (res.inviteUrl) return res.inviteUrl.split("/").pop() ?? null;
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Full group metadata incl. participants + admin flags. Evolution's
+   * findGroupInfos returns participants when getParticipants is requested;
+   * we normalize into { jid, isAdmin }. Returns null on any error.
+   */
+  async fetchGroupParticipants(
+    instanceName: string,
+    groupJid: string,
+  ): Promise<{
+    subject: string | null;
+    description: string | null;
+    pictureUrl: string | null;
+    owner: string | null;
+    isAnnounce: boolean | null;
+    isLocked: boolean | null;
+    participants: Array<{ jid: string; isAdmin: boolean }>;
+  } | null> {
+    try {
+      const res = await this.request<unknown>(
+        `/group/findGroupInfos/${encodeURIComponent(instanceName)}?groupJid=${encodeURIComponent(groupJid)}&getParticipants=true`,
+        { method: "GET" },
+      );
+      if (!res || typeof res !== "object") return null;
+      const r = res as Record<string, unknown>;
+      const rawParts = Array.isArray(r.participants) ? r.participants : [];
+      const participants = rawParts
+        .map((p): { jid: string; isAdmin: boolean } | null => {
+          if (!p || typeof p !== "object") return null;
+          const pr = p as Record<string, unknown>;
+          const jid =
+            typeof pr.id === "string"
+              ? pr.id
+              : typeof pr.jid === "string"
+                ? pr.jid
+                : null;
+          if (!jid) return null;
+          const admin =
+            pr.admin === "admin" ||
+            pr.admin === "superadmin" ||
+            pr.isAdmin === true ||
+            pr.isSuperAdmin === true;
+          return { jid, isAdmin: admin };
+        })
+        .filter((x): x is { jid: string; isAdmin: boolean } => x !== null);
+      return {
+        subject: typeof r.subject === "string" ? r.subject.trim() : null,
+        description: typeof r.desc === "string" ? r.desc : null,
+        pictureUrl: typeof r.pictureUrl === "string" ? r.pictureUrl : null,
+        owner: typeof r.owner === "string" ? r.owner : null,
+        isAnnounce: typeof r.announce === "boolean" ? r.announce : null,
+        isLocked: typeof r.restrict === "boolean" ? r.restrict : null,
+        participants,
+      };
+    } catch {
+      return null;
+    }
+  }
+
   /**
    * Configure the per-instance webhook. `events` is the subset of
    * Evolution event names the gateway should fan out (e.g.

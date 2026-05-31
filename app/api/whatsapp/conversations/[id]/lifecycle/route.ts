@@ -6,6 +6,7 @@ import {
   isValidPriority,
   isValidStatus,
 } from "@/lib/whatsapp/inbox";
+import { emitConversationResolved } from "@/lib/whatsapp/reporting";
 import {
   jsonError,
   readJson,
@@ -106,6 +107,15 @@ export async function PATCH(
     if (rpcErr) return jsonError(rpcErr.message, 500);
     patched.status = body.status;
     patched.snoozed_until = snoozedUntil;
+
+    // EPIC-15: emit conversation_resolved when an operator marks it resolved.
+    if (body.status === 1) {
+      await emitConversationResolved(admin, {
+        workspaceId,
+        conversationId,
+        userId: auth.user.id,
+      });
+    }
   }
 
   // ── priority ──

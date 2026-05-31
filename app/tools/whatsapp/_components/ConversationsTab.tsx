@@ -30,6 +30,7 @@ import type { RealtimeChannel } from "@supabase/supabase-js";
 import { getSupabase, isSupabaseConfigured } from "@/lib/supabase/client";
 import {
   addConversationLabel,
+  aiAssist,
   fetchCanned,
   fetchConversations,
   fetchLabels,
@@ -1211,6 +1212,10 @@ export default function ConversationsTab({ workspaceId, compact }: Props) {
                       conversationId={selected.id}
                       reloadKey={sidebarReloadKey}
                       onClose={() => setSidebarOpen(false)}
+                      onInsertDraft={(t) => {
+                        setNoteMode(false);
+                        setDraft(t);
+                      }}
                     />
                   </div>
                 ) : null}
@@ -1228,6 +1233,11 @@ export default function ConversationsTab({ workspaceId, compact }: Props) {
             conversationId={selected.id}
             reloadKey={sidebarReloadKey}
             onClose={() => setSidebarOpen(false)}
+            onInsertDraft={(t) => {
+              setNoteMode(false);
+              setDraft(t);
+              setSidebarOpen(false);
+            }}
           />
         </div>
       ) : null}

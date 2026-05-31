@@ -52,15 +52,36 @@ const AutomationPanel = dynamic(() => import("./_components/AutomationPanel"), {
   ssr: false,
   loading: PanelLoading,
 });
+// Wave-4 panels — also lazy so the analytics dashboards / macros editor stay
+// out of the initial chunk (Vercel 8GB build-OOM guard).
+const AnalyticsPanel = dynamic(() => import("./_components/AnalyticsPanel"), {
+  ssr: false,
+  loading: PanelLoading,
+});
+const MacrosPanel = dynamic(() => import("./_components/MacrosPanel"), {
+  ssr: false,
+  loading: PanelLoading,
+});
+const SearchPanel = dynamic(() => import("./_components/SearchPanel"), {
+  ssr: false,
+  loading: PanelLoading,
+});
+// Bell is light but client-only; lazy keeps it off SSR.
+const NotificationBell = dynamic(() => import("./_components/NotificationBell"), {
+  ssr: false,
+});
 
 const MOBILE_BREAKPOINT = 720;
 
 type WaTabKey =
   | "connection"
   | "conversations"
+  | "search"
   | "groups"
   | "broadcasts"
   | "automation"
+  | "macros"
+  | "analytics"
   | "lists"
   | "history"
   | "jobs";
@@ -74,9 +95,12 @@ interface WaTabMeta {
 const TABS: WaTabMeta[] = [
   { key: "connection", label: "Connection", short: "Connect" },
   { key: "conversations", label: "Conversations", short: "Chats" },
+  { key: "search", label: "Search", short: "Search" },
   { key: "broadcasts", label: "Broadcasts", short: "Blast" },
   { key: "automation", label: "Automation", short: "Auto" },
+  { key: "macros", label: "Macros", short: "Macros" },
   { key: "groups", label: "Groups", short: "Groups" },
+  { key: "analytics", label: "Analytics", short: "Stats" },
   { key: "lists", label: "Lists", short: "Lists" },
   { key: "history", label: "Send history", short: "History" },
   { key: "jobs", label: "Jobs", short: "Jobs" },
@@ -148,11 +172,14 @@ export default function WhatsAppApp({ width, initialParams }: NativeAppProps) {
             );
           })}
         </nav>
-        {!compact && workspaceName ? (
-          <div className="shrink-0 truncate font-mono text-[0.6rem] uppercase tracking-[0.18em] text-faint">
-            {workspaceName}
-          </div>
-        ) : null}
+        <div className="flex shrink-0 items-center gap-2">
+          <NotificationBell />
+          {!compact && workspaceName ? (
+            <div className="truncate font-mono text-[0.6rem] uppercase tracking-[0.18em] text-faint">
+              {workspaceName}
+            </div>
+          ) : null}
+        </div>
       </header>
 
       <div className="min-h-0 flex-1">
@@ -162,14 +189,23 @@ export default function WhatsAppApp({ width, initialParams }: NativeAppProps) {
         {tab === "conversations" && (
           <ConversationsTab workspaceId={workspaceId} compact={compact} />
         )}
+        {tab === "search" && (
+          <SearchPanel workspaceId={workspaceId} compact={compact} />
+        )}
         {tab === "broadcasts" && (
           <BroadcastsPanel workspaceId={workspaceId} compact={compact} />
         )}
         {tab === "automation" && (
           <AutomationPanel workspaceId={workspaceId} compact={compact} />
         )}
+        {tab === "macros" && (
+          <MacrosPanel workspaceId={workspaceId} compact={compact} />
+        )}
         {tab === "groups" && (
           <GroupsTab workspaceId={workspaceId} compact={compact} />
+        )}
+        {tab === "analytics" && (
+          <AnalyticsPanel workspaceId={workspaceId} compact={compact} />
         )}
         {tab === "lists" && (
           <ListsTab workspaceId={workspaceId} compact={compact} />

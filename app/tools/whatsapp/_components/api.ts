@@ -924,6 +924,8 @@ export interface WaThreadMessage {
   sender_name: string | null;
   is_private: boolean | null;
   evolution_message_id: string | null;
+  /** Wave 4: voice-note transcription (EPIC-11), null until transcribed. */
+  transcription?: string | null;
   /** Optimistic-only client fields (not from server). */
   _optimistic?: boolean;
 }
@@ -1360,4 +1362,336 @@ export function saveBusinessHours(
     method: "PUT",
     body: JSON.stringify({ workspace_id: workspaceId, ...config }),
   });
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   Wave 4 — groups manage · AI assist · search + saved views · macros ·
+   analytics · notifications
+   ════════════════════════════════════════════════════════════════════════ */
+
+// ── contacts picker (EPIC-10 fix: route now exists) ──
+export interface WaPickContact {
+  id: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  email: string | null;
+  name: string | null;
+  label: string;
+}
+export function fetchPickContacts(
+  workspaceId: string,
+  query?: string,
+  hasPhone = true,
+): Promise<Result<WaPickContact[]>> {
+  const q = new URLSearchParams({ workspace_id: workspaceId });
+  if (query) q.set("q", query);
+  if (hasPhone) q.set("has_phone", "1");
+  return jsonFetchItems<WaPickContact>(`/api/whatsapp/contacts?${q.toString()}`);
+}
+
+// ── group management (EPIC-10) ──
+export interface WaGroupParticipant {
+  jid: string;
+  isAdmin: boolean;
+}
+export interface WaGroupDetail {
+  id: string;
+  name: string | null;
+  evolution_group_id: string;
+  member_count: number;
+  description: string | null;
+  avatar_url: string | null;
+  owner_jid: string | null;
+  is_announce: boolean;
+  is_locked: boolean;
+  invite_code: string | null;
+  participants: WaGroupParticipant[];
+  last_synced_at: string | null;
+}
+export function fetchGroupDetail(
+  workspaceId: string,
+  groupId: string,
+): Promise<Result<WaGroupDetail>> {
+  return jsonFetchItem<WaGroupDetail>(
+    `/api/whatsapp/groups/${encodeURIComponent(groupId)}?workspace_id=${encodeURIComponent(workspaceId)}`,
+  );
+}
+export type WaGroupAction =
+  | "add_participants"
+  | "remove_participants"
+  | "promote"
+  | "demote"
+  | "update_subject"
+  | "update_description"
+  | "update_picture"
+  | "set_announce"
+  | "set_locked"
+  | "leave"
+  | "invite_code"
+  | "revoke_invite";
+export function groupAction(
+  workspaceId: string,
+  groupId: string,
+  action: WaGroupAction,
+  payload?: {
+    participants?: string[];
+    subject?: string;
+    description?: string;
+    image?: string;
+    value?: boolean;
+  },
+): Promise<
+  Result<{ ok: true; invite_code?: string | null; invite_url?: string | null; left?: boolean }>
+> {
+  return jsonFetch(`/api/whatsapp/groups/${encodeURIComponent(groupId)}`, {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId, action, ...(payload ?? {}) }),
+  });
+}
+
+// ── AI assist (EPIC-11) ──
+export type WaAITask = "draft" | "summarize" | "translate" | "transcribe";
+export type WaTranslateTarget = "english" | "urdu" | "roman_urdu";
+export interface WaAIResult {
+  ai_configured: boolean;
+  result?: string | null;
+  cached?: boolean;
+  error?: string;
+}
+export function aiAssist(
+  workspaceId: string,
+  body: {
+    task: WaAITask;
+    conversation_id?: string;
+    message_id?: string;
+    text?: string;
+    target?: WaTranslateTarget;
+    instruction?: string;
+  },
+): Promise<Result<WaAIResult>> {
+  return jsonFetch<WaAIResult>("/api/whatsapp/ai", {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId, ...body }),
+  });
+}
+
+// ── search + saved views (EPIC-13) ──
+export interface WaSearchGroup {
+  conversation_id: string;
+  title: string | null;
+  phone: string | null;
+  chat_type: "individual" | "group";
+  last_message_at: string | null;
+  match_count: number;
+  messages: Array<{
+    id: string;
+    direction: "inbound" | "outbound";
+    body: string | null;
+    created_at: string;
+  }>;
+}
+export async function searchMessages(
+  workspaceId: string,
+  q: string,
+): Promise<Result<WaSearchGroup[]>> {
+  const res = await jsonFetch<{ groups?: WaSearchGroup[] }>(
+    `/api/whatsapp/search?workspace_id=${encodeURIComponent(workspaceId)}&q=${encodeURIComponent(q)}`,
+  );
+  if (!res.ok) return res;
+  return ok(Array.isArray(res.data.groups) ? res.data.groups : []);
+}
+
+export interface WaSavedView {
+  id: string;
+  name: string;
+  query: Record<string, unknown>;
+  position: number;
+  created_at: string;
+  updated_at: string;
+}
+export function fetchSavedViews(workspaceId: string): Promise<Result<WaSavedView[]>> {
+  return jsonFetchItems<WaSavedView>(
+    `/api/whatsapp/saved-views?workspace_id=${encodeURIComponent(workspaceId)}`,
+  );
+}
+export function createSavedView(
+  workspaceId: string,
+  body: { name: string; query: Record<string, unknown> },
+): Promise<Result<WaSavedView>> {
+  return jsonFetchItem<WaSavedView>("/api/whatsapp/saved-views", {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId, ...body }),
+  });
+}
+export function deleteSavedView(
+  workspaceId: string,
+  id: string,
+): Promise<Result<{ ok: true }>> {
+  return jsonFetch(
+    `/api/whatsapp/saved-views?workspace_id=${encodeURIComponent(workspaceId)}&id=${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+}
+
+// ── macros (EPIC-14) ──
+export interface WaMacro {
+  id: string;
+  name: string;
+  description: string | null;
+  actions: Array<{ type: string; params?: Record<string, unknown> }>;
+  visibility: "global" | "personal";
+  created_by: string | null;
+  created_at: string;
+  updated_at: string;
+}
+export function fetchMacros(workspaceId: string): Promise<Result<WaMacro[]>> {
+  return jsonFetchItems<WaMacro>(
+    `/api/whatsapp/macros?workspace_id=${encodeURIComponent(workspaceId)}`,
+  );
+}
+export function createMacro(
+  workspaceId: string,
+  body: {
+    name: string;
+    description?: string;
+    actions: Array<{ type: string; params?: Record<string, unknown> }>;
+    visibility?: "global" | "personal";
+  },
+): Promise<Result<WaMacro>> {
+  return jsonFetchItem<WaMacro>("/api/whatsapp/macros", {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId, ...body }),
+  });
+}
+export function updateMacro(
+  workspaceId: string,
+  id: string,
+  body: Partial<{
+    name: string;
+    description: string;
+    actions: Array<{ type: string; params?: Record<string, unknown> }>;
+    visibility: "global" | "personal";
+  }>,
+): Promise<Result<WaMacro>> {
+  return jsonFetchItem<WaMacro>("/api/whatsapp/macros", {
+    method: "PATCH",
+    body: JSON.stringify({ workspace_id: workspaceId, id, ...body }),
+  });
+}
+export function deleteMacro(
+  workspaceId: string,
+  id: string,
+): Promise<Result<{ ok: true }>> {
+  return jsonFetch(
+    `/api/whatsapp/macros?workspace_id=${encodeURIComponent(workspaceId)}&id=${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+}
+export function runMacro(
+  workspaceId: string,
+  conversationId: string,
+  macroId: string,
+): Promise<Result<{ ok: true; results: Array<{ type: string; ok: boolean; skipped?: string; error?: string }> }>> {
+  return jsonFetch(
+    `/api/whatsapp/conversations/${encodeURIComponent(conversationId)}/macros`,
+    {
+      method: "POST",
+      body: JSON.stringify({ workspace_id: workspaceId, macro_id: macroId }),
+    },
+  );
+}
+
+// ── analytics (EPIC-15) ──
+export interface WaAnalyticsOverview {
+  new_conversations?: number;
+  resolved_conversations?: number;
+  reopened_conversations?: number;
+  first_response_count?: number;
+  avg_first_response_seconds?: number | null;
+  median_first_response_seconds?: number | null;
+  avg_resolution_seconds?: number | null;
+  reply_count?: number;
+  avg_reply_seconds?: number | null;
+  busiest_hours?: Record<string, number>;
+}
+export interface WaAnalytics {
+  range: { from: string; to: string; tz: string };
+  live: { open: number; unassigned: number; created_today: number };
+  overview: WaAnalyticsOverview;
+  volume: Array<{
+    day: string;
+    new_convos: number;
+    resolved: number;
+    first_responses: number;
+  }>;
+}
+export function fetchAnalytics(
+  workspaceId: string,
+  opts?: { from?: string; to?: string },
+): Promise<Result<WaAnalytics>> {
+  const q = new URLSearchParams({ workspace_id: workspaceId });
+  if (opts?.from) q.set("from", opts.from);
+  if (opts?.to) q.set("to", opts.to);
+  return jsonFetch<WaAnalytics>(`/api/whatsapp/analytics?${q.toString()}`);
+}
+export function analyticsCsvUrl(
+  workspaceId: string,
+  opts?: { from?: string; to?: string },
+): string {
+  const q = new URLSearchParams({ workspace_id: workspaceId, format: "csv" });
+  if (opts?.from) q.set("from", opts.from);
+  if (opts?.to) q.set("to", opts.to);
+  return `/api/whatsapp/analytics?${q.toString()}`;
+}
+
+// ── notifications bell (EPIC-16) ──
+export interface WaNotification {
+  id: string;
+  workspace_id: string | null;
+  kind: string;
+  source_entity_type: string | null;
+  source_entity_id: string | null;
+  title: string;
+  body: string | null;
+  href: string | null;
+  read_at: string | null;
+  created_at: string;
+}
+export async function fetchNotifications(
+  unreadOnly = false,
+): Promise<Result<{ items: WaNotification[]; unread_count: number }>> {
+  const q = new URLSearchParams();
+  if (unreadOnly) q.set("unread", "1");
+  return jsonFetch<{ items: WaNotification[]; unread_count: number }>(
+    `/api/whatsapp/notifications?${q.toString()}`,
+  );
+}
+export function markNotificationRead(id: string): Promise<Result<{ ok: true }>> {
+  return jsonFetch("/api/whatsapp/notifications", {
+    method: "POST",
+    body: JSON.stringify({ action: "mark_read", id }),
+  });
+}
+export function markAllNotificationsRead(): Promise<Result<{ ok: true }>> {
+  return jsonFetch("/api/whatsapp/notifications", {
+    method: "POST",
+    body: JSON.stringify({ action: "mark_all_read" }),
+  });
+}
+
+// ── wa.me / QR link builder (EPIC-14, pure client) ──
+export function buildWaMeLink(
+  phoneDigits: string,
+  text?: string,
+  ref?: string,
+): string {
+  const num = phoneDigits.replace(/\D/g, "");
+  const msg = (text ?? "").trim();
+  const withRef =
+    ref && ref.trim()
+      ? `${msg}${msg ? "\n\n" : ""}[ref:${ref.trim()}]`
+      : msg;
+  const qp = withRef ? `?text=${encodeURIComponent(withRef)}` : "";
+  return `https://wa.me/${num}${qp}`;
 }

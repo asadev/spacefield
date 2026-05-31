@@ -10,6 +10,7 @@ import {
   canSendToContact,
   variateTemplate,
 } from "@/lib/whatsapp/throttle";
+import { emitOutboundResponseEvents } from "@/lib/whatsapp/reporting";
 import {
   jsonError,
   readJson,
@@ -339,6 +340,16 @@ export async function POST(req: NextRequest): Promise<Response> {
       } catch {
         // best-effort — send already succeeded
       }
+      // EPIC-15: emit first_response / reply_time reporting events for the
+      // operator's reply. Best-effort; never blocks the response.
+      await emitOutboundResponseEvents(admin, {
+        workspaceId,
+        conversationId: conv.id,
+        contactId,
+        instanceId: inst.id,
+        userId: auth.user.id,
+        sentAt,
+      });
     }
 
     return NextResponse.json({
