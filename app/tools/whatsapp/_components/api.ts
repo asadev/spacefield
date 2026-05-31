@@ -590,8 +590,323 @@ export interface WaConversation {
   last_message_at: string | null;
   last_message_preview: string | null;
   last_direction: "inbound" | "outbound" | null;
-  status: string | null;
+  /** 0 open · 1 resolved · 2 pending · 3 snoozed (server sends a number; older
+   *  callers tolerated a string). */
+  status: number | string | null;
   assignee_id: string | null;
+  /** Wave 2 enrichments (optional — older list responses omit them). */
+  priority?: number | null;
+  assignee_name?: string | null;
+  label_ids?: string[];
+}
+
+// ── Wave 2: lifecycle / labels / notes / canned / custom fields ──────────
+
+export type WaStatusName = "open" | "resolved" | "pending" | "snoozed";
+export const WA_STATUS_NUM: Record<WaStatusName, number> = {
+  open: 0,
+  resolved: 1,
+  pending: 2,
+  snoozed: 3,
+};
+export const WA_STATUS_NAME: Record<number, WaStatusName> = {
+  0: "open",
+  1: "resolved",
+  2: "pending",
+  3: "snoozed",
+};
+export const WA_PRIORITY_LABEL: Record<number, string> = {
+  0: "None",
+  1: "Low",
+  2: "Medium",
+  3: "High",
+  4: "Urgent",
+};
+
+export interface WaLabel {
+  id: string;
+  workspace_id: string;
+  title: string;
+  color: string;
+  show_on_sidebar: boolean;
+  created_at: string;
+  conversation_count?: number;
+}
+
+export interface WaCanned {
+  id: string;
+  workspace_id: string;
+  short_code: string;
+  content: string;
+  created_at: string;
+  /** Present only when fetched with a conversation_id (interpolated). */
+  rendered?: string;
+}
+
+export interface WaCustomFieldDef {
+  id: string;
+  workspace_id?: string;
+  display_name: string;
+  attribute_key: string;
+  attribute_type: "text" | "number" | "currency" | "date" | "list" | "checkbox";
+  attribute_model?: "conversation" | "contact";
+  attribute_values: string[];
+  position: number;
+  created_at?: string;
+}
+
+export interface WaMember {
+  id: string;
+  name: string;
+  username: string | null;
+  role: string;
+}
+
+export interface WaContactBundle {
+  conversation: {
+    id: string;
+    title: string | null;
+    phone: string;
+    chat_type: WaChatType;
+    avatar_url: string | null;
+    status: number;
+    priority: number;
+    assignee_id: string | null;
+    assignee_name: string | null;
+    custom_attributes: Record<string, unknown>;
+    lifecycle_stage: string | null;
+    last_message_at: string | null;
+    first_reply_at: string | null;
+    created_at: string;
+  };
+  contact: {
+    id: string;
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    phone: string | null;
+    job_title: string | null;
+    notes: string | null;
+    company_name?: string | null;
+    custom?: Record<string, unknown>;
+  } | null;
+  labels: Array<{ id: string; title: string; color: string }>;
+  participants: Array<{ id: string; name: string }>;
+  custom_field_defs: WaCustomFieldDef[];
+  activity: Array<{
+    id: string;
+    direction: "inbound" | "outbound";
+    is_private: boolean;
+    preview: string;
+    created_at: string;
+  }>;
+}
+
+/** PATCH a conversation's lifecycle (status / priority / assignee / snooze). */
+export function patchLifecycle(
+  workspaceId: string,
+  conversationId: string,
+  patch: {
+    status?: number;
+    priority?: number;
+    assignee_id?: string | null;
+    snoozed_until?: string | null;
+  },
+): Promise<Result<{ ok: true; conversation: Record<string, unknown> }>> {
+  return jsonFetch(
+    `/api/whatsapp/conversations/${encodeURIComponent(conversationId)}/lifecycle`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ workspace_id: workspaceId, ...patch }),
+    },
+  );
+}
+
+/** Post an internal note (is_private — never sent to WhatsApp). */
+export function postNote(
+  workspaceId: string,
+  conversationId: string,
+  body: string,
+  mentions?: string[],
+): Promise<Result<{ ok: true; message_id: string; notified: string[] }>> {
+  return jsonFetch(
+    `/api/whatsapp/conversations/${encodeURIComponent(conversationId)}/notes`,
+    {
+      method: "POST",
+      body: JSON.stringify({
+        workspace_id: workspaceId,
+        body,
+        ...(mentions && mentions.length ? { mentions } : {}),
+      }),
+    },
+  );
+}
+
+/** Workspace members for the assignee picker + @mention. */
+export function fetchMembers(workspaceId: string): Promise<Result<WaMember[]>> {
+  return jsonFetchItems<WaMember>(
+    `/api/whatsapp/members?workspace_id=${encodeURIComponent(workspaceId)}`,
+  );
+}
+
+// ── labels ──
+export function fetchLabels(workspaceId: string): Promise<Result<WaLabel[]>> {
+  return jsonFetchItems<WaLabel>(
+    `/api/whatsapp/labels?workspace_id=${encodeURIComponent(workspaceId)}`,
+  );
+}
+export function createLabel(
+  workspaceId: string,
+  body: { title: string; color?: string; show_on_sidebar?: boolean },
+): Promise<Result<{ label: WaLabel }>> {
+  return jsonFetch("/api/whatsapp/labels", {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId, ...body }),
+  });
+}
+export function updateLabel(
+  workspaceId: string,
+  id: string,
+  body: { title?: string; color?: string; show_on_sidebar?: boolean },
+): Promise<Result<{ label: WaLabel }>> {
+  return jsonFetch("/api/whatsapp/labels", {
+    method: "PATCH",
+    body: JSON.stringify({ workspace_id: workspaceId, id, ...body }),
+  });
+}
+export function deleteLabel(
+  workspaceId: string,
+  id: string,
+): Promise<Result<{ ok: true }>> {
+  return jsonFetch(
+    `/api/whatsapp/labels?workspace_id=${encodeURIComponent(workspaceId)}&id=${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+}
+export function addConversationLabel(
+  workspaceId: string,
+  conversationId: string,
+  labelId: string,
+): Promise<Result<{ ok: true }>> {
+  return jsonFetch(
+    `/api/whatsapp/conversations/${encodeURIComponent(conversationId)}/labels`,
+    {
+      method: "POST",
+      body: JSON.stringify({ workspace_id: workspaceId, label_id: labelId }),
+    },
+  );
+}
+export function removeConversationLabel(
+  workspaceId: string,
+  conversationId: string,
+  labelId: string,
+): Promise<Result<{ ok: true }>> {
+  return jsonFetch(
+    `/api/whatsapp/conversations/${encodeURIComponent(conversationId)}/labels?workspace_id=${encodeURIComponent(workspaceId)}&label_id=${encodeURIComponent(labelId)}`,
+    { method: "DELETE" },
+  );
+}
+
+// ── canned responses ──
+export function fetchCanned(
+  workspaceId: string,
+  conversationId?: string,
+): Promise<Result<WaCanned[]>> {
+  const q = new URLSearchParams({ workspace_id: workspaceId });
+  if (conversationId) q.set("conversation_id", conversationId);
+  return jsonFetchItems<WaCanned>(`/api/whatsapp/canned?${q.toString()}`);
+}
+export function createCanned(
+  workspaceId: string,
+  body: { short_code: string; content: string },
+): Promise<Result<{ canned: WaCanned }>> {
+  return jsonFetch("/api/whatsapp/canned", {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId, ...body }),
+  });
+}
+export function updateCanned(
+  workspaceId: string,
+  id: string,
+  body: { short_code?: string; content?: string },
+): Promise<Result<{ canned: WaCanned }>> {
+  return jsonFetch("/api/whatsapp/canned", {
+    method: "PATCH",
+    body: JSON.stringify({ workspace_id: workspaceId, id, ...body }),
+  });
+}
+export function deleteCanned(
+  workspaceId: string,
+  id: string,
+): Promise<Result<{ ok: true }>> {
+  return jsonFetch(
+    `/api/whatsapp/canned?workspace_id=${encodeURIComponent(workspaceId)}&id=${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+}
+
+// ── custom field definitions + values ──
+export function fetchCustomFieldDefs(
+  workspaceId: string,
+  model: "conversation" | "contact" = "conversation",
+): Promise<Result<WaCustomFieldDef[]>> {
+  return jsonFetchItems<WaCustomFieldDef>(
+    `/api/whatsapp/custom-fields?workspace_id=${encodeURIComponent(workspaceId)}&model=${model}`,
+  );
+}
+export function createCustomFieldDef(
+  workspaceId: string,
+  body: {
+    display_name: string;
+    attribute_type?: string;
+    attribute_model?: string;
+    attribute_values?: string[];
+  },
+): Promise<Result<{ definition: WaCustomFieldDef }>> {
+  return jsonFetch("/api/whatsapp/custom-fields", {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId, ...body }),
+  });
+}
+export function deleteCustomFieldDef(
+  workspaceId: string,
+  id: string,
+): Promise<Result<{ ok: true }>> {
+  return jsonFetch(
+    `/api/whatsapp/custom-fields?workspace_id=${encodeURIComponent(workspaceId)}&id=${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+}
+export function patchConversationAttributes(
+  workspaceId: string,
+  conversationId: string,
+  attributes: Record<string, unknown>,
+  lifecycleStage?: string | null,
+): Promise<Result<{ ok: true; custom_attributes: Record<string, unknown> }>> {
+  return jsonFetch(
+    `/api/whatsapp/conversations/${encodeURIComponent(conversationId)}/attributes`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        workspace_id: workspaceId,
+        attributes,
+        ...(lifecycleStage !== undefined ? { lifecycle_stage: lifecycleStage } : {}),
+      }),
+    },
+  );
+}
+
+/** The contact-sidebar bundle for an open conversation. */
+export function fetchContactBundle(
+  workspaceId: string,
+  conversationId: string,
+  opts?: { refreshAvatar?: boolean },
+): Promise<Result<WaContactBundle>> {
+  const q = new URLSearchParams({ workspace_id: workspaceId });
+  if (opts?.refreshAvatar) q.set("refresh_avatar", "1");
+  return jsonFetch<WaContactBundle>(
+    `/api/whatsapp/conversations/${encodeURIComponent(conversationId)}/contact?${q.toString()}`,
+  );
 }
 
 /** A message row in a conversation thread (v2 shape). */
@@ -624,14 +939,30 @@ export interface WaMessagesPage {
   has_more: boolean;
 }
 
-/** Fetch one page of conversations (newest activity first). */
+/** Fetch one page of conversations (newest activity first).
+ *  Wave 2 filter params (all optional, backward-compatible). */
 export async function fetchConversations(
   workspaceId: string,
-  opts?: { cursor?: string | null; limit?: number }
+  opts?: {
+    cursor?: string | null;
+    limit?: number;
+    view?: "open_mine" | "mine" | "unassigned" | "all" | null;
+    status?: "open" | "resolved" | "pending" | "snoozed" | null;
+    assignee_id?: string | null;
+    label_id?: string | null;
+    priority?: number | null;
+    unread?: boolean;
+  }
 ): Promise<Result<WaConversationsPage>> {
   const q = new URLSearchParams({ workspace_id: workspaceId });
   if (opts?.cursor) q.set("cursor", opts.cursor);
   if (opts?.limit) q.set("limit", String(opts.limit));
+  if (opts?.view && opts.view !== "all") q.set("view", opts.view);
+  if (opts?.status) q.set("status", opts.status);
+  if (opts?.assignee_id) q.set("assignee_id", opts.assignee_id);
+  if (opts?.label_id) q.set("label_id", opts.label_id);
+  if (typeof opts?.priority === "number") q.set("priority", String(opts.priority));
+  if (opts?.unread) q.set("unread", "1");
   const res = await jsonFetch<{ items?: WaConversation[]; next_cursor?: string | null }>(
     `/api/whatsapp/conversations?${q.toString()}`
   );
