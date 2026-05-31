@@ -277,9 +277,108 @@ async function runAction(
         ? { type: action.type, ok: false, error: error.message }
         : { type: action.type, ok: true };
     }
+    case "send_product": {
+      // Wave 5 (EPIC-18): send a catalog product card (image + caption + price).
+      const productId = p(params, "product_id");
+      if (!productId) return { type: action.type, ok: false, skipped: "no_product" };
+      const { data: prod } = await admin
+        .from("whatsapp_products")
+        .select("name, description, price, currency, sku, media_url, order_link, active")
+        .eq("workspace_id", ctx.workspaceId)
+        .eq("id", productId)
+        .maybeSingle();
+      if (!prod) return { type: action.type, ok: false, skipped: "product_not_found" };
+      const product = prod as ProductRow & { active?: boolean };
+      const caption = buildProductCaption(product);
+      if (product.media_url) {
+        return sendOutbound(admin, ctx, caption, {
+          url: product.media_url,
+          type: "image",
+          caption,
+        });
+      }
+      return sendOutbound(admin, ctx, caption);
+    }
+    case "ai_reply": {
+      // Wave 5 (EPIC-19): AI-in-flow. Draft a reply from the conversation
+      // thread (reusing the Wave-4 AI lib) and send it through sendOutbound
+      // (which applies throttle + opt-out + soft-ban exactly like every send).
+      const { isAIConfigured, aiDraftReply } = await import("./ai");
+      if (!isAIConfigured()) {
+        return { type: action.type, ok: false, skipped: "ai_not_configured" };
+      }
+      const { data: rows } = await admin
+        .from("whatsapp_messages")
+        .select("direction, body, media_type, created_at")
+        .eq("conversation_id", ctx.conversationId)
+        .eq("is_private", false)
+        .order("created_at", { ascending: false })
+        .limit(30);
+      const turns = ((rows ?? []) as Array<{
+        direction: "inbound" | "outbound";
+        body: string | null;
+        media_type: string | null;
+        created_at: string;
+      }>)
+        .reverse()
+        .map((r) => ({
+          direction: r.direction,
+          body: (r.body ?? "").trim() || (r.media_type ? `[${r.media_type}]` : ""),
+          created_at: r.created_at,
+        }))
+        .filter((t) => t.body);
+      if (turns.length === 0) return { type: action.type, ok: false, skipped: "empty_thread" };
+      let reply = "";
+      try {
+        reply = await aiDraftReply({
+          turns,
+          contactName:
+            [ctx.contact?.first_name, ctx.contact?.last_name]
+              .filter(Boolean)
+              .join(" ")
+              .trim() || null,
+          instruction: p(params, "prompt") || null,
+        });
+      } catch (e) {
+        return {
+          type: action.type,
+          ok: false,
+          error: e instanceof Error ? e.message : "ai_failed",
+        };
+      }
+      if (!reply.trim()) return { type: action.type, ok: false, skipped: "ai_empty" };
+      return sendOutbound(admin, ctx, reply.trim());
+    }
     default:
       return { type: action.type, ok: false, skipped: "unknown_action" };
   }
+}
+
+export interface ProductRow {
+  name?: string;
+  description?: string | null;
+  price?: number | string | null;
+  currency?: string | null;
+  sku?: string | null;
+  media_url?: string | null;
+  order_link?: string | null;
+}
+
+/**
+ * Build a WhatsApp product-card caption (name + price + desc + SKU + order
+ * link). Shared by the inbox product picker (send_product action) and any
+ * future catalog surface so the format stays consistent.
+ */
+export function buildProductCaption(p: ProductRow): string {
+  const name = (p.name ?? "").trim();
+  const price =
+    p.price != null && String(p.price).trim() !== ""
+      ? `\n💰 ${p.currency ?? "PKR"} ${p.price}`
+      : "";
+  const desc = p.description ? `\n\n${p.description}` : "";
+  const sku = p.sku ? `\n\nSKU: ${p.sku}` : "";
+  const order = p.order_link ? `\n\n🛒 Order: ${p.order_link}` : "";
+  return `*${name}*${price}${desc}${sku}${order}`.trim();
 }
 
 /**

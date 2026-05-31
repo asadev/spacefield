@@ -43,6 +43,9 @@ import {
   removeConversationLabel,
   sendConversationText,
   sendConversationMedia,
+  sendProductToConversation,
+  fetchProducts,
+  type WaProduct,
   mediaUrl,
   WA_PRIORITY_LABEL,
   WA_STATUS_NAME,
@@ -158,6 +161,13 @@ export default function ConversationsTab({ workspaceId, compact }: Props) {
   const [canned, setCanned] = useState<WaCanned[]>([]);
   const [showCanned, setShowCanned] = useState(false);
   const [cannedQuery, setCannedQuery] = useState("");
+
+  // product picker (EPIC-18) — lazy fetch on first open
+  const [showProducts, setShowProducts] = useState(false);
+  const [products, setProducts] = useState<WaProduct[]>([]);
+  const [productsLoaded, setProductsLoaded] = useState(false);
+  const [productQuery, setProductQuery] = useState("");
+  const [sendingProduct, setSendingProduct] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement | null>(null);
   const selectedRef = useRef<WaConversation | null>(null);
@@ -650,6 +660,41 @@ export default function ConversationsTab({ workspaceId, compact }: Props) {
     return list.slice(0, 8);
   }, [showCanned, cannedQuery, canned]);
 
+  // ── product picker (EPIC-18) ──
+  const openProductPicker = useCallback(async () => {
+    setShowProducts(true);
+    setShowCanned(false);
+    if (productsLoaded) return;
+    const res = await fetchProducts(workspaceId);
+    if (res.ok) setProducts(res.data.filter((p) => p.active));
+    setProductsLoaded(true);
+  }, [workspaceId, productsLoaded]);
+
+  const handleSendProduct = useCallback(
+    async (product: WaProduct) => {
+      const conv = selected;
+      if (!conv || sendingProduct) return;
+      setSendingProduct(true);
+      setShowProducts(false);
+      setSendErr(null);
+      const res = await sendProductToConversation(workspaceId, conv.id, product.id);
+      setSendingProduct(false);
+      if (!res.ok) {
+        setSendErr(res.error);
+        return;
+      }
+      await loadThread(conv);
+      bumpConversationLocally(conv.id, `🛍️ ${product.name}`, "outbound");
+    },
+    [selected, workspaceId, sendingProduct, loadThread],
+  );
+
+  const productMatches = useMemo(() => {
+    const q = productQuery.trim().toLowerCase();
+    const list = q ? products.filter((p) => p.name.toLowerCase().includes(q)) : products;
+    return list.slice(0, 20);
+  }, [products, productQuery]);
+
   // ── voice recording ──────────────────────────────────────────────────────
   const startRecording = useCallback(async () => {
     if (!voiceSupported || recording) return;
@@ -1067,6 +1112,61 @@ export default function ConversationsTab({ workspaceId, compact }: Props) {
                       </div>
                     ) : null}
 
+                    {/* product picker popover */}
+                    {showProducts ? (
+                      <div className="absolute bottom-full left-2 right-2 z-20 mb-1 max-h-72 overflow-y-auto rounded-md border border-app bg-app-elevated shadow-lg">
+                        <div className="sticky top-0 border-b border-app bg-app-elevated p-2">
+                          <input
+                            type="search"
+                            value={productQuery}
+                            onChange={(e) => setProductQuery(e.target.value)}
+                            placeholder="Search products"
+                            className="w-full rounded border border-app bg-surface px-2 py-1 text-xs text-app outline-none placeholder:text-faint"
+                            autoFocus
+                          />
+                        </div>
+                        {!productsLoaded ? (
+                          <div className="px-3 py-2 text-xs text-faint">loading…</div>
+                        ) : productMatches.length === 0 ? (
+                          <div className="px-3 py-2 text-xs text-faint">
+                            No products. Add them in the Products tab.
+                          </div>
+                        ) : (
+                          productMatches.map((p) => (
+                            <button
+                              key={p.id}
+                              type="button"
+                              onClick={() => void handleSendProduct(p)}
+                              className="flex w-full items-center gap-2 border-b border-app px-2 py-1.5 text-left last:border-0 hover:bg-surface"
+                            >
+                              {/* eslint-disable-next-line @next/next/no-img-element */}
+                              {p.media_url ? (
+                                <img
+                                  src={p.media_url}
+                                  alt=""
+                                  className="h-9 w-9 shrink-0 rounded border border-app object-cover"
+                                />
+                              ) : (
+                                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-app bg-surface text-faint">
+                                  <MiniIcon name="image" size={14} />
+                                </span>
+                              )}
+                              <span className="min-w-0 flex-1">
+                                <span className="block truncate text-xs font-medium text-app">
+                                  {p.name}
+                                </span>
+                                <span className="block truncate text-[0.65rem] text-secondary">
+                                  {p.price != null && p.price !== ""
+                                    ? `${p.currency} ${p.price}`
+                                    : "no price"}
+                                </span>
+                              </span>
+                            </button>
+                          ))
+                        )}
+                      </div>
+                    ) : null}
+
                     {reply && !noteMode ? (
                       <div className="mb-2 flex items-start gap-2 rounded-md border-l-2 border-tool-accent bg-surface px-2 py-1">
                         <div className="min-w-0 flex-1">
@@ -1131,6 +1231,23 @@ export default function ConversationsTab({ workspaceId, compact }: Props) {
                           title="Attach image, video or document"
                         >
                           <MiniIcon name="paperclip" size={16} />
+                        </button>
+                      ) : null}
+
+                      {!noteMode ? (
+                        <button
+                          type="button"
+                          onClick={() => (showProducts ? setShowProducts(false) : void openProductPicker())}
+                          disabled={sending || sendingProduct}
+                          className={`shrink-0 rounded-md border p-2 disabled:opacity-60 ${
+                            showProducts
+                              ? "border-tool-accent bg-tool-accent-soft text-tool-accent"
+                              : "border-app bg-surface text-secondary hover:bg-app hover:text-app"
+                          }`}
+                          aria-label="Send a product"
+                          title="Send a product card (image + price)"
+                        >
+                          <MiniIcon name="image" size={16} />
                         </button>
                       ) : null}
 

@@ -66,6 +66,23 @@ const SearchPanel = dynamic(() => import("./_components/SearchPanel"), {
   ssr: false,
   loading: PanelLoading,
 });
+// Wave-5 panels — all lazy (rare/heavy; protects the 8GB build ceiling).
+const WorkflowsPanel = dynamic(() => import("./_components/WorkflowsPanel"), {
+  ssr: false,
+  loading: PanelLoading,
+});
+const ProductsPanel = dynamic(() => import("./_components/ProductsPanel"), {
+  ssr: false,
+  loading: PanelLoading,
+});
+const StatusPanel = dynamic(() => import("./_components/StatusPanel"), {
+  ssr: false,
+  loading: PanelLoading,
+});
+const TeamPanel = dynamic(() => import("./_components/TeamPanel"), {
+  ssr: false,
+  loading: PanelLoading,
+});
 // Bell is light but client-only; lazy keeps it off SSR.
 const NotificationBell = dynamic(() => import("./_components/NotificationBell"), {
   ssr: false,
@@ -80,6 +97,10 @@ type WaTabKey =
   | "groups"
   | "broadcasts"
   | "automation"
+  | "workflows"
+  | "products"
+  | "status"
+  | "team"
   | "macros"
   | "analytics"
   | "lists"
@@ -98,8 +119,12 @@ const TABS: WaTabMeta[] = [
   { key: "search", label: "Search", short: "Search" },
   { key: "broadcasts", label: "Broadcasts", short: "Blast" },
   { key: "automation", label: "Automation", short: "Auto" },
+  { key: "workflows", label: "Workflows", short: "Flows" },
+  { key: "products", label: "Products", short: "Shop" },
+  { key: "status", label: "Status", short: "Status" },
   { key: "macros", label: "Macros", short: "Macros" },
   { key: "groups", label: "Groups", short: "Groups" },
+  { key: "team", label: "Team", short: "Team" },
   { key: "analytics", label: "Analytics", short: "Stats" },
   { key: "lists", label: "Lists", short: "Lists" },
   { key: "history", label: "Send history", short: "History" },
@@ -198,11 +223,23 @@ export default function WhatsAppApp({ width, initialParams }: NativeAppProps) {
         {tab === "automation" && (
           <AutomationPanel workspaceId={workspaceId} compact={compact} />
         )}
+        {tab === "workflows" && (
+          <WorkflowsPanel workspaceId={workspaceId} compact={compact} />
+        )}
+        {tab === "products" && (
+          <ProductsPanel workspaceId={workspaceId} compact={compact} />
+        )}
+        {tab === "status" && (
+          <StatusPanel workspaceId={workspaceId} compact={compact} />
+        )}
         {tab === "macros" && (
           <MacrosPanel workspaceId={workspaceId} compact={compact} />
         )}
         {tab === "groups" && (
           <GroupsTab workspaceId={workspaceId} compact={compact} />
+        )}
+        {tab === "team" && (
+          <TeamPanel workspaceId={workspaceId} compact={compact} />
         )}
         {tab === "analytics" && (
           <AnalyticsPanel workspaceId={workspaceId} compact={compact} />

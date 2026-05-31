@@ -12,6 +12,7 @@ import { signInstanceWebhook } from "@/lib/whatsapp/instance-manager";
 import { parseEvolutionEvent } from "@/lib/whatsapp/webhook-parser";
 import { detectConsentKeyword, recordOptOut, recordOptIn } from "@/lib/whatsapp/consent";
 import { runInboundAutomation } from "@/lib/whatsapp/automation";
+import { autoAssignConversation } from "@/lib/whatsapp/assign";
 import {
   emitConversationCreated,
   emitConversationReopened,
@@ -256,6 +257,17 @@ async function dispatch(
           title: isGroup ? msg.pushName : null,
           fallbackTitle: msg.remoteNumber,
           preview: msg.body || (msg.mediaType ? `[${msg.mediaType}]` : ""),
+        });
+      }
+
+      // ── Auto-assignment (EPIC-20) ──
+      // Brand-new INDIVIDUAL conversation + instance has auto-assign on → pick
+      // an available agent (round-robin/capacity/presence). Default off; no-op
+      // otherwise. Manual single-assignee (Wave 2) stays the baseline.
+      if (conv?.isNew && direction === "inbound" && !isGroup) {
+        await autoAssignConversation(admin, {
+          conversationId: conv.id,
+          instanceId: inst.id,
         });
       }
 

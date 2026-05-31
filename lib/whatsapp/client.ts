@@ -336,6 +336,44 @@ export class EvolutionClient {
     }
   }
 
+  /**
+   * Post a WhatsApp Status (story) — EPIC-18. POST-only; reading others' status
+   * is out of scope. Evolution's /message/sendStatus contract:
+   *   type: 'text' | 'image' | 'video' | 'audio'
+   *   content: the text body (text) OR a media URL/base64 (image/video/audio)
+   *   caption?: caption for media statuses
+   *   backgroundColor/font: text-status styling
+   *   allContacts: broadcast to all status contacts
+   * Returns the Evolution message id (best-effort).
+   */
+  async sendStatus(
+    instanceName: string,
+    args: {
+      type: "text" | "image" | "video" | "audio";
+      content: string;
+      caption?: string;
+      backgroundColor?: string;
+      font?: number;
+    },
+  ): Promise<{ messageId: string }> {
+    const body: Record<string, unknown> = {
+      type: args.type,
+      content: args.content,
+      allContacts: true,
+    };
+    if (args.caption) body.caption = args.caption;
+    if (args.type === "text") {
+      body.backgroundColor = args.backgroundColor ?? "#000000";
+      body.font = args.font ?? 1;
+    }
+    const res = await this.request<EvolutionSendResult>(
+      `/message/sendStatus/${encodeURIComponent(instanceName)}`,
+      { method: "POST", body },
+    );
+    const id = res.key?.id ?? res.messageId ?? "";
+    return { messageId: id };
+  }
+
   /** Send a PTT/voice note. `audio` is a URL or base64 string. */
   async sendWhatsAppAudio(
     instanceName: string,

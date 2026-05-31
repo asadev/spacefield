@@ -1680,6 +1680,392 @@ export function markAllNotificationsRead(): Promise<Result<{ ok: true }>> {
   });
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+   Wave 5 — Status posting · product picker · workflows · sequences · teams ·
+   multi-number
+   ════════════════════════════════════════════════════════════════════════ */
+
+// ── products (EPIC-18) ──
+export interface WaProduct {
+  id: string;
+  name: string;
+  description: string | null;
+  price: number | string | null;
+  currency: string;
+  sku: string | null;
+  media_url: string | null;
+  media_storage_path: string | null;
+  order_link: string | null;
+  source: string | null;
+  source_id: string | null;
+  active: boolean;
+  created_at: string;
+}
+export function fetchProducts(workspaceId: string, q?: string): Promise<Result<WaProduct[]>> {
+  const sp = new URLSearchParams({ workspace_id: workspaceId });
+  if (q) sp.set("q", q);
+  return jsonFetchItems<WaProduct>(`/api/whatsapp/products?${sp.toString()}`);
+}
+export function createProduct(
+  workspaceId: string,
+  body: Partial<WaProduct>,
+): Promise<Result<WaProduct>> {
+  return jsonFetchItem<WaProduct>("/api/whatsapp/products", {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId, ...body }),
+  });
+}
+export function importProductsFromInventory(
+  workspaceId: string,
+  itemIds: string[],
+): Promise<Result<{ items: WaProduct[]; imported: number }>> {
+  return jsonFetch("/api/whatsapp/products", {
+    method: "POST",
+    body: JSON.stringify({
+      workspace_id: workspaceId,
+      action: "import_from_inventory",
+      item_ids: itemIds,
+    }),
+  });
+}
+export function updateProduct(
+  workspaceId: string,
+  id: string,
+  body: Partial<WaProduct>,
+): Promise<Result<WaProduct>> {
+  return jsonFetchItem<WaProduct>("/api/whatsapp/products", {
+    method: "PATCH",
+    body: JSON.stringify({ workspace_id: workspaceId, id, ...body }),
+  });
+}
+export function deleteProduct(workspaceId: string, id: string): Promise<Result<{ ok: true }>> {
+  return jsonFetch(
+    `/api/whatsapp/products?workspace_id=${encodeURIComponent(workspaceId)}&id=${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+}
+/** Send a product card into a conversation (image + caption + price). */
+export function sendProductToConversation(
+  workspaceId: string,
+  conversationId: string,
+  productId: string,
+): Promise<Result<{ ok: true }>> {
+  return jsonFetch(
+    `/api/whatsapp/conversations/${encodeURIComponent(conversationId)}/send-product`,
+    {
+      method: "POST",
+      body: JSON.stringify({ workspace_id: workspaceId, product_id: productId }),
+    },
+  );
+}
+
+// ── status posts (EPIC-18) ──
+export interface WaStatusPost {
+  id: string;
+  instance_id: string;
+  kind: "text" | "image" | "video";
+  caption: string | null;
+  text_content: string | null;
+  media_url: string | null;
+  background_color: string | null;
+  font: number | null;
+  status: "draft" | "scheduled" | "queued" | "sent" | "failed";
+  scheduled_at: string | null;
+  sent_at: string | null;
+  last_error: string | null;
+  created_at: string;
+}
+export function fetchStatusPosts(workspaceId: string): Promise<Result<WaStatusPost[]>> {
+  return jsonFetchItems<WaStatusPost>(
+    `/api/whatsapp/status?workspace_id=${encodeURIComponent(workspaceId)}`,
+  );
+}
+export function createStatusPost(
+  workspaceId: string,
+  body: {
+    kind: "text" | "image" | "video";
+    text_content?: string;
+    media_url?: string;
+    caption?: string;
+    background_color?: string;
+    scheduled_at?: string | null;
+    instance_id?: string;
+  },
+): Promise<Result<WaStatusPost>> {
+  return jsonFetchItem<WaStatusPost>("/api/whatsapp/status", {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId, ...body }),
+  });
+}
+export function deleteStatusPost(workspaceId: string, id: string): Promise<Result<{ ok: true }>> {
+  return jsonFetch(
+    `/api/whatsapp/status?workspace_id=${encodeURIComponent(workspaceId)}&id=${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+}
+
+// ── workflows (EPIC-19) ──
+export interface WaWorkflowGraph {
+  trigger?: string;
+  conditions?: Record<string, unknown>;
+  actions?: Array<{ type: string; params?: Record<string, unknown> }>;
+}
+export interface WaWorkflow {
+  id: string;
+  name: string;
+  description: string | null;
+  trigger: string;
+  graph: WaWorkflowGraph;
+  recipe_key: string | null;
+  active: boolean;
+  created_at: string;
+}
+export interface WaWorkflowRecipe {
+  key: string;
+  name: string;
+  description: string;
+  graph: WaWorkflowGraph;
+}
+export async function fetchWorkflows(
+  workspaceId: string,
+  withRecipes = false,
+): Promise<Result<{ items: WaWorkflow[]; recipes: Record<string, WaWorkflowRecipe> }>> {
+  const sp = new URLSearchParams({ workspace_id: workspaceId });
+  if (withRecipes) sp.set("recipes", "1");
+  const res = await jsonFetch<{ items?: WaWorkflow[]; recipes?: Record<string, WaWorkflowRecipe> }>(
+    `/api/whatsapp/workflows?${sp.toString()}`,
+  );
+  if (!res.ok) return res;
+  return ok({ items: res.data.items ?? [], recipes: res.data.recipes ?? {} });
+}
+export function createWorkflow(
+  workspaceId: string,
+  body: { name: string; description?: string; trigger?: string; graph?: WaWorkflowGraph; recipe_key?: string; active?: boolean },
+): Promise<Result<WaWorkflow>> {
+  return jsonFetchItem<WaWorkflow>("/api/whatsapp/workflows", {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId, ...body }),
+  });
+}
+export function updateWorkflow(
+  workspaceId: string,
+  id: string,
+  body: Partial<{ name: string; description: string; trigger: string; graph: WaWorkflowGraph; active: boolean }>,
+): Promise<Result<WaWorkflow>> {
+  return jsonFetchItem<WaWorkflow>("/api/whatsapp/workflows", {
+    method: "PATCH",
+    body: JSON.stringify({ workspace_id: workspaceId, id, ...body }),
+  });
+}
+export function deleteWorkflow(workspaceId: string, id: string): Promise<Result<{ ok: true }>> {
+  return jsonFetch(
+    `/api/whatsapp/workflows?workspace_id=${encodeURIComponent(workspaceId)}&id=${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+}
+
+// ── sequences (EPIC-19) ──
+export interface WaSequenceStep {
+  delay_minutes?: number;
+  actions?: Array<{ type: string; params?: Record<string, unknown> }>;
+}
+export interface WaSequence {
+  id: string;
+  name: string;
+  description: string | null;
+  steps: WaSequenceStep[];
+  exit_conditions: { on_reply?: boolean };
+  recipe_key: string | null;
+  active: boolean;
+  active_enrollments?: number;
+  created_at: string;
+}
+export interface WaSequenceRecipe {
+  key: string;
+  name: string;
+  description: string;
+  steps: WaSequenceStep[];
+  exit_conditions: { on_reply?: boolean };
+}
+export async function fetchSequences(
+  workspaceId: string,
+  withRecipes = false,
+): Promise<Result<{ items: WaSequence[]; recipes: Record<string, WaSequenceRecipe> }>> {
+  const sp = new URLSearchParams({ workspace_id: workspaceId });
+  if (withRecipes) sp.set("recipes", "1");
+  const res = await jsonFetch<{ items?: WaSequence[]; recipes?: Record<string, WaSequenceRecipe> }>(
+    `/api/whatsapp/sequences?${sp.toString()}`,
+  );
+  if (!res.ok) return res;
+  return ok({ items: res.data.items ?? [], recipes: res.data.recipes ?? {} });
+}
+export function createSequence(
+  workspaceId: string,
+  body: { name: string; description?: string; steps?: WaSequenceStep[]; exit_conditions?: { on_reply?: boolean }; recipe_key?: string; active?: boolean },
+): Promise<Result<WaSequence>> {
+  return jsonFetchItem<WaSequence>("/api/whatsapp/sequences", {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId, ...body }),
+  });
+}
+export function updateSequence(
+  workspaceId: string,
+  id: string,
+  body: Partial<{ name: string; description: string; steps: WaSequenceStep[]; exit_conditions: { on_reply?: boolean }; active: boolean }>,
+): Promise<Result<WaSequence>> {
+  return jsonFetchItem<WaSequence>("/api/whatsapp/sequences", {
+    method: "PATCH",
+    body: JSON.stringify({ workspace_id: workspaceId, id, ...body }),
+  });
+}
+export function deleteSequence(workspaceId: string, id: string): Promise<Result<{ ok: true }>> {
+  return jsonFetch(
+    `/api/whatsapp/sequences?workspace_id=${encodeURIComponent(workspaceId)}&id=${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+}
+export function enrollInSequence(
+  workspaceId: string,
+  sequenceId: string,
+  conversationId: string,
+): Promise<Result<{ ok: true; enrolled: boolean }>> {
+  return jsonFetch("/api/whatsapp/sequences", {
+    method: "POST",
+    body: JSON.stringify({
+      workspace_id: workspaceId,
+      action: "enroll",
+      sequence_id: sequenceId,
+      conversation_id: conversationId,
+    }),
+  });
+}
+
+// ── teams + members (EPIC-20) ──
+export interface WaTeamMember {
+  id: string;
+  team_id: string;
+  user_id: string;
+  name: string;
+  capacity: number;
+  presence: "available" | "away" | "offline";
+  active_count: number;
+}
+export interface WaTeam {
+  id: string;
+  name: string;
+  created_at: string;
+  members: WaTeamMember[];
+}
+export function fetchTeams(workspaceId: string): Promise<Result<WaTeam[]>> {
+  return jsonFetchItems<WaTeam>(
+    `/api/whatsapp/teams?workspace_id=${encodeURIComponent(workspaceId)}`,
+  );
+}
+export function createTeam(workspaceId: string, name: string): Promise<Result<WaTeam>> {
+  return jsonFetchItem<WaTeam>("/api/whatsapp/teams", {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId, name }),
+  });
+}
+export function deleteTeam(workspaceId: string, id: string): Promise<Result<{ ok: true }>> {
+  return jsonFetch(
+    `/api/whatsapp/teams?workspace_id=${encodeURIComponent(workspaceId)}&id=${encodeURIComponent(id)}`,
+    { method: "DELETE" },
+  );
+}
+export function addTeamMember(
+  workspaceId: string,
+  teamId: string,
+  userId: string,
+  capacity?: number,
+): Promise<Result<WaTeamMember>> {
+  return jsonFetchItem<WaTeamMember>("/api/whatsapp/teams", {
+    method: "POST",
+    body: JSON.stringify({
+      workspace_id: workspaceId,
+      action: "add_member",
+      team_id: teamId,
+      user_id: userId,
+      ...(capacity != null ? { capacity } : {}),
+    }),
+  });
+}
+export function updateTeamMember(
+  workspaceId: string,
+  teamId: string,
+  userId: string,
+  body: { capacity?: number; presence?: string },
+): Promise<Result<WaTeamMember>> {
+  return jsonFetchItem<WaTeamMember>("/api/whatsapp/teams", {
+    method: "PATCH",
+    body: JSON.stringify({
+      workspace_id: workspaceId,
+      action: "update_member",
+      team_id: teamId,
+      user_id: userId,
+      ...body,
+    }),
+  });
+}
+export function removeTeamMember(
+  workspaceId: string,
+  teamId: string,
+  userId: string,
+): Promise<Result<{ ok: true }>> {
+  return jsonFetch(
+    `/api/whatsapp/teams?workspace_id=${encodeURIComponent(workspaceId)}&team_id=${encodeURIComponent(teamId)}&user_id=${encodeURIComponent(userId)}`,
+    { method: "DELETE" },
+  );
+}
+
+// ── instances / multi-number (EPIC-20) ──
+export interface WaInstanceRow {
+  id: string;
+  evolution_instance_name: string;
+  phone_number: string | null;
+  status: string;
+  label: string | null;
+  role: string;
+  is_default: boolean;
+  auto_assign_enabled: boolean;
+  auto_assign_strategy: string;
+  auto_assign_team_id: string | null;
+  paired_at: string | null;
+  sent_today?: number;
+  daily_cap?: number | null;
+}
+export function fetchInstances(workspaceId: string): Promise<Result<WaInstanceRow[]>> {
+  return jsonFetchItems<WaInstanceRow>(
+    `/api/whatsapp/instances?workspace_id=${encodeURIComponent(workspaceId)}`,
+  );
+}
+export function createInstanceLine(
+  workspaceId: string,
+  body: { label?: string; role?: string },
+): Promise<Result<WaInstanceRow>> {
+  return jsonFetchItem<WaInstanceRow>("/api/whatsapp/instances", {
+    method: "POST",
+    body: JSON.stringify({ workspace_id: workspaceId, ...body }),
+  });
+}
+export function updateInstance(
+  workspaceId: string,
+  instanceId: string,
+  body: Partial<{
+    label: string;
+    role: string;
+    is_default: boolean;
+    auto_assign_enabled: boolean;
+    auto_assign_strategy: string;
+    auto_assign_team_id: string | null;
+  }>,
+): Promise<Result<WaInstanceRow>> {
+  return jsonFetchItem<WaInstanceRow>("/api/whatsapp/instances", {
+    method: "PATCH",
+    body: JSON.stringify({ workspace_id: workspaceId, instance_id: instanceId, ...body }),
+  });
+}
+
 // ── wa.me / QR link builder (EPIC-14, pure client) ──
 export function buildWaMeLink(
   phoneDigits: string,
