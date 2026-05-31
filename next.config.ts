@@ -29,14 +29,20 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: '2mb',
     },
-    // Vercel's production build container is 2 cores / 8 GB. The inbox v2
-    // frontend (ConversationsTab.tsx is ~1.3k lines + realtime + media) pushed
-    // webpack's peak compile memory past that ceiling and the build worker was
-    // OOM-killed (SIGKILL) before it ever reached type-checking — commits
-    // 16281f0 / 052af1d / 07b2535 all failed this way while the backend-only
-    // c0ca37c built fine. This flag trades a little build speed for materially
-    // lower peak webpack memory so the build fits in 8 GB.
+    // The inbox v2 frontend (ConversationsTab.tsx is ~1.3k lines + realtime +
+    // media) pushed the webpack production build past the build container's RAM
+    // and the build worker was OOM-killed (SIGKILL) before it ever reached
+    // type-checking — commits 16281f0 / 052af1d / 07b2535 all failed this way
+    // while the backend-only c0ca37c built fine. Two mitigations, plus the
+    // build machine is bumped to "enhanced" (more RAM/cores) in the Vercel
+    // project's resourceConfig:
+    //  1) webpackMemoryOptimizations — lowers peak webpack compile memory.
+    //  2) cpus:2 — caps the static-generation worker pool. Each worker is a
+    //     separate Node process that holds the whole app in memory; the default
+    //     (one per core) is what multiplied RSS past the limit. 2 keeps some
+    //     parallelism without the RSS blow-up.
     webpackMemoryOptimizations: true,
+    cpus: 2,
   },
   images: {
     remotePatterns: [
