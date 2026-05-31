@@ -4,8 +4,17 @@ import type {
   EvolutionConnectResponse,
   EvolutionGroup,
   EvolutionInstance,
+  EvolutionMediaBase64,
   EvolutionSendResult,
 } from "./types";
+
+/** Minimal Baileys message-key shape used by chat/media/reaction endpoints. */
+export interface EvolutionMessageKey {
+  id: string;
+  remoteJid?: string;
+  fromMe?: boolean;
+  participant?: string;
+}
 
 /**
  * EvolutionClient — typed wrapper around the self-hosted Evolution
@@ -239,30 +248,37 @@ export class EvolutionClient {
     );
   }
 
-  /** Send a plain text message. */
+  /** Send a plain text message. Pass `opts.quotedId` to reply to a message. */
   async sendText(
     instanceName: string,
     to: string,
     body: string,
+    opts?: { quotedId?: string },
   ): Promise<{ messageId: string }> {
     const res = await this.request<EvolutionSendResult>(
       `/message/sendText/${encodeURIComponent(instanceName)}`,
       {
         method: "POST",
-        body: { number: to, text: body },
+        body: {
+          number: to,
+          text: body,
+          ...(opts?.quotedId ? { quoted: { key: { id: opts.quotedId } } } : {}),
+        },
       },
     );
     const id = res.key?.id ?? res.messageId ?? "";
     return { messageId: id };
   }
 
-  /** Send media (image/video/document) with optional caption. */
+  /** Send media (image/video/document) with optional caption. Pass
+   *  `opts.quotedId` to reply to a message. */
   async sendMedia(
     instanceName: string,
     to: string,
     mediaUrl: string,
     caption?: string,
     mediaType: "image" | "video" | "audio" | "document" = "image",
+    opts?: { quotedId?: string },
   ): Promise<{ messageId: string }> {
     const res = await this.request<EvolutionSendResult>(
       `/message/sendMedia/${encodeURIComponent(instanceName)}`,
@@ -273,11 +289,109 @@ export class EvolutionClient {
           mediatype: mediaType,
           media: mediaUrl,
           caption: caption ?? "",
+          ...(opts?.quotedId ? { quoted: { key: { id: opts.quotedId } } } : {}),
         },
       },
     );
     const id = res.key?.id ?? res.messageId ?? "";
     return { messageId: id };
+  }
+
+  /**
+   * Fetch the decrypted media bytes for an inbound message as base64.
+   * Evolution downloads + decrypts the WhatsApp media for us; the raw
+   * `media_url` on the webhook is an undecryptable `.enc` blob, so this is
+   * the only way to re-host attachments. Returns null on any error or when
+   * the response has no base64 payload (best-effort — callers tolerate null).
+   */
+  async getBase64FromMedia(
+    instanceName: string,
+    key: EvolutionMessageKey,
+    opts?: { convertToMp4?: boolean; timeoutMs?: number },
+  ): Promise<EvolutionMediaBase64 | null> {
+    try {
+      const res = await this.request<{
+        base64?: string;
+        mimetype?: string;
+        fileName?: string;
+        media?: { base64?: string; mimetype?: string; fileName?: string };
+      }>(`/chat/getBase64FromMediaMessage/${encodeURIComponent(instanceName)}`, {
+        method: "POST",
+        body: { message: { key }, convertToMp4: opts?.convertToMp4 ?? false },
+        timeoutMs: opts?.timeoutMs ?? 20_000,
+      });
+      const base64 = res.base64 ?? res.media?.base64 ?? null;
+      if (!base64) return null;
+      return {
+        base64,
+        mimetype: res.mimetype ?? res.media?.mimetype ?? "application/octet-stream",
+        fileName: res.fileName ?? res.media?.fileName ?? null,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  /** Send a PTT/voice note. `audio` is a URL or base64 string. */
+  async sendWhatsAppAudio(
+    instanceName: string,
+    to: string,
+    audio: string,
+    opts?: { quotedId?: string },
+  ): Promise<{ messageId: string }> {
+    const res = await this.request<EvolutionSendResult>(
+      `/message/sendWhatsAppAudio/${encodeURIComponent(instanceName)}`,
+      {
+        method: "POST",
+        body: {
+          number: to,
+          audio,
+          ...(opts?.quotedId ? { quoted: { key: { id: opts.quotedId } } } : {}),
+        },
+      },
+    );
+    const id = res.key?.id ?? res.messageId ?? "";
+    return { messageId: id };
+  }
+
+  /** React to a message with an emoji (empty string removes the reaction). */
+  async sendReaction(
+    instanceName: string,
+    key: EvolutionMessageKey,
+    reaction: string,
+  ): Promise<void> {
+    await this.request<unknown>(
+      `/message/sendReaction/${encodeURIComponent(instanceName)}`,
+      { method: "POST", body: { key, reaction } },
+    );
+  }
+
+  /** Mark inbound messages as read (blue ticks) on WhatsApp. No-op on empty. */
+  async markMessageAsRead(
+    instanceName: string,
+    readMessages: EvolutionMessageKey[],
+  ): Promise<void> {
+    if (readMessages.length === 0) return;
+    await this.request<unknown>(
+      `/chat/markMessageAsRead/${encodeURIComponent(instanceName)}`,
+      { method: "POST", body: { readMessages } },
+    );
+  }
+
+  /** Fetch a contact/group profile-picture URL. Returns null on any error. */
+  async fetchProfilePictureUrl(
+    instanceName: string,
+    numberOrJid: string,
+  ): Promise<string | null> {
+    try {
+      const res = await this.request<{ profilePictureUrl?: string | null }>(
+        `/chat/fetchProfilePictureUrl/${encodeURIComponent(instanceName)}`,
+        { method: "POST", body: { number: numberOrJid }, timeoutMs: 8_000 },
+      );
+      return res.profilePictureUrl ?? null;
+    } catch {
+      return null;
+    }
   }
 
   /** List all WhatsApp groups visible to this instance.

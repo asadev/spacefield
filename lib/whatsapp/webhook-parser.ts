@@ -115,79 +115,65 @@ function connectionStateToInternal(v: string | null): WhatsAppInstanceStatus {
   return "pending";
 }
 
-/**
- * Extract text + media metadata from a Baileys-shaped message body.
- * Returns nulls for any unsupported message subtype rather than throwing —
- * we can still log the envelope without the body.
- */
+/** Pull a quoted-message id out of a node's Baileys contextInfo, if any. */
+function ctxReplyId(node: Record<string, unknown> | null): string | null {
+  if (!node) return null;
+  const ctx = asObj(node.contextInfo);
+  return ctx ? asString(ctx.stanzaId) : null;
+}
+
 function extractBodyAndMedia(message: Record<string, unknown>): {
-  body: string;
-  mediaUrl: string | null;
-  mediaType: string | null;
+  body: string; mediaUrl: string | null; mediaType: string | null;
+  mimetype: string | null; fileName: string | null; replyToId: string | null;
 } {
-  // 1. Plain text or extendedText
+  const empty = { body: "", mediaUrl: null, mediaType: null, mimetype: null, fileName: null, replyToId: null };
   const conv = asString(message.conversation);
-  if (conv) return { body: conv, mediaUrl: null, mediaType: null };
-
+  if (conv) return { ...empty, body: conv };
   const ext = asObj(message.extendedTextMessage);
-  if (ext) {
-    return {
-      body: asString(ext.text) ?? "",
-      mediaUrl: null,
-      mediaType: null,
-    };
-  }
-
-  // 2. Media variants — each carries an optional caption.
-  for (const variant of [
-    "imageMessage",
-    "videoMessage",
-    "documentMessage",
-    "audioMessage",
-    "stickerMessage",
-  ] as const) {
+  if (ext) return { ...empty, body: asString(ext.text) ?? "", replyToId: ctxReplyId(ext) };
+  for (const variant of ["imageMessage","videoMessage","documentMessage","audioMessage","stickerMessage"] as const) {
     const m = asObj(message[variant]);
     if (m) {
       return {
         body: asString(m.caption) ?? "",
         mediaUrl: asString(m.url) ?? asString(m.directPath) ?? null,
         mediaType: variant.replace("Message", ""),
+        mimetype: asString(m.mimetype),
+        fileName: asString(m.fileName) ?? asString(m.title),
+        replyToId: ctxReplyId(m),
       };
     }
   }
-
-  return { body: "", mediaUrl: null, mediaType: null };
+  return empty;
 }
 
-/** Parse a single MESSAGES_UPSERT entry into our internal shape. */
-function parseMessageEntry(
-  entry: Record<string, unknown>,
-): ParsedWhatsAppMessage | null {
+function extractReaction(message: Record<string, unknown>): { emoji: string; targetId: string } | null {
+  const r = asObj(message.reactionMessage);
+  if (!r) return null;
+  const key = asObj(r.key);
+  const targetId = asString(key?.id);
+  if (!targetId) return null;
+  return { emoji: asString(r.text) ?? "", targetId };
+}
+
+function parseMessageEntry(entry: Record<string, unknown>): ParsedWhatsAppMessage | null {
   const key = asObj(entry.key);
   if (!key) return null;
-
   const evolutionMessageId = asString(key.id);
   if (!evolutionMessageId) return null;
-
   const remoteJid = asString(key.remoteJid) ?? "";
   const fromMe = key.fromMe === true;
-
+  const participant = asString(key.participant);
+  const pushName = asString(entry.pushName);
   const messageRoot = asObj(entry.message) ?? {};
-  const { body, mediaUrl, mediaType } = extractBodyAndMedia(messageRoot);
-
+  const reaction = extractReaction(messageRoot);
+  const { body, mediaUrl, mediaType, mimetype, fileName, replyToId } = extractBodyAndMedia(messageRoot);
   const tsRaw = asNumber(entry.messageTimestamp);
-  const timestamp = tsRaw
-    ? new Date(tsRaw * 1000).toISOString()
-    : new Date().toISOString();
-
+  const timestamp = tsRaw ? new Date(tsRaw * 1000).toISOString() : new Date().toISOString();
   return {
-    evolutionMessageId,
-    fromMe,
-    remoteJid,
-    remoteNumber: jidToNumber(remoteJid),
-    body,
-    mediaUrl,
-    mediaType,
+    evolutionMessageId, fromMe, remoteJid, remoteNumber: jidToNumber(remoteJid),
+    body, mediaUrl, mediaType, mimetype, fileName, pushName, participant,
+    replyToId, reactionEmoji: reaction?.emoji ?? null, reactionTargetId: reaction?.targetId ?? null,
     timestamp,
   };
 }
