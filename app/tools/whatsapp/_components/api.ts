@@ -472,6 +472,89 @@ export function fetchMessages(
   return jsonFetchItems<WaMessage>(`/api/whatsapp/messages?${q.toString()}`);
 }
 
+// ── history ─────────────────────────────────────────────────────────────
+
+export interface WaHistoryRow {
+  id: string;
+  created_at: string;
+  target_type: "contact" | "group" | "list";
+  target_id: string;
+  target_name: string | null;
+  message_preview: string;
+  full_message: string | null;
+  status: "queued" | "sent" | "delivered" | "read" | "failed" | "mixed";
+  total_contacts: number;
+  delivered_count: number;
+  failed_count: number;
+  read_count: number;
+}
+
+export function fetchHistory(
+  workspaceId: string,
+  opts?: { from?: string; to?: string; target_type?: string; status?: string }
+): Promise<Result<WaHistoryRow[]>> {
+  const q = new URLSearchParams({ workspace_id: workspaceId });
+  if (opts?.from) q.set("from", opts.from);
+  if (opts?.to) q.set("to", opts.to);
+  if (opts?.target_type) q.set("target_type", opts.target_type);
+  if (opts?.status) q.set("status", opts.status);
+  return jsonFetchItems<WaHistoryRow>(`/api/whatsapp/history?${q.toString()}`);
+}
+
+export function fetchHistoryDetail(
+  workspaceId: string,
+  rowId: string
+): Promise<Result<WaJobLogEntry[]>> {
+  const q = new URLSearchParams({ workspace_id: workspaceId });
+  return jsonFetchItems<WaJobLogEntry>(
+    `/api/whatsapp/history/${encodeURIComponent(rowId)}?${q.toString()}`
+  );
+}
+
+// ── contacts (fallback to CRM contacts when picker UI needed) ────────────
+
+export interface WaCrmContact {
+  id: string;
+  workspace_id: string;
+  first_name: string | null;
+  last_name: string | null;
+  phone: string | null;
+  email: string | null;
+}
+
+/** Lists CRM contacts that have a phone number — these are the only ones
+ * pickable for WhatsApp send. Server endpoint is provided by CRM lib (Agent
+ * A surfaces a thin adapter at /api/whatsapp/contacts). When that endpoint
+ * isn't present yet, we fall through to /api/crm/contacts which has long
+ * existed. */
+export async function fetchSendableContacts(
+  workspaceId: string,
+  query?: string
+): Promise<Result<WaCrmContact[]>> {
+  const q = new URLSearchParams({ workspace_id: workspaceId });
+  if (query) q.set("q", query);
+  q.set("has_phone", "1");
+
+  // Adapter route also returns `{ items }` envelope — unwrap to bare array.
+  const primary = await jsonFetchItems<WaCrmContact>(
+    `/api/whatsapp/contacts?${q.toString()}`,
+  );
+  if (primary.ok) return primary;
+  if (primary.code !== "not_found") return primary;
+
+  // Fallback to CRM endpoint. Its shape is `{ items: CrmContact[] }`, not a bare array —
+  // so we use a wider type here and unwrap.
+  const crmQ = new URLSearchParams({ workspace_id: workspaceId });
+  if (query) crmQ.set("search", query);
+  crmQ.set("limit", "200");
+  const crm = await jsonFetch<{ items?: WaCrmContact[] }>(
+    `/api/crm/contacts?${crmQ.toString()}`
+  );
+  if (!crm.ok) return crm;
+  const list = (crm.data.items ?? []).filter((c) => !!(c.phone && c.phone.trim()));
+  return ok(list);
+}
+
 /* ════════════════════════════════════════════════════════════════════════
    Inbox v2 — conversation-centric API (Wave 1)
    ────────────────────────────────────────────────────────────────────────
