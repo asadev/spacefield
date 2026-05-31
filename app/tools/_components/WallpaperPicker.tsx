@@ -1,7 +1,7 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { TOOL_ICONS } from "../_data/tools-list";
 import {
   DEFAULT_WALLPAPER_ID,
@@ -15,7 +15,6 @@ import {
 } from "./wallpaper-resolver";
 import { useWorkspaceKey } from "./useWorkspaces";
 import { useTheme } from "@/components/ThemeProvider";
-import { INTERACTIVE_COMPONENTS } from "./wallpapers/index";
 
 /* WallpaperPicker — modal overlay for swapping the desktop background.
  * Mirrors the AppStore / WidgetGallery / DockCustomizer treatment:
@@ -23,7 +22,7 @@ import { INTERACTIVE_COMPONENTS } from "./wallpapers/index";
  *
  * Sources:
  *   1. PAIRED_WALLPAPERS — light/dark theme-aware builtin set.
- *   2. Legacy gradients / photos / interactive — single-mode builtins.
+ *   2. Legacy gradients / photos — single-mode builtins.
  *   3. Custom wallpapers — fetched from /api/wallpapers/list at mount.
  *
  * The unified resolver hands back per-entry getBackground/getPreview
@@ -40,7 +39,6 @@ const SECTION_ORDER: SectionId[] = [
   "pairs",
   "gradients",
   "photos",
-  "interactive",
   "custom",
 ];
 
@@ -48,7 +46,6 @@ const SECTION_LABEL: Record<SectionId, string> = {
   pairs: "Theme pairs",
   gradients: "Gradients",
   photos: "Photos",
-  interactive: "Interactive",
   custom: "Custom",
 };
 
@@ -270,22 +267,12 @@ export default function WallpaperPicker({ open, onClose }: Props) {
                             : "border-app hover:border-app-hover"
                         }`}
                       >
-                        {/* Preview swatch — for interactive entries we
-                            mount the actual canvas/Three.js component
-                            in `preview` mode so the tile shows what
-                            the wallpaper LOOKS LIKE, not a stand-in
-                            gradient. */}
+                        {/* Preview swatch — a cheap CSS gradient that
+                            shows what the wallpaper looks like. */}
                         <div
                           className="relative aspect-[16/10] w-full overflow-hidden"
                           style={{ background: preview }}
                         >
-                          {entry.section === "interactive" &&
-                            entry.interactiveKey &&
-                            INTERACTIVE_COMPONENTS[entry.interactiveKey] && (
-                              <InteractivePreview
-                                interactiveKey={entry.interactiveKey}
-                              />
-                            )}
                           {entry.badge && (
                             <span className="absolute left-2 top-2 rounded-full bg-app/70 px-2 py-0.5 text-[9px] font-medium uppercase tracking-[0.14em] text-app backdrop-blur-md">
                               {entry.badge}
@@ -343,43 +330,5 @@ export default function WallpaperPicker({ open, onClose }: Props) {
         </motion.div>
       )}
     </AnimatePresence>
-  );
-}
-
-/* InteractivePreview — measures its container, then mounts the
- * matching canvas/Three.js wallpaper component with the `preview`
- * prop so the tile shows the ACTUAL rendered look (not a stand-in
- * gradient). The component's preview mode runs at reduced density,
- * pauses on tab-hide, and tears down cleanly on unmount.
- *
- * Lazy mount: we only attach a ResizeObserver once the picker is
- * actually visible — since each preview spins up its own WebGL
- * context, doing them all at once would blow the browser's context
- * limit on very large picker grids. With only 3 interactive
- * wallpapers in the catalog this is well below any practical
- * threshold. */
-function InteractivePreview({ interactiveKey }: { interactiveKey: string }) {
-  const Component = INTERACTIVE_COMPONENTS[interactiveKey];
-  const ref = useRef<HTMLDivElement | null>(null);
-  const [size, setSize] = useState<{ w: number; h: number } | null>(null);
-
-  useEffect(() => {
-    const node = ref.current;
-    if (!node) return;
-    const ro = new ResizeObserver(() => {
-      const rect = node.getBoundingClientRect();
-      if (rect.width > 0 && rect.height > 0) {
-        setSize({ w: Math.round(rect.width), h: Math.round(rect.height) });
-      }
-    });
-    ro.observe(node);
-    return () => ro.disconnect();
-  }, []);
-
-  if (!Component) return null;
-  return (
-    <div ref={ref} className="absolute inset-0">
-      {size && <Component preview={size} />}
-    </div>
   );
 }
