@@ -37,6 +37,8 @@ export const ICONS: Record<string, string> = {
     "M9 3v1H4v2h16V4h-5V3H9zm-3 5l1 13h10l1-13H6zm3 2h2v9H9v-9zm4 0h2v9h-2v-9z",
   inbox:
     "M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm0 2v9h4a3 3 0 006 0h4V5H5zm0 11v3h14v-3h-4a5 5 0 01-10 0H5z",
+  bell:
+    "M12 2a2 2 0 00-2 2v.29A7 7 0 005 11v4l-1.6 1.6a1 1 0 00.7 1.7h15.8a1 1 0 00.7-1.7L19 15v-4a7 7 0 00-5-6.71V4a2 2 0 00-2-2zm0 3a5 5 0 015 5v4.59l.59.41H6.41L7 14.59V10a5 5 0 015-5zm-2 15a2 2 0 004 0h-4z",
   // Inbox v2 — composer + bubble affordances
   mic: "M12 2a3 3 0 00-3 3v6a3 3 0 006 0V5a3 3 0 00-3-3zm-7 9a7 7 0 0014 0h-2a5 5 0 01-10 0H5zm6 7.93V22h2v-3.07A9 9 0 0011 18.93z",
   reply:
