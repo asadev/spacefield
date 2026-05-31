@@ -196,7 +196,7 @@ export default function WhatsAppApp({ width, initialParams }: NativeAppProps) {
   }
 
   return (
-    <div className="wa-shell flex h-full flex-row bg-app">
+    <div className="wa-shell relative flex h-full flex-row bg-app">
       <aside
         className={`flex shrink-0 flex-col overflow-y-auto border-r border-app bg-app-elevated ${
           compact ? "w-40" : "w-48"
