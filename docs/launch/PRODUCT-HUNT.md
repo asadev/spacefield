@@ -59,7 +59,7 @@ Posted within 2 minutes of go-live. Don't paste it as a reply to the
 post — use "Maker's first comment" so it pins.
 
 ```
-Hey PH 👋 — I'm Asad, building Spacefield from Dubai.
+Hey PH 👋 — I'm the maintainer, building Spacefield from Dubai.
 
 The TL;DR: most solo operators (brokers, agents, freelancers) pay
 for 8–12 separate SaaS subscriptions, and still spend half their day
@@ -87,18 +87,18 @@ Ask me anything 🙏
 Pre-write the first 5 replies. They guarantee momentum in the
 critical first hour.
 
-1. **Friend A** asks `What's the killer feature?` — Asad replies with
+1. **Friend A** asks `What's the killer feature?` — the maintainer replies with
    the agent-driven workflow story.
 2. **Friend B** asks `How does it compare to Notion + Zapier?` —
-   Asad replies "different shape; less assembly".
-3. **Friend C** asks `Will there be a mobile app?` — Asad replies
+   the maintainer replies "different shape; less assembly".
+3. **Friend C** asks `Will there be a mobile app?` — the maintainer replies
    "PWA today, native within 90 days, here's the icon".
-4. **Friend D** asks `Open-source?` — Asad replies "core no, but
+4. **Friend D** asks `Open-source?` — the maintainer replies "core no, but
    skills SDK yes, here's the repo".
-5. **Friend E** asks `Pricing for teams?` — Asad replies with the
+5. **Friend E** asks `Pricing for teams?` — the maintainer replies with the
    Studio tier breakdown.
 
-These are real friends, real questions Asad has been asked before. Not
+These are real friends, real questions the maintainer has been asked before. Not
 sockpuppets. PH detects sockpuppets and kills the rank.
 
 ---
@@ -112,7 +112,7 @@ sockpuppets. PH detects sockpuppets and kills the rank.
 | 3–6 | Reply to comments ≤15 min |
 | 6–10 | Reply to comments ≤30 min |
 | 10–18 | Reply nightly (Dubai sleep window) — set autoresponder |
-| 18–24 | Reply ≤15 min once Asad wakes |
+| 18–24 | Reply ≤15 min once the maintainer wakes |
 
 ---
 

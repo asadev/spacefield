@@ -149,7 +149,7 @@ export default async function NewAlertPage({
               name="action_recipients"
               rows={4}
               spellCheck={false}
-              placeholder={"you@example.com\n+971500000000"}
+              placeholder={"you@example.com\n+10000000000"}
               className={`${inputClass} font-mono text-xs`}
             />
           </Field>

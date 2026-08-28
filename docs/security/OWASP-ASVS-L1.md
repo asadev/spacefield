@@ -74,7 +74,7 @@ Final tally is at the bottom.
 | 4.1.5 — Access control fails closed | Pass | Default-deny RLS; admin checks fail-closed in `assertCan`. |
 | 4.2.1 — Sensitive data + APIs protected against IDOR | Pass | Verified by middleware path-scoping + RLS workspace_id filters. |
 | 4.2.2 — Anti-CSRF tokens on state-changing requests | Pass | `sameSite=lax` cookies + same-origin requirement on middleware. Server actions also enforce. |
-| 4.3.1 — Admin interface uses MFA | Partial | Studio access for Asad has 2FA; in-app `/admin` reuses normal session auth. |
+| 4.3.1 — Admin interface uses MFA | Partial | Studio access for the maintainer has 2FA; in-app `/admin` reuses normal session auth. |
 | 4.3.2 — Directory browsing disabled | Pass | Next.js does not serve directory listings. |
 
 ## V5 — Validation, sanitization, encoding

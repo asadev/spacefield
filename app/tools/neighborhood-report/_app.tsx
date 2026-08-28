@@ -545,7 +545,7 @@ export default function NeighborhoodReportApp({ width, openApp }: NativeAppProps
   const onShare = useCallback(async () => {
     if (!featured) return;
     const url = `${typeof window !== "undefined" ? window.location.origin : ""}/tools/neighborhood-report/${featured.id}`;
-    const text = `${featured.name} — Overall ${featured.scores.overall.toFixed(1)}/10 (${getScoreLabel(featured.scores.overall)}) on the Asad Iqbal Neighborhood Report.`;
+    const text = `${featured.name} — Overall ${featured.scores.overall.toFixed(1)}/10 (${getScoreLabel(featured.scores.overall)}) on the Spacefield Neighborhood Report.`;
     try {
       if (typeof navigator !== "undefined" && navigator.share) {
         await navigator.share({ title: featured.name, text, url });

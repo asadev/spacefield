@@ -6,7 +6,7 @@
 --
 -- Design choice — we keep the queue tables (instead of just a
 -- deleted_at on auth.users / public.workspaces) because:
---   * Asad wants the cancel-window to be visible to the user. A
+--   * the maintainer wants the cancel-window to be visible to the user. A
 --     dedicated row with grace_until + requested_at is easier to read,
 --     show in the UI, and reason about than nullable timestamps.
 --   * auth.users is owned by Supabase auth and we shouldn't be writing

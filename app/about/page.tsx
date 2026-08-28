@@ -45,7 +45,7 @@ export default function AboutPage() {
 
       <h2>Who&apos;s behind it</h2>
       <p>
-        Space Field is built by Asad Iqbal — a lifelong builder shipping the
+        Space Field is built by Spacefield — a lifelong builder shipping the
         product publicly. If you have feedback, ideas, or you&apos;d like a
         tool we don&apos;t have yet, the{" "}
         <a href="/contact">contact page</a> is the fastest way to reach us.

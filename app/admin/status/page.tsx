@@ -93,7 +93,7 @@ export default function StatusOverview() {
                   />
                 </div>
                 <p className="mt-2 text-[11px] leading-snug text-secondary">
-                  {p.asad}
+                  {p.plain}
                 </p>
                 <p className="mt-1 text-[10px] text-faint">
                   {t.done}/{t.total} · {t.missing} missing
@@ -156,7 +156,7 @@ export default function StatusOverview() {
                   </span>
                 </div>
                 <p className="mt-0.5 text-[11px] leading-snug text-secondary">
-                  {c.asad}
+                  {c.plain}
                 </p>
                 <div className="mt-2 h-1 w-full overflow-hidden rounded-full bg-app">
                   <div

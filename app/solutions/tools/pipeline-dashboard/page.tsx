@@ -56,7 +56,7 @@ function defaultState(): PipelineState {
       {
         id: uid(),
         name: "Acme Corp — Enterprise seat expansion",
-        owner: "Asad",
+        owner: "Alex",
         stage: "proposal",
         probability: 55,
         amount: 48000,

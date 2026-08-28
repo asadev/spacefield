@@ -2,7 +2,7 @@
 
 /* LaunchpadSidebar — Finder-style left rail.
  *
- * Sections (matches Asad's 2026-04-29 spec):
+ * Sections (matches the maintainer's 2026-04-29 spec):
  *
  *   Workspace   → a single non-clickable header showing the active
  *                 workspace's name + colour dot. Hovering surfaces a

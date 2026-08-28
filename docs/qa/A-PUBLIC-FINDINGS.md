@@ -1,6 +1,6 @@
 # QA-A: Public anonymous surface — findings
 
-**Audited**: 2026-05-19/20 by QA-A (parallel opus run, Asad asleep)
+**Audited**: 2026-05-19/20 by QA-A (parallel opus run, the maintainer asleep)
 **Pages walked**: 25 routes + adjacent (sitemap, robots, security.txt, OG image, manifest)
 **Live build under test**: 877caf68 (Vercel) / 783fa8b (main)
 **Method**: source-read of every in-scope route + 22 WebFetch calls against the live site, plus header probes.

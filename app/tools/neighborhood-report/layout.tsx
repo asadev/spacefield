@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Dubai Neighborhood Quality Report — 50 Communities Scored | Asad Iqbal",
+  title: "Dubai Neighborhood Quality Report — 50 Communities Scored | Spacefield",
   description: "Comprehensive, data-driven neighborhood quality reports for 50 Dubai communities. Six scoring categories covering investment potential, livability, connectivity, family-friendliness, value for money, and future growth.",
   openGraph: {
     title: "Dubai Neighborhood Quality Report — 50 Communities Scored",

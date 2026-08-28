@@ -45,7 +45,7 @@ async function hasSupabaseAuthCookie(): Promise<boolean> {
  * paints a neutral skeleton (not the marketing hero) for visitors that
  * are probably signed in — eliminates the "sign in box flashes for half
  * a second then disappears, and clicking it bounces you back" UX bug
- * (caught 2026-05-27 by Asad's screen recording). */
+ * (caught 2026-05-27 by the maintainer's screen recording). */
 export default async function SpaceFieldHome() {
   const likelyAuthed = await hasSupabaseAuthCookie();
   return <HomeGate likelyAuthed={likelyAuthed} />;

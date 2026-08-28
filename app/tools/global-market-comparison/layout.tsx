@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Global Market Comparison – Real-Time Real Estate Data | Asad Iqbal",
+  title: "Global Market Comparison – Real-Time Real Estate Data | Spacefield",
   description:
     "Compare real estate markets worldwide with live data from BIS, OECD, and World Bank. Property price indices, affordability ratios, economic fundamentals across 60+ countries.",
   openGraph: {

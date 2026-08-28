@@ -1,7 +1,7 @@
 # T+0 to T+10 — Hour-by-Hour Response Plan
 
 > The most-loaded 10 hours of the launch. Sets the trajectory.
-> Owner: Asad on every hour today; named slots for future hires.
+> Owner: the maintainer on every hour today; named slots for future hires.
 
 Companion: [WAR-ROOM.md](./WAR-ROOM.md), [COMMS-PLAN.md](./COMMS-PLAN.md),
 [ROLLBACK_TRIGGERS.md](./ROLLBACK_TRIGGERS.md).
@@ -10,7 +10,7 @@ Companion: [WAR-ROOM.md](./WAR-ROOM.md), [COMMS-PLAN.md](./COMMS-PLAN.md),
 
 ## T+0 — Go-live (09:00 Dubai)
 
-**Shift:** Asad — full focus, no other meetings.
+**Shift:** the maintainer — full focus, no other meetings.
 
 - Product Hunt scheduled post goes live at 00:01 PST = 12:01 Dubai —
   we adjust the Dubai start to match: **post goes live at 12:01 Dubai
@@ -23,7 +23,7 @@ Companion: [WAR-ROOM.md](./WAR-ROOM.md), [COMMS-PLAN.md](./COMMS-PLAN.md),
 
 ## T+1 — Stabilisation
 
-**Shift:** Asad.
+**Shift:** the maintainer.
 
 - Monitoring: signup → activation funnel (target >40%).
 - Watch: AI assistant error rate (target <2%).
@@ -35,7 +35,7 @@ Companion: [WAR-ROOM.md](./WAR-ROOM.md), [COMMS-PLAN.md](./COMMS-PLAN.md),
 
 ## T+2 — First spike absorbs
 
-**Shift:** Asad.
+**Shift:** the maintainer.
 
 - Monitoring: DB CPU + connection pool + replica lag.
 - Watch: bandwidth on Vercel.
@@ -45,7 +45,7 @@ Companion: [WAR-ROOM.md](./WAR-ROOM.md), [COMMS-PLAN.md](./COMMS-PLAN.md),
 
 ## T+3 — Early-user signups taper, returning sessions begin
 
-**Shift:** Asad.
+**Shift:** the maintainer.
 
 - Monitoring: returning-user metrics. First "session 2" activations.
 - Watch: support inbox depth (target <10).
@@ -56,7 +56,7 @@ Companion: [WAR-ROOM.md](./WAR-ROOM.md), [COMMS-PLAN.md](./COMMS-PLAN.md),
 
 ## T+4 — Reply-everywhere sweep
 
-**Shift:** Asad.
+**Shift:** the maintainer.
 
 - Monitoring: tweet/PH/HN engagement; quote-tweet volume.
 - Watch: any tweet picking up traction we should boost.
@@ -67,14 +67,14 @@ Companion: [WAR-ROOM.md](./WAR-ROOM.md), [COMMS-PLAN.md](./COMMS-PLAN.md),
 
 ## T+5 — Lunch / energy reset
 
-**Shift:** Asad. Eat. 20 min off-screen.
+**Shift:** the maintainer. Eat. 20 min off-screen.
 
 - Auto-ack on support inbox if needed.
 - Sentry alerts still active to phone.
 
 ## T+6 — Mid-day stats post
 
-**Shift:** Asad.
+**Shift:** the maintainer.
 
 - Monitoring: signup count + tool-use distribution.
 - Comms: mid-day stats tweet — "6 hours in: X signups, top tools
@@ -84,7 +84,7 @@ Companion: [WAR-ROOM.md](./WAR-ROOM.md), [COMMS-PLAN.md](./COMMS-PLAN.md),
 
 ## T+7 — Press follow-up
 
-**Shift:** Asad.
+**Shift:** the maintainer.
 
 - Comms: nudge journalists with embargo lifted at T+0 — ask if they
   want quotes / a quick call.
@@ -92,7 +92,7 @@ Companion: [WAR-ROOM.md](./WAR-ROOM.md), [COMMS-PLAN.md](./COMMS-PLAN.md),
 
 ## T+8 — Evening surge (US East wakes up)
 
-**Shift:** Asad — second adrenaline window.
+**Shift:** the maintainer — second adrenaline window.
 
 - Monitoring: signups should re-spike as US East workday begins.
 - Watch: Vercel function regions — confirm US East requests routing
@@ -103,7 +103,7 @@ Companion: [WAR-ROOM.md](./WAR-ROOM.md), [COMMS-PLAN.md](./COMMS-PLAN.md),
 
 ## T+9 — Pre-handoff stabilisation
 
-**Shift:** Asad.
+**Shift:** the maintainer.
 
 - Monitoring: queue depth on background jobs (cron, emails, AI).
 - Watch: AI cost burn for the day. Project full day cost.
@@ -114,7 +114,7 @@ Companion: [WAR-ROOM.md](./WAR-ROOM.md), [COMMS-PLAN.md](./COMMS-PLAN.md),
 
 ## T+10 — Founder reflection thread + day-1 close-out
 
-**Shift:** Asad → about to hand to overnight rest mode.
+**Shift:** the maintainer → about to hand to overnight rest mode.
 
 - Monitoring: final KPI snapshot for `#metrics`. See
   [KPI-DASHBOARD.md](./KPI-DASHBOARD.md).

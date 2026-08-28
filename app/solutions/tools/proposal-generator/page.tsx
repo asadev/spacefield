@@ -143,7 +143,7 @@ function defaultState(): State {
     clientName: "Jane Doe",
     clientCompany: "Acme Co",
     proposalTitle: "Pipeline Reporting Engagement",
-    preparedBy: "Asad Iqbal",
+    preparedBy: "Spacefield",
     date: new Date().toISOString().slice(0, 10),
     problem: PRESETS.consulting.problem!,
     solution: PRESETS.consulting.solution!,

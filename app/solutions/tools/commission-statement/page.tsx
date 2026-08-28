@@ -58,7 +58,7 @@ const uid = () => Math.random().toString(36).slice(2, 9);
 
 function defaultState(): State {
   return {
-    rep: "Asad Iqbal",
+    rep: "Spacefield",
     period: "2026 Q2",
     quota: 250000,
     ytdQuota: 500000,

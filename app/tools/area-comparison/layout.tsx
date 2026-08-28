@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Area Comparison Tool — Compare Dubai Communities Side by Side | Asad Iqbal",
+  title: "Area Comparison Tool — Compare Dubai Communities Side by Side | Spacefield",
   description:
     "Pick 2–3 Dubai areas and compare them side-by-side across price, yield, schools, commute, lifestyle, and more. Data-driven comparison powered by 50-community dataset.",
   openGraph: {

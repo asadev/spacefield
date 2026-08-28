@@ -19,7 +19,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
  * daily costs nothing once next month's partition exists.
  *
  * NOTE: the scaffolds are not yet authoritative — the legacy tables
- * still receive all production writes. Once Asad runs the swap
+ * still receive all production writes. Once the maintainer runs the swap
  * documented at the top of 20260518e_db_scale.sql, the rotator
  * automatically keeps the live tables ahead by one month.
  *

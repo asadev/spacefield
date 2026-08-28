@@ -146,7 +146,7 @@ export function useWorkspaceSync() {
           // on every mount in an infinite loop. (useRef guard resets
           // when window.location.reload() runs, so the only way to
           // break the loop is to detect a no-op and skip the reload.
-          // Asad caught this 2026-05-27 — page was auto-refreshing
+          // the maintainer caught this 2026-05-27 — page was auto-refreshing
           // constantly on his desktop.)
           let anythingChanged = false;
 

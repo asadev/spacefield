@@ -1,7 +1,7 @@
 -- ─────────────────────────────────────────────────────────────────────
 -- Admin panel foundation — 2026-05-09
 --
--- Adds the platform-control plane Asad needs in /admin:
+-- Adds the platform-control plane the maintainer needs in /admin:
 --   1. app_registry           — declarative list of every OS-shell app
 --   2. user_app_grants        — per-user override (complements
 --                               workspace_tool_grants)

@@ -148,7 +148,7 @@ function defaultDeal(name = "Acme — Q2 expansion"): Deal {
     id: uid(),
     name,
     company: "Acme Co",
-    owner: "Asad",
+    owner: "Alex",
     amount: 45000,
     scores: {
       metrics: 3,

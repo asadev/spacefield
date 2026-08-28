@@ -72,7 +72,7 @@
 
 ### A4. Signin/auth flow keyboard trap test not done
 - **Why P1:** if you can't tab through signin, you can't enter.
-- **Action:** Asad personally tabs through `/signin` end-to-end with
+- **Action:** the maintainer personally tabs through `/signin` end-to-end with
   the mouse unplugged, and signs in. Same for signup, forgot-password.
 - **Status:** UNVERIFIED. Schedule in BUG-BASH.md.
 
@@ -219,7 +219,7 @@ To call a11y "launch-ready":
       hotfix candidates).
 - [ ] P3 items filed in backlog tagged `a11y-post-launch`.
 - [ ] One full keyboard-only signup → first-tool-output flow
-      completed by Asad and recorded as proof.
+      completed by the maintainer and recorded as proof.
 
-Owner: Asad. Re-test cadence post-launch: monthly axe-core run on
+Owner: the maintainer. Re-test cadence post-launch: monthly axe-core run on
 the top-10 pages, until score is consistently >95.

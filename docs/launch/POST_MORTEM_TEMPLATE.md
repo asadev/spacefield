@@ -88,10 +88,10 @@ _What allowed this to happen. Plural; aim for at least 2-3 causes._
 
 | Owner | Due | Item | Tracking link |
 |-------|-----|------|--------------|
-| Asad | 2026-05-15 | Add real Paddle webhook fixtures (captured from prod) to the test suite. | issue #TBD |
-| Asad | 2026-05-19 | Add canary deploy step (10% → 100% with auto-rollback on error rate). | issue #TBD |
-| Asad | 2026-05-13 | Switch on-call to SMS-first, email-second. | issue #TBD |
-| Asad | 2026-05-20 | Add a "previous deploy is 1 click away" widget to /admin/status for faster rollback during incidents. | issue #TBD |
+| Owner | 2026-05-15 | Add real Paddle webhook fixtures (captured from prod) to the test suite. | issue #TBD |
+| Owner | 2026-05-19 | Add canary deploy step (10% → 100% with auto-rollback on error rate). | issue #TBD |
+| Owner | 2026-05-13 | Switch on-call to SMS-first, email-second. | issue #TBD |
+| Owner | 2026-05-20 | Add a "previous deploy is 1 click away" widget to /admin/status for faster rollback during incidents. | issue #TBD |
 
 Action items without an owner and a date are wishes, not action items.
 If you can't assign one of those, don't add the item.

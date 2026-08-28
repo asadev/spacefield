@@ -46,7 +46,7 @@ export default function DesktopBackground() {
   // Start as null (not DEFAULT_WALLPAPER_ID) so SSR + first paint don't
   // render the wrong wallpaper. The mount effect below reads localStorage
   // and sets the real wallpaperId — by then we know what to paint. This
-  // avoids the flash Asad caught 2026-05-27 where his chosen wallpaper
+  // avoids the flash the maintainer caught 2026-05-27 where his chosen wallpaper
   // (beach) appeared briefly after a default one. With this change the
   // underlying `bg-app` (solid dark) shows for one render cycle, then
   // crossfades into the user's actual wallpaper via the existing

@@ -95,7 +95,7 @@ Counts: ✅ 9, ⚠️ 11, ❌ 4 (capped at 30 total per brief).
    `lib/escape-helpers.ts:55` that does this correctly and is already used by
    `app/admin/database/_helpers.ts` and `app/admin/people/export/route.ts`.
    **Fix:** delete the local `csvCell` at line 1311 and import `escapeCsvCell`
-   from `@/lib/escape-helpers`. Severity: **P0** — exposes Asad and other
+   from `@/lib/escape-helpers`. Severity: **P0** — exposes the maintainer and other
    admins to RCE-equivalent via a malicious user-controlled field (workspace
    name, full_name, etc.). Persona: power admin who clicks Export.
 

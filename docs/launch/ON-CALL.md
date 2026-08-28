@@ -1,29 +1,29 @@
 # On-Call Rotation
 
 > Procedure for who answers the phone when something breaks. Today
-> this is mostly Asad; the structure is here so a hire slots in.
+> this is mostly the maintainer; the structure is here so a hire slots in.
 
 ## Today's reality (one-person company)
 
-- **Primary on-call:** Asad. 24/7.
+- **Primary on-call:** the maintainer. 24/7.
 - **Secondary:** Friend-X. Paging-eligible during launch week ONLY
   (T-1 to T+7).
-- **Escalation path:** alerts → Asad's phone → Friend-X (after 15
+- **Escalation path:** alerts → the maintainer's phone → Friend-X (after 15
   min no-ack) → support email (auto-ack).
 
-Friend-X is a real person Asad has briefed. They have:
+Friend-X is a real person the maintainer has briefed. They have:
 - Printed rollback procedure (from ROLLBACK_TRIGGERS.md)
 - Vercel + Supabase dashboard logins (read-only)
-- Asad's spouse's number for "is Asad OK"
+- the maintainer's spouse's number for "is the maintainer OK"
 - One-page playbook: "if the site is down, here is the one button you
-  push, then call Asad"
+  push, then call the maintainer"
 
 ## Tomorrow's structure (post-first-hire)
 
 | Week | Primary | Secondary | Escalation |
 |---|---|---|---|
-| Even-numbered | Asad | Hire-1 | Hire-2 |
-| Odd-numbered | Hire-1 | Asad | Hire-2 |
+| Even-numbered | Owner | Hire-1 | Hire-2 |
+| Odd-numbered | Hire-1 | Owner | Hire-2 |
 
 Rotate weekly. Two people on a 2-week rotation gives each person
 50% weeks off-call.
@@ -32,7 +32,7 @@ Rotate weekly. Two people on a 2-week rotation gives each person
 
 ## Paging tool
 
-**Today:** Sentry + Better Stack → SMS to Asad's UAE number.
+**Today:** Sentry + Better Stack → SMS to the maintainer's UAE number.
 Phone is on "do not disturb override" for these two senders only.
 
 **Production-ready replacement options (when budget allows):**
@@ -53,9 +53,9 @@ Sentry alert → Email → Gmail filter → Forward to Twilio webhook
 
 ## Off-hours protocol
 
-Define "off-hours" as 23:00–06:00 Dubai for Asad. During off-hours:
+Define "off-hours" as 23:00–06:00 Dubai for the maintainer. During off-hours:
 
-### What pages Asad
+### What pages the maintainer
 - Sev0: security incident, breach, exposed creds — **always pages**.
 - Sev1: site down, auth broken, payment broken — **always pages**.
 - Sev2: one feature broken — **does NOT page**; queued for morning.
@@ -68,7 +68,7 @@ Define "off-hours" as 23:00–06:00 Dubai for Asad. During off-hours:
 
 ### Sleep override conditions
 Even Sev1 doesn't page if:
-- The site has been in known-degraded state for >30 min and Asad
+- The site has been in known-degraded state for >30 min and the maintainer
   acknowledged it before sleeping.
 - A maintenance window is in effect.
 
@@ -111,17 +111,17 @@ The on-call does NOT:
 
 ---
 
-## "Asad is unreachable" protocol
+## "the maintainer is unreachable" protocol
 
-If Asad doesn't ack a Sev1 within 30 min:
+If the maintainer doesn't ack a Sev1 within 30 min:
 1. Friend-X gets a page (via SMS).
 2. Friend-X opens Vercel dashboard, identifies last good deploy,
    uses "Promote to Production" to roll back.
-3. Friend-X posts in `#launch-war-room`: "Asad unreachable.
+3. Friend-X posts in `#launch-war-room`: "the maintainer unreachable.
    Rolled back to {sha}. Will keep trying to reach him."
-4. Friend-X calls Asad's spouse to confirm he's OK.
+4. Friend-X calls the maintainer's spouse to confirm he's OK.
 5. Status page goes to "investigating" with vague copy. No detail
-   until Asad is back.
+   until the maintainer is back.
 
 This protocol exists because the alternative — flying blind for
 hours during a launch — is worse than a possibly-unneeded rollback.

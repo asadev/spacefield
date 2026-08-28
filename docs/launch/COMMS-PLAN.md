@@ -8,13 +8,13 @@
 
 | Channel | Owner | Cadence on launch day |
 |---|---|---|
-| Twitter/X — `@spacefield` | Asad | 6 posts (T+0/2/4/6/8/10h) |
-| LinkedIn — personal + page | Asad | 1 long-form + 2 short |
-| Product Hunt | Asad + Hunter | See [PRODUCT-HUNT.md](./PRODUCT-HUNT.md) |
-| Hacker News (Show HN) | Asad | 1 post, reply to every comment ≤2h |
-| Email blast (Resend) | Asad | Single send at T+0:30 |
-| In-app banner | Asad | Auto-on via admin banners table |
-| Discord/Slack of friends | Asad | Soft-share at T-1h |
+| Twitter/X — `@spacefield` | Owner | 6 posts (T+0/2/4/6/8/10h) |
+| LinkedIn — personal + page | Owner | 1 long-form + 2 short |
+| Product Hunt | the maintainer + Hunter | See [PRODUCT-HUNT.md](./PRODUCT-HUNT.md) |
+| Hacker News (Show HN) | Owner | 1 post, reply to every comment ≤2h |
+| Email blast (Resend) | Owner | Single send at T+0:30 |
+| In-app banner | Owner | Auto-on via admin banners table |
+| Discord/Slack of friends | Owner | Soft-share at T-1h |
 
 ---
 

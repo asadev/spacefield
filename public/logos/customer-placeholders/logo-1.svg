@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 160 48" role="img" aria-label="Customer logo placeholder 1">
+  <rect x="0" y="0" width="160" height="48" rx="6" fill="#9ca3af" opacity="0.18"/>
+  <rect x="0" y="0" width="160" height="48" rx="6" fill="none" stroke="#9ca3af" stroke-opacity="0.35" stroke-dasharray="4 4"/>
+  <text x="80" y="29" text-anchor="middle" font-family="system-ui, -apple-system, Segoe UI, Helvetica, Arial, sans-serif" font-size="13" font-weight="600" fill="#6b7280" letter-spacing="2">LOGO 1</text>
+</svg>

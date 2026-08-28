@@ -44,7 +44,7 @@ export function limitFor(key: LimitKey, isPro: boolean): number {
 // app's instance/connect API and the AI inventory-caption endpoint.
 //
 // The source of truth for tier is `public.subscriptions` (managed by
-// the Paddle webhook + manual admin grants — see Asad's row
+// the Paddle webhook + manual admin grants — see the maintainer's row
 // `tier_id='pro'` granted via metadata.granted_by='manual_admin_grant').
 // We read tier_id there with a `status='active'` filter so cancelled /
 // past-due subs don't keep granting Pro.
@@ -53,7 +53,7 @@ export async function isPro(userId: string | null | undefined): Promise<boolean>
   const supabase = await createClient();
 
   // Platform admins (profiles.is_admin = true) auto-pass every Pro gate.
-  // Asad / staff shouldn't have to pay themselves to test or operate the
+  // the maintainer / staff shouldn't have to pay themselves to test or operate the
   // platform. Single round-trip in parallel with the subscription check.
   const [{ data: prof }, { data: sub }] = await Promise.all([
     supabase

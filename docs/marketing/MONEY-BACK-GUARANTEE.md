@@ -106,7 +106,7 @@ Thanks for trying us. The reason you mentioned ({reasonShort}) is
 on our list — if it gets fixed and you want to come back, this
 email is the place to start.
 
-— Asad
+— the maintainer
 ```
 
 ### Email reply template (denied)
@@ -125,7 +125,7 @@ bend it for everyone. {Alternative we can offer, if any}.
 Happy to talk it through — reply here or book 15 min:
 {calendlyLink}.
 
-— Asad
+— the maintainer
 ```
 
 ## Reporting

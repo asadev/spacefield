@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Dubai Rental Yield Heatmap — Interactive Map of 40+ Areas | Asad Iqbal",
+  title: "Dubai Rental Yield Heatmap — Interactive Map of 40+ Areas | Spacefield",
   description:
     "Explore rental yields across 40+ Dubai communities on an interactive heatmap. Compare gross yields, average rents, price per sqft, and year-over-year changes to find the best investment areas.",
   openGraph: {

@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Developer Track Record — 30+ Dubai Developers Scored | Asad Iqbal",
+  title: "Developer Track Record — 30+ Dubai Developers Scored | Spacefield",
   description:
     "Score and compare 30+ Dubai real estate developers on delivery timeline, build quality, and price appreciation history. Emaar, DAMAC, Sobha, Nakheel, and more.",
   openGraph: {

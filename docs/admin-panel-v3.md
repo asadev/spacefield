@@ -4,9 +4,9 @@ This contract drives the third round of admin-panel work. Read it
 **before** touching any code. v1 (basic admin: apps/agents/logs/etc) and
 v2 (skills/models/users-tabs/workspaces-tabs/webhooks/jobs/database/
 insights/ops/emails) already shipped. This round adds **deep
-editability** for existing surfaces AND **new sections** Asad demands.
+editability** for existing surfaces AND **new sections** the maintainer demands.
 
-## What Asad said (verbatim)
+## What the maintainer said (verbatim)
 
 > "the skills are not that much of editable no no tools are editable I
 > need everything properly editable properly controllable and full
@@ -115,7 +115,7 @@ editability** for existing surfaces AND **new sections** Asad demands.
   - Show: tool name (mono), source kind (`skill-code` / `skill-custom` / `app-registry`), description, used-by count.
 - `/admin/tools-catalog/[source]/[id]`: per-tool detail. Source code link (if code), full schema, list of agents that use it, recent invocations, override controls (description, requires_confirmation), per-agent overrides table.
 
-### J — Providers (NEW + critical for Asad's "add models myself" ask)
+### J — Providers (NEW + critical for the maintainer's "add models myself" ask)
 - `/admin/providers`: lists `ai_providers` (Anthropic/OpenAI/Google/etc).
 - Per-provider page: edit display_name, base_url, api_key_env (reference name), cost_quota_usd. Toggle status.
 - "Test connection" button: server-action that pings the provider's models-list endpoint with the live API key (read from process.env using the api_key_env name) and stores result in `ai_provider_health`.

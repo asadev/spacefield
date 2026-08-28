@@ -56,7 +56,7 @@ function defaultState(): State {
         due: new Date(Date.now() + 2 * 86400000).toISOString().slice(0, 10),
         message: "Send pricing proposal",
         status: "pending",
-        owner: "Asad",
+        owner: "Alex",
       },
       {
         id: uid(),
@@ -64,7 +64,7 @@ function defaultState(): State {
         due: new Date(Date.now() - 86400000).toISOString().slice(0, 10),
         message: "Check on pilot results",
         status: "pending",
-        owner: "Asad",
+        owner: "Alex",
       },
     ],
   };

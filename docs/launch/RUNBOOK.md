@@ -12,19 +12,19 @@
 ## Roles
 
 Spacefield is a one-person company right now. We list real roles anyway —
-**Asad currently wears all three hats**. The point of naming them is so
-that during an incident "who's doing what" is obvious instead of "Asad,
+**the maintainer currently wears all three hats**. The point of naming them is so
+that during an incident "who's doing what" is obvious instead of "the maintainer,
 holding three phones".
 
 | Role | Hat | Responsibility |
 |------|-----|---------------|
-| **Founder / Incident Commander** | Asad | Final call on go/no-go, rollback, public comms. |
-| **On-call Engineer** | Asad | First responder to alerts; runs the fix or rolls back. |
-| **Support Lead** | Asad | Triages user reports, replies to email/social, status-page updates. |
+| **Founder / Incident Commander** | Owner | Final call on go/no-go, rollback, public comms. |
+| **On-call Engineer** | Owner | First responder to alerts; runs the fix or rolls back. |
+| **Support Lead** | Owner | Triages user reports, replies to email/social, status-page updates. |
 
-**Escalation path (today):** alerts → Asad's phone → … that's it.
+**Escalation path (today):** alerts → the maintainer's phone → … that's it.
 This is a known single-point-of-failure and is itself a Sev2 risk if
-Asad is unreachable for >30 min during launch week. Mitigation: pre-arrange
+the maintainer is unreachable for >30 min during launch week. Mitigation: pre-arrange
 a backup human (a friend, a contractor, anyone) who has the rollback
 button procedure printed and can hit it on call.
 
@@ -66,7 +66,7 @@ The boring weeks where the launch is actually won or lost.
       retention. Pin the dashboards we'll actually watch on launch day.
 - [ ] Uptime probes on the 5 most important URLs: `/`, `/admin/status`,
       `/login`, the top tool, the Paddle webhook endpoint.
-- [ ] On-call alerting: Sentry → SMS/push to Asad's phone, NOT just email.
+- [ ] On-call alerting: Sentry → SMS/push to the maintainer's phone, NOT just email.
 
 ### T-10 — Support readiness
 - [ ] Help-center top-20 FAQs written and indexed.

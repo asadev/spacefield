@@ -36,7 +36,7 @@ A focused checklist. Do not skip ahead.
 - [ ] **List the regulatory triggers.** EU users in scope → GDPR
       72-hour clock starts NOW. California users in scope → CCPA.
       UAE/KSA users → relevant local laws. UK users → UK GDPR.
-- [ ] **Inform Asad's co-counsel / lawyer** if the severity is above
+- [ ] **Inform the maintainer's co-counsel / lawyer** if the severity is above
       "email address only". (We don't have retainer counsel; the
       decision-tree is: above this bar, find one.)
 
@@ -65,7 +65,7 @@ because we have no EU office.
   - Approximate number of data subjects + records
   - Likely consequences
   - Measures taken or proposed
-  - Name + contact of the data-protection point person (Asad)
+  - Name + contact of the data-protection point person (the maintainer)
 
 If we can't fill every field within 72 hours, file with what we have
 and submit additional information later. Late notification is worse
@@ -94,7 +94,7 @@ than incomplete notification.
 > If you have questions, reply to this email and a real human (me)
 > will respond.
 >
-> — Asad, Space Field
+> — the maintainer, Space Field
 
 ### Email — "material exposure" (content / billing / hashed passwords)
 
@@ -125,7 +125,7 @@ than incomplete notification.
 > I take full responsibility for this. If you want to talk to me
 > directly, reply to this email or call [phone].
 >
-> — Asad, Space Field
+> — the maintainer, Space Field
 
 ### In-product banner
 
