@@ -54,7 +54,7 @@ export default function PressPage() {
           <ul className="ml-4 list-disc text-sm text-secondary">
             <li>Founded: 2026</li>
             <li>Headquarters: Dubai, United Arab Emirates</li>
-            <li>Founder: Asad Iqbal</li>
+            <li>Founder: Spacefield</li>
             <li>Website: spacefield.co</li>
             <li>Press contact: press@spacefield.co</li>
           </ul>
@@ -83,7 +83,7 @@ export default function PressPage() {
         <section className="mt-10 space-y-3">
           <h2 className="text-lg font-semibold">Founder bio</h2>
           <p className="text-sm leading-relaxed text-secondary">
-            Asad Iqbal — UAE-based founder building Space Field. Background in
+            Spacefield — UAE-based founder building Space Field. Background in
             real estate operations and product. Long-form bio and headshot
             available on request.
           </p>

@@ -11,9 +11,7 @@ import { REGION_MARKET_LABEL } from "@/lib/region";
 const BASE_URL = "https://example.com";
 
 export const ORG_SAMEAS: string[] = [
-  "",
-  "",
-  "",
+  // Add your own social profile URLs here (used for schema.org sameAs).
 ];
 
 /** Organization / brand entity. Rendered in root layout. */
@@ -22,7 +20,7 @@ export function organizationJsonLd() {
     "@context": "https://schema.org",
     "@type": "Organization",
     "@id": `${BASE_URL}/#organization`,
-    name: "example.com",
+    name: "Spacefield",
     legalName: "example.com",
     url: BASE_URL,
     logo: `${BASE_URL}/og-image.png`,
@@ -30,7 +28,7 @@ export function organizationJsonLd() {
       "Real estate intelligence platform — tools, market data, courses, and a verified broker network across 10 markets.",
     founder: {
       "@type": "Person",
-      name: "Asad Iqbal",
+      name: "Spacefield",
       url: BASE_URL,
     },
     sameAs: ORG_SAMEAS,
@@ -44,7 +42,7 @@ export function websiteJsonLd() {
     "@type": "WebSite",
     "@id": `${BASE_URL}/#website`,
     url: BASE_URL,
-    name: "example.com",
+    name: "Spacefield",
     description:
       "Professional real estate tools, market games, courses, and a verified broker network.",
     publisher: { "@id": `${BASE_URL}/#organization` },
@@ -126,7 +124,7 @@ export function articleJsonLd(params: {
     dateModified: params.dateModified || params.datePublished,
     author: {
       "@type": "Person",
-      name: params.author || "Asad Iqbal",
+      name: params.author || "Spacefield",
       url: BASE_URL,
     },
     publisher: { "@id": `${BASE_URL}/#organization` },

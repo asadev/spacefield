@@ -42,7 +42,7 @@ function defaultState(): State {
       {
         id: uid(),
         name: "NYC North",
-        rep: "Asad",
+        rep: "Alex",
         coverage: "10001, 10002, 10003",
       },
       {

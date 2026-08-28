@@ -9,19 +9,19 @@ precedence over the calendar.
 
 | Env var                          | What it is                          | Stored in                         | Cadence | Owner |
 | -------------------------------- | ----------------------------------- | --------------------------------- | ------- | ----- |
-| `SUPABASE_SERVICE_ROLE_KEY`      | Bypasses RLS — full DB read/write   | Supabase dashboard + Vercel env   | 90 d    | Asad  |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY`  | Client-side anon key, RLS-gated     | Supabase dashboard + Vercel env   | 90 d    | Asad  |
-| `RESEND_API_KEY`                 | Outbound transactional email        | Resend dashboard + Vercel env     | 90 d    | Asad  |
-| `POSTMARK_API_KEY`               | Fallback transactional email        | Postmark dashboard + Vercel env   | 90 d    | Asad  |
-| `PADDLE_API_KEY`                 | Paddle billing API (subscriptions)  | Paddle dashboard + Vercel env     | 180 d   | Asad  |
-| `PADDLE_WEBHOOK_SECRET`          | Verifies incoming Paddle webhooks   | Paddle dashboard + Vercel env     | 180 d   | Asad  |
-| `CRON_SECRET`                    | Auth for `/api/cron/*` endpoints    | Vercel env (auto-rotated by Vercel on regen) | 90 d | Asad |
-| `AUTH_FINGERPRINT_SECRET`        | HMAC for lockout fingerprints       | Vercel env                        | 365 d   | Asad  |
-| `UNSUBSCRIBE_TOKEN_SECRET`       | HMAC for one-click unsub tokens     | Vercel env                        | 365 d   | Asad  |
-| `SKILLS_HTTP_HANDLER_SECRET`     | Outbound HMAC to user-defined skill webhooks | Vercel env               | 90 d    | Asad  |
-| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | AI provider keys              | Vercel env                        | 90 d    | Asad  |
-| GitHub PAT (`SPACEFIELD_DEPLOY_TOKEN`) | CI deploys + repo writes       | GitHub repo secrets               | 90 d    | Asad  |
-| GoDaddy API key                  | Custom-domain DNS automation        | Vercel env                        | 180 d   | Asad  |
+| `SUPABASE_SERVICE_ROLE_KEY`      | Bypasses RLS — full DB read/write   | Supabase dashboard + Vercel env   | 90 d    | Owner |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY`  | Client-side anon key, RLS-gated     | Supabase dashboard + Vercel env   | 90 d    | Owner |
+| `RESEND_API_KEY`                 | Outbound transactional email        | Resend dashboard + Vercel env     | 90 d    | Owner |
+| `POSTMARK_API_KEY`               | Fallback transactional email        | Postmark dashboard + Vercel env   | 90 d    | Owner |
+| `PADDLE_API_KEY`                 | Paddle billing API (subscriptions)  | Paddle dashboard + Vercel env     | 180 d   | Owner |
+| `PADDLE_WEBHOOK_SECRET`          | Verifies incoming Paddle webhooks   | Paddle dashboard + Vercel env     | 180 d   | Owner |
+| `CRON_SECRET`                    | Auth for `/api/cron/*` endpoints    | Vercel env (auto-rotated by Vercel on regen) | 90 d | Owner |
+| `AUTH_FINGERPRINT_SECRET`        | HMAC for lockout fingerprints       | Vercel env                        | 365 d   | Owner |
+| `UNSUBSCRIBE_TOKEN_SECRET`       | HMAC for one-click unsub tokens     | Vercel env                        | 365 d   | Owner |
+| `SKILLS_HTTP_HANDLER_SECRET`     | Outbound HMAC to user-defined skill webhooks | Vercel env               | 90 d    | Owner |
+| `OPENAI_API_KEY` / `ANTHROPIC_API_KEY` | AI provider keys              | Vercel env                        | 90 d    | Owner |
+| GitHub PAT (`SPACEFIELD_DEPLOY_TOKEN`) | CI deploys + repo writes       | GitHub repo secrets               | 90 d    | Owner |
+| GoDaddy API key                  | Custom-domain DNS automation        | Vercel env                        | 180 d   | Owner |
 
 "Cadence" is **target** rotation. We schedule the work on a Monday
 morning; we accept up to a 14-day grace before flagging the row in

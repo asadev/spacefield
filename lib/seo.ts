@@ -106,7 +106,7 @@ export function courseJsonLd(slug: string, name: string, description: string, le
     url: `${BASE_URL}/learn/${slug}`,
     provider: {
       "@type": "Person",
-      name: "Asad Iqbal",
+      name: "Spacefield",
       url: BASE_URL,
     },
     numberOfLessons: lessonCount,
@@ -124,7 +124,7 @@ export function blogJsonLd(slug: string, title: string, excerpt: string, date: s
     datePublished: date,
     author: {
       "@type": "Person",
-      name: "Asad Iqbal",
+      name: "Spacefield",
       url: BASE_URL,
     },
     timeRequired: readTime,

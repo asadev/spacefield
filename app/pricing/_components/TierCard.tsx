@@ -225,7 +225,7 @@ export default function TierCard({
   // here we detect the param, strip it from the URL, and open the
   // Paddle overlay automatically. Without this, the user lands on the
   // home page or /pricing with no further forward motion — exactly
-  // what Asad reported.
+  // what the maintainer reported.
   useEffect(() => {
     if (!meChecked || !isSignedIn || !checkoutTier || !targetWorkspaceId) {
       return;

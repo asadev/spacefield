@@ -22,8 +22,8 @@ Anthropic status page goes yellow.
 
 ### Who's notified
 1. `#alerts` channel — Sentry auto-post.
-2. `#launch-war-room` — Asad pings `@here`.
-3. Status page — Asad publishes "investigating AI assistant
+2. `#launch-war-room` — the maintainer pings `@here`.
+3. Status page — the maintainer publishes "investigating AI assistant
    degradation" within 10 min.
 
 ### Decision tree
@@ -70,8 +70,8 @@ upgrade. Three support emails already.
 
 ### Who's notified
 1. `#alerts` — BetterStack auto-post.
-2. `#support-incoming` — support lead pages Asad.
-3. Asad pings `@here` in `#launch-war-room`.
+2. `#support-incoming` — support lead pages the maintainer.
+3. the maintainer pings `@here` in `#launch-war-room`.
 
 ### Decision tree
 ```
@@ -115,8 +115,8 @@ Users report stale data ("I created a deal, it's not showing").
 - OR: 3+ support tickets matching `I created X but can't see X`.
 
 ### Who's notified
-1. Supabase email alert → Asad.
-2. Asad pings `@here` in `#launch-war-room`.
+1. Supabase email alert → the maintainer.
+2. the maintainer pings `@here` in `#launch-war-room`.
 
 ### Decision tree
 ```

@@ -124,7 +124,7 @@ export default async function StatusListPage({
               <div className="mb-2 flex items-baseline justify-between gap-3 border-b border-app pb-2">
                 <div>
                   <h2 className="text-lg font-semibold text-app">{c.label}</h2>
-                  <p className="mt-0.5 max-w-2xl text-xs text-secondary">{c.asad}</p>
+                  <p className="mt-0.5 max-w-2xl text-xs text-secondary">{c.plain}</p>
                 </div>
                 <div className="shrink-0 text-right text-xs">
                   <div className="font-mono tabular-nums text-app">{pct}%</div>

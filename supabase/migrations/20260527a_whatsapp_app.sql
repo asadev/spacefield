@@ -2,7 +2,7 @@
 -- 20260527a_whatsapp_app.sql — WhatsApp app (Pro-tier feature)
 --
 -- Tables for a per-workspace WhatsApp gateway integration backed by an
--- external Evolution API (self-hosted Baileys, see Asad's clothing-shop
+-- external Evolution API (self-hosted Baileys, see the maintainer's clothing-shop
 -- project). Every table is workspace-scoped with default-deny RLS that
 -- delegates to public.workspace_role_of() — matches the same recipe
 -- used by crm_*, tasks, and people in earlier migrations.

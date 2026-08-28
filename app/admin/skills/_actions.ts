@@ -748,7 +748,7 @@ export async function clearToolOverride(formData: FormData): Promise<void> {
 }
 
 /* ──────────────────── test runner ────────────────────
- * Asad's ask: a way to invoke a skill with sample input from the panel
+ * the maintainer's ask: a way to invoke a skill with sample input from the panel
  * and see what the runtime would return. Wiring all the way through to
  * `executeToolGuarded` is too coupled — the tool needs a UserContext
  * with a real Supabase client + auth user, and the admin panel's

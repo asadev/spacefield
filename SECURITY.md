@@ -1,53 +1,31 @@
 # Security Policy
 
-We take security seriously. If you believe you have found a vulnerability in
-Spacefield (spacefield.co, toshare.net, or any related surface), please
-report it to us privately so we can fix it before it is publicly disclosed.
-
 ## Reporting a vulnerability
 
-Email: **security@spacefield.co**
+Please **do not** open a public issue for a security problem.
 
-Helpful, but optional, things to include:
+Report it privately through GitHub's
+[security advisory form](https://github.com/asadev/spacefield/security/advisories/new).
+That opens a private thread visible only to the maintainers.
 
-- a clear description of the issue and its impact,
-- steps to reproduce (proof-of-concept code, request transcripts, screenshots),
-- the affected URL, endpoint, or component,
-- your name / handle, if you would like to be credited.
+Include what you found, how to reproduce it, and what an attacker could do
+with it. You will get an acknowledgement, and a fix or an explanation of why
+it is not a problem.
 
-Please do **not** open a public GitHub issue, post on social media, or
-discuss the issue in any public forum until we have had a chance to
-investigate and ship a fix.
+## Supported versions
 
-See also our published security contact and policy:
+This project is maintained on `main`. Fixes land there; there are no
+backported release branches.
 
-- <https://spacefield.co/.well-known/security.txt>
-- <https://spacefield.co/legal/security>
+## If you self-host
 
-## Our commitment
+A few things are your responsibility, not the code's:
 
-- **Acknowledgement** within **72 hours** of receiving your report.
-- A triage update with severity and a rough remediation timeline within 7
-  days.
-- Notification when the fix ships and (with your consent) public credit in
-  the release notes.
-
-## Safe harbour
-
-We will not pursue legal action against researchers who:
-
-- act in good faith,
-- avoid privacy violations, destruction of data, and degradation of service,
-- give us a reasonable window to remediate before public disclosure,
-- test only against accounts and workspaces you own or have explicit
-  permission to test.
-
-## Out of scope
-
-- Findings that require physical access to a user's device.
-- Social engineering of Spacefield staff, customers, or vendors.
-- Denial-of-service / volumetric attacks.
-- Reports generated solely by automated scanners with no demonstrated impact.
-- Missing best-practice headers without an exploitable consequence.
-
-Thank you for helping keep Spacefield and its users safe.
+- **Generate your own secrets.** Every secret in `.env.example` is blank on
+  purpose. Use `openssl rand -hex 32`, never a value copied from a tutorial.
+- **Keep the service-role key server-side.** It bypasses row-level security
+  entirely. It must never reach the browser.
+- **Set `ADMIN_EMAILS` deliberately.** It is empty by default, which locks
+  everyone out of `/admin`. That is the safe default — widen it on purpose.
+- **Review the row-level security policies** in `supabase/migrations/` against
+  your own threat model before putting real user data in.

@@ -35,7 +35,7 @@ export async function joinWaitlist(formData: FormData) {
   const emailTag = await emailLogTag(email);
 
   if (!url || !anon) {
-    // Worst case: env not wired. Still log so Asad doesn't lose the lead.
+    // Worst case: env not wired. Still log so the maintainer doesn't lose the lead.
     console.log(
       JSON.stringify({
         evt: "waitlist.signup.fallback",

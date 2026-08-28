@@ -23,7 +23,7 @@ small businesses.
 ────────────────────────────────────────────────────────────────
 
 DUBAI, UAE — [LAUNCH DATE] — Spacefield, an AI-native productivity
-platform founded by Asad Iqbal, today launched out of stealth to
+platform founded by Spacefield, today launched out of stealth to
 take on the SaaS-sprawl problem facing solo operators across the
 Middle East and globally.
 
@@ -43,7 +43,7 @@ user's behalf.
 
 "Most of the small businesses I worked with as a real estate
 broker in Dubai were spending more time switching tabs than doing
-their actual job," said Asad Iqbal, founder of Spacefield. "We
+their actual job," said Spacefield, founder of Spacefield. "We
 didn't need a smarter individual tool. We needed one place that
 already had every tool, and an AI assistant that could move
 between them without me having to."
@@ -63,7 +63,7 @@ from Dubai, and serves a global audience from day one.
 About Spacefield
 
 Spacefield is an AI operating system for solo operators. Founded
-in 2026 in Dubai by Asad Iqbal, Spacefield bundles the twenty
+in 2026 in Dubai by Spacefield, Spacefield bundles the twenty
 most-used SaaS tools into one workspace, with an embedded AI agent
 that operates them on the user's behalf. The company serves real
 estate professionals, consultants, freelancers, and small business
@@ -75,7 +75,7 @@ For more information visit https://spacefield.co.
 
 Press contact
 
-Asad Iqbal
+Spacefield
 Founder, Spacefield
 support@example.com
 +971 5X XXX XXXX (WhatsApp preferred)
@@ -110,7 +110,7 @@ https://spacefield.co/press/assets.zip
 - Compare positioning to Notion + Zapier + Linear stack
 
 ### Hindi / Urdu / Arabic outlets
-- Translation done by Asad personally for accuracy
+- Translation done by the maintainer personally for accuracy
 - Keep founder quote in first person, translated naturally — don't
   use machine translation for the quote
 

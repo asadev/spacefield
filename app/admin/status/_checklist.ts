@@ -1,7 +1,7 @@
 /**
  * Launch-readiness checklist — single source of truth for /admin/status.
  *
- * Asad-mode: every reasonable item across all 15 readiness categories,
+ * the maintainer-mode: every reasonable item across all 15 readiness categories,
  * with a `phase` so the path to launch is obvious and `effort` so you
  * know the cost of fixing each one. Plain-English notes. Stripe / Linear
  * / Vercel / Notion playbooks were the reference for "what big companies
@@ -64,15 +64,15 @@ export interface Category {
   id: CategoryId;
   label: string;
   description: string;
-  /** plain-English one-liner Asad can read instead of the description */
-  asad: string;
+  /** plain-English one-liner the maintainer can read instead of the description */
+  owner: string;
 }
 
 export interface PhaseDef {
   id: Phase;
   label: string;
   /** plain-English explanation for the overview/flow view */
-  asad: string;
+  owner: string;
 }
 
 export interface Item {
@@ -91,27 +91,27 @@ export const PHASES: PhaseDef[] = [
   {
     id: "foundation",
     label: "Foundation",
-    asad: "Bones of the product. Must work for anything else to matter. Mostly already done.",
+    plain: "Bones of the product. Must work for anything else to matter. Mostly already done.",
   },
   {
     id: "hardening",
     label: "Hardening",
-    asad: "What separates 'works on my laptop' from 'survives the internet'. This is where the launch lives or dies — security, monitoring, performance, legal.",
+    plain: "What separates 'works on my laptop' from 'survives the internet'. This is where the launch lives or dies — security, monitoring, performance, legal.",
   },
   {
     id: "polish",
     label: "Polish",
-    asad: "The 10% that makes the difference between 'good launch' and 'great launch' — onboarding, help docs, press kit, the little CX touches.",
+    plain: "The 10% that makes the difference between 'good launch' and 'great launch' — onboarding, help docs, press kit, the little CX touches.",
   },
   {
     id: "scale",
     label: "Scale",
-    asad: "Stuff that breaks at 1000+ users. Don't need it on day one but stop ignoring it once traffic is real.",
+    plain: "Stuff that breaks at 1000+ users. Don't need it on day one but stop ignoring it once traffic is real.",
   },
   {
     id: "maturity",
     label: "Maturity",
-    asad: "Forever-work that compounds — SOC2, evals, partner integrations, new markets. Post-launch reality.",
+    plain: "Forever-work that compounds — SOC2, evals, partner integrations, new markets. Post-launch reality.",
   },
 ];
 
@@ -120,91 +120,91 @@ export const CATEGORIES: Category[] = [
     id: "product",
     label: "Product completeness",
     description: "Core surfaces, features, parity between platforms.",
-    asad: "Is every button you click going to actually do something useful?",
+    plain: "Is every button you click going to actually do something useful?",
   },
   {
     id: "ai",
     label: "AI runtime",
     description: "Models, prompts, evals, cost, safety.",
-    asad: "The AI brain — does it work, can we afford it, can it embarrass us?",
+    plain: "The AI brain — does it work, can we afford it, can it embarrass us?",
   },
   {
     id: "database",
     label: "Database & data",
     description: "Postgres/Supabase schema, RLS, retention, backups.",
-    asad: "Where everything lives. If this goes down or leaks, you have a crisis.",
+    plain: "Where everything lives. If this goes down or leaks, you have a crisis.",
   },
   {
     id: "cache",
     label: "Caching & CDN",
     description: "Edge cache, ISR/SSR, Redis, image optimization.",
-    asad: "Speed and cost. Good caching = 5–10× cheaper AND faster.",
+    plain: "Speed and cost. Good caching = 5–10× cheaper AND faster.",
   },
   {
     id: "perf",
     label: "Performance",
     description: "Core Web Vitals, bundle size, query p95/p99.",
-    asad: "How fast pages feel. Slow = users leave before signing up.",
+    plain: "How fast pages feel. Slow = users leave before signing up.",
   },
   {
     id: "security",
     label: "Security",
     description: "Auth, RBAC, WAF, OWASP, secrets, pen-test.",
-    asad: "Don't get hacked. One breach can end the company.",
+    plain: "Don't get hacked. One breach can end the company.",
   },
   {
     id: "scale",
     label: "Scalability",
     description: "Load capacity, queues, multi-region, autoscaling.",
-    asad: "Can the product survive a Twitter spike or 10× our current traffic?",
+    plain: "Can the product survive a Twitter spike or 10× our current traffic?",
   },
   {
     id: "reliability",
     label: "Reliability",
     description: "SLOs, retries, idempotency, circuit breakers, kill-switches.",
-    asad: "The difference between '99% uptime' and '99.9% uptime' — engineering choices.",
+    plain: "The difference between '99% uptime' and '99.9% uptime' — engineering choices.",
   },
   {
     id: "observability",
     label: "Observability",
     description: "Logs, metrics, traces, alerts, on-call.",
-    asad: "You can't fix what you can't see. Right now you'd find out from users on Twitter.",
+    plain: "You can't fix what you can't see. Right now you'd find out from users on Twitter.",
   },
   {
     id: "devops",
     label: "DevOps & CI/CD",
     description: "Build, test, deploy, rollback, env separation.",
-    asad: "The factory floor. Faster + safer shipping = faster company.",
+    plain: "The factory floor. Faster + safer shipping = faster company.",
   },
   {
     id: "compliance",
     label: "Compliance & legal",
     description: "ToS, privacy, GDPR, UAE PDPL, DPA, subprocessors.",
-    asad: "The paperwork. Required for B2B sales and most regulators.",
+    plain: "The paperwork. Required for B2B sales and most regulators.",
   },
   {
     id: "cx",
     label: "Customer experience",
     description: "Onboarding, help, support, comms, branded errors.",
-    asad: "How users feel using it. First-week retention is decided here.",
+    plain: "How users feel using it. First-week retention is decided here.",
   },
   {
     id: "gtm",
     label: "Business & GTM",
     description: "Pricing, billing edges, launch comms, partnerships.",
-    asad: "How you get and keep paying customers. Money stuff.",
+    plain: "How you get and keep paying customers. Money stuff.",
   },
   {
     id: "mobile",
     label: "Mobile & multi-platform",
     description: "Responsive web, native apps, push, offline, PWA.",
-    asad: "MENA is mobile-first. Half your users are on a phone.",
+    plain: "MENA is mobile-first. Half your users are on a phone.",
   },
   {
     id: "launch",
     label: "Launch readiness",
     description: "Load test, DR drill, runbooks, war room, comms.",
-    asad: "Final gates before flipping the public switch.",
+    plain: "Final gates before flipping the public switch.",
   },
 ];
 
@@ -483,7 +483,7 @@ export const CHECKLIST: Item[] = [
   { id: "scan-sd-002-toshare-mint-rate", category: "security", phase: "hardening", title: "[SD-002] /api/toshare/mint: no rate-limit, no slug allowlist", status: "done", priority: "P0", effort: "S", notes: "FIXED 2026-05-15 (V-3): wrapped with withApiHandler 30/600s + reserved-slug reject (signin/admin/api/spacefield/etc)." },
   { id: "scan-se-001-next-cve", category: "security", phase: "hardening", title: "[SE-001] next@^16.2.4 has 7 advisories including 3 middleware-bypass CVEs", status: "done", priority: "P0", effort: "XS", notes: "FIXED 2026-05-15 (V-5): package.json bumped to ^16.2.6. Vercel auto-installs on next deploy." },
 
-  // P1 — High (most done; xlsx + PII compliance + toshare-anon-rate need Asad input)
+  // P1 — High (most done; xlsx + PII compliance + toshare-anon-rate need the maintainer input)
   { id: "scan-sa-001-toshare-mint-workspace", category: "security", phase: "hardening", title: "[SA-001] toshare_mint RPC trusts client workspace_id without membership check", status: "done", priority: "P1", effort: "S", notes: "FIXED 2026-05-15 (V-3 migration 20260515a): toshare_mint now raises 'not a member of workspace' when is_workspace_member(p_workspace_id) fails (null = personal link still allowed)." },
   { id: "scan-sa-002-toshare-anon-rpcs", category: "security", phase: "hardening", title: "[SA-002] toshare_record_submit/view granted to anon, no rate-limit or payload-size cap", status: "partial", priority: "P1", effort: "M", notes: "PARTIAL 2026-05-15 (V-3 migration 20260515a): toshare_record_submit now rejects payloads >16KB. Anon rate-limit on direct PostgREST RPC calls still missing — needs design decision (route through Next vs keep anon direct)." },
   { id: "scan-sb-003-webhook-ssrf", category: "security", phase: "hardening", title: "[SB-003] SSRF via payload.webhookUrl: fetch(userInput) with response excerpt logged", status: "done", priority: "P1", effort: "S", notes: "FIXED 2026-05-15 (V-2): new lib/safe-fetch.ts blocks private/loopback/link-local IPs + cloud metadata + non-http(s); applied to 4 call sites (toshare-webhook-sign, webhooks/sign, workflow-runner, agent skill HTTP dispatcher)." },
@@ -563,7 +563,7 @@ export const CHECKLIST: Item[] = [
   { id: "retries-idempotent", category: "reliability", phase: "hardening", title: "Retries on idempotent ops (3x exp backoff)", status: "partial", priority: "P1", effort: "S" },
   { id: "idempotency-keys", category: "reliability", phase: "hardening", title: "Idempotency keys on critical mutations", status: "done", priority: "P1", effort: "M", notes: "Shipped 2026-05-14 (lib) + applied 2026-05-17 (P2): migration 20260517b creates idempotency_keys table; withIdempotency() wrapping Paddle webhook + toShare mint + agent dispatch." },
   { id: "error-reporter-lib", category: "reliability", phase: "foundation", title: "Error reporter lib (admin/errors)", status: "done", priority: "P0", effort: "M", ref: "/admin/errors" },
-  { id: "sentry-or-datadog", category: "reliability", phase: "hardening", title: "Sentry (or equivalent) for production errors", status: "partial", priority: "P0", effort: "S", notes: "Dormant wrapper shipped 2026-05-14 at lib/sentry.ts. Activates when SENTRY_DSN env is set AND @sentry/nextjs is installed. Until then falls back to log.error. Asad: create Sentry project + set DSN to flip on." },
+  { id: "sentry-or-datadog", category: "reliability", phase: "hardening", title: "Sentry (or equivalent) for production errors", status: "partial", priority: "P0", effort: "S", notes: "Dormant wrapper shipped 2026-05-14 at lib/sentry.ts. Activates when SENTRY_DSN env is set AND @sentry/nextjs is installed. Until then falls back to log.error. the maintainer: create Sentry project + set DSN to flip on." },
   { id: "health-endpoint", category: "reliability", phase: "hardening", title: "/api/health endpoint (DB + AI probes)", status: "partial", priority: "P0", effort: "S", notes: "Shipped 2026-05-13 — edge endpoint probing Supabase, returns 503 on degraded. Skips AI provider probe (would burn tokens on every monitor hit). Add ?deep=1 later for AI probe." },
   { id: "feature-killswitch", category: "reliability", phase: "hardening", title: "Per-feature kill-switch (one-click disable)", status: "partial", priority: "P1", effort: "S" },
   { id: "rollback-plan", category: "reliability", phase: "hardening", title: "Documented rollback plan (Vercel + DB)", status: "done", priority: "P1", effort: "S", notes: "Shipped 2026-05-14 (Agent L): docs/launch/ROLLBACK_TRIGGERS.md — auto + manual triggers, Vercel one-click revert, migration-rollback convention, feature-flag kill switch, comms matrix." },
@@ -632,7 +632,7 @@ export const CHECKLIST: Item[] = [
   { id: "settings-backup", category: "devops", phase: "hardening", title: "Backup of Vercel + Supabase project settings", status: "done", priority: "P2", effort: "S" , notes: "Shipped 2026-05-19 (C2): scripts/backup-settings.ts exports JSON of workspace_settings + runtime_config + admin_pages + admin_roles + feature_flags. docs/ops/SETTINGS-BACKUP.md." },
   { id: "deploy-gates", category: "devops", phase: "hardening", title: "Deploy gates (build + smoke test pass)", status: "partial", priority: "P1", effort: "M" },
   { id: "release-notes", category: "devops", phase: "polish", title: "Release notes / changelog automation", status: "done", priority: "P2", effort: "S", notes: "Shipped 2026-05-19 (C2): release-notes.yml generates CHANGELOG.md update from commit messages on tag push. No external deps." },
-  { id: "branch-protection", category: "devops", phase: "hardening", title: "Branch protection on main (no force-push)", status: "partial", priority: "P1", effort: "XS" , notes: "Shipped 2026-05-19 (C2): docs/devops/BRANCH-PROTECTION.md documents the rules to apply via GitHub UI (require ci/test/lighthouse checks, linear history, no force-push). Asad applies via UI." },
+  { id: "branch-protection", category: "devops", phase: "hardening", title: "Branch protection on main (no force-push)", status: "partial", priority: "P1", effort: "XS" , notes: "Shipped 2026-05-19 (C2): docs/devops/BRANCH-PROTECTION.md documents the rules to apply via GitHub UI (require ci/test/lighthouse checks, linear history, no force-push). the maintainer applies via UI." },
   { id: "signed-commits", category: "devops", phase: "polish", title: "Signed commits required", status: "missing", priority: "P3", effort: "XS" },
   { id: "renovate", category: "devops", phase: "polish", title: "Automated dependency updates (Renovate/Dependabot)", status: "done", priority: "P2", effort: "S", notes: "Shipped 2026-05-14: .github/dependabot.yml — npm daily, minor+patch grouped weekly, open-PR limit 5; github-actions weekly." },
   { id: "lockfile-integrity", category: "devops", phase: "hardening", title: "Lockfile integrity check in CI", status: "done", priority: "P2", effort: "XS", notes: "CI installs with `pnpm install --frozen-lockfile`, so any lockfile drift fails the typecheck/lint jobs." },
@@ -640,8 +640,8 @@ export const CHECKLIST: Item[] = [
   { id: "test-coverage-gate", category: "devops", phase: "scale", title: "Test coverage minimum gate (60% start)", status: "done", priority: "P2", effort: "S" , notes: "Shipped 2026-05-19 (C2): coverage.yml enforces 60% lib coverage threshold via vitest --coverage. Soft-warn first." },
   { id: "pre-commit-hooks", category: "devops", phase: "polish", title: "Pre-commit hooks (prettier + lint)", status: "partial", priority: "P3", effort: "XS" },
   { id: "pr-template", category: "devops", phase: "polish", title: "PR + issue templates", status: "done", priority: "P3", effort: "XS", notes: "Shipped 2026-05-14: .github/PULL_REQUEST_TEMPLATE.md + bug_report + feature_request + config.yml (disables blank issues, routes security to security@)." },
-  { id: "codeowners", category: "devops", phase: "polish", title: "CODEOWNERS file", status: "done", priority: "P3", effort: "XS", notes: "Shipped 2026-05-14: single-owner @spacefield for all paths." },
-  { id: "license-file", category: "devops", phase: "polish", title: "LICENSE file", status: "done", priority: "P3", effort: "XS", notes: "Shipped 2026-05-14: Proprietary / All Rights Reserved. Owner: Spacefield (Asad Iqbal), 2026." },
+  { id: "codeowners", category: "devops", phase: "polish", title: "CODEOWNERS file", status: "done", priority: "P3", effort: "XS", notes: "Shipped 2026-05-14: single-owner @owner for all paths." },
+  { id: "license-file", category: "devops", phase: "polish", title: "LICENSE file", status: "done", priority: "P3", effort: "XS", notes: "Shipped 2026-05-14: Proprietary / All Rights Reserved. Owner: Spacefield (Spacefield), 2026." },
   { id: "security-md", category: "devops", phase: "polish", title: "SECURITY.md (disclosure policy)", status: "done", priority: "P2", effort: "XS", notes: "Shipped 2026-05-14 at repo root. Reports to security@spacefield.co, 72h ack, links to /.well-known/security.txt + /legal/security." },
   { id: "storybook", category: "devops", phase: "maturity", title: "Component library / Storybook", status: "missing", priority: "P3", effort: "L" },
   { id: "visual-regression", category: "devops", phase: "maturity", title: "Visual regression testing (Chromatic/Percy)", status: "missing", priority: "P3", effort: "M" },
@@ -660,7 +660,7 @@ export const CHECKLIST: Item[] = [
   { id: "subprocessors-list", category: "compliance", phase: "polish", title: "Public subprocessors page + change notification", status: "done", priority: "P2", effort: "XS", notes: "Live at /legal/subprocessors with vendor / region / data columns. Email subscribe-to-changes." },
   { id: "aup", category: "compliance", phase: "hardening", title: "Acceptable Use Policy", status: "partial", priority: "P2", effort: "S", notes: "Live at /legal/aup. Real-estate specifics + AI-content rules covered. Needs counsel pass." },
   { id: "trust-center", category: "compliance", phase: "polish", title: "Trust center page (security summary)", status: "done", priority: "P2", effort: "S", notes: "Live at /legal/security. Current controls + roadmap + responsible-disclosure flow." },
-  { id: "uae-pdpl", category: "compliance", phase: "hardening", title: "UAE PDPL compliance review", status: "missing", priority: "P1", effort: "S", notes: "Federal Decree-Law No. 45 of 2021. Asad's primary market." },
+  { id: "uae-pdpl", category: "compliance", phase: "hardening", title: "UAE PDPL compliance review", status: "missing", priority: "P1", effort: "S", notes: "Federal Decree-Law No. 45 of 2021. the maintainer's primary market." },
   { id: "ksa-pdpl", category: "compliance", phase: "maturity", title: "KSA PDPL compliance (if expanding)", status: "missing", priority: "P3", effort: "M" },
   { id: "saudi-nca", category: "compliance", phase: "maturity", title: "Saudi NCA cybersecurity controls", status: "missing", priority: "P3", effort: "L", notes: "Required for govt deals in KSA. Skip until expansion." },
   { id: "ccpa", category: "compliance", phase: "polish", title: "CCPA opt-out (California users)", status: "missing", priority: "P3", effort: "S" },
@@ -669,7 +669,7 @@ export const CHECKLIST: Item[] = [
   { id: "data-residency", category: "compliance", phase: "maturity", title: "Data residency requirements documented", status: "missing", priority: "P2", effort: "S", notes: "If a UAE bank wants the data in UAE, we need an answer." },
   { id: "dpia", category: "compliance", phase: "polish", title: "DPIA (Data Protection Impact Assessment)", status: "missing", priority: "P2", effort: "M", notes: "Required under GDPR Art. 35 for high-risk processing (AI on personal data)." },
   { id: "ropa", category: "compliance", phase: "polish", title: "ROPA (Records of Processing Activities)", status: "missing", priority: "P2", effort: "S" },
-  { id: "dpo", category: "compliance", phase: "maturity", title: "DPO (Data Protection Officer) designated", status: "missing", priority: "P3", effort: "XS", notes: "Required by GDPR at certain scale. Asad can be it initially, document the appointment." },
+  { id: "dpo", category: "compliance", phase: "maturity", title: "DPO (Data Protection Officer) designated", status: "missing", priority: "P3", effort: "XS", notes: "Required by GDPR at certain scale. the maintainer can be it initially, document the appointment." },
   { id: "eu-representative", category: "compliance", phase: "maturity", title: "EU representative (if EU users)", status: "missing", priority: "P3", effort: "S" },
   { id: "scc", category: "compliance", phase: "polish", title: "Standard Contractual Clauses (SCCs) for transfers", status: "missing", priority: "P2", effort: "S" },
   { id: "vendor-risk", category: "compliance", phase: "polish", title: "Vendor risk assessments (Supabase, Vercel, etc.)", status: "missing", priority: "P2", effort: "S" },
@@ -790,7 +790,7 @@ export const CHECKLIST: Item[] = [
   // ════════════════════════════════════════════════════════════════════
   // ── Launch readiness ──
   // ════════════════════════════════════════════════════════════════════
-  { id: "launch-runbook", category: "launch", phase: "polish", title: "Launch runbook (T-30 to T+30 plan)", status: "done", priority: "P0", effort: "M", notes: "Shipped 2026-05-14: docs/launch/RUNBOOK.md — 5 phases (pre-launch / launch week / launch day hour-by-hour / first week / first month), named roles (founder/on-call/support all currently Asad — SPOF called out)." },
+  { id: "launch-runbook", category: "launch", phase: "polish", title: "Launch runbook (T-30 to T+30 plan)", status: "done", priority: "P0", effort: "M", notes: "Shipped 2026-05-14: docs/launch/RUNBOOK.md — 5 phases (pre-launch / launch week / launch day hour-by-hour / first week / first month), named roles (founder/on-call/support all currently the maintainer — SPOF called out)." },
   { id: "war-room", category: "launch", phase: "polish", title: "War-room channel + comms primed", status: "done", priority: "P1", effort: "XS" , notes: "Shipped 2026-05-19 (C4): docs/launch/WAR-ROOM.md — channel setup, staffing rotation, escalation ladder, decision-maker designation, press protocol." },
   { id: "tabletop-drill", category: "launch", phase: "polish", title: "Tabletop incident drill (3 scenarios)", status: "done", priority: "P1", effort: "S" , notes: "Shipped 2026-05-19 (C4): docs/launch/TABLETOP-DRILL.md — 3 scenarios (Anthropic outage / Paddle webhook fail / Supabase replica lag) with trigger / notification / decision tree / rollback criteria." },
   { id: "dns-ttl-drop", category: "launch", phase: "polish", title: "DNS TTLs dropped to 60s pre-launch", status: "missing", priority: "P2", effort: "XS" },

@@ -10,11 +10,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const dev = developers.find((d) => d.id === id);
 
   if (!dev) {
-    return { title: "Developer Not Found | Asad Iqbal" };
+    return { title: "Developer Not Found | Spacefield" };
   }
 
   return {
-    title: `${dev.name} — Developer Track Record | Asad Iqbal`,
+    title: `${dev.name} — Developer Track Record | Spacefield`,
     description: `${dev.description} Overall score: ${dev.overallScore}/10. Delivery: ${dev.deliveryScore}/10. Quality: ${dev.qualityScore}/10. Price range: ${dev.priceRange}.`,
     openGraph: {
       title: `${dev.name} — Dubai Developer Track Record`,

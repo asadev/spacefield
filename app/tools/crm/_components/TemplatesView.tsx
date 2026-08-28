@@ -125,7 +125,7 @@ export default function TemplatesView({
     company: "Acme Co",
     meeting_date: "Friday 2pm",
     pain_point: "pipeline leakage",
-    sender_name: "Asad",
+    sender_name: "Alex",
     segment: "mid-market",
     role: "RevOps",
     timeframe: "6 weeks",

@@ -96,11 +96,11 @@ See `docs/ops/DR-PLAYBOOK.md` for the step-by-step. In short:
 
 Solo founder + on-call as of 2026-05. Pager via Apple Push (Spacefield
 admin app) — admin notifications with `kind = 'ops.*'` fire a push by
-default. Backups owner: Asad.
+default. Backups owner: the maintainer.
 
 When we hire a second engineer, the rotation becomes weekly with a
 documented handover at the start of each rotation. Until then,
-"on-call" = "Asad, with a 1-hour SLA from being paged on his iPhone
+"on-call" = "the maintainer, with a 1-hour SLA from being paged on his iPhone
 during waking hours, and best-effort overnight".
 
 Outside this SLA window, the maintenance banner auto-shows

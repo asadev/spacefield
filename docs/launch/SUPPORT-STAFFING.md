@@ -11,7 +11,7 @@
 | Twitter mentions | `@spacefield` | no | every 30 min |
 | Product Hunt comments | PH thread | no | every 15 min on launch day |
 | Show HN comments | HN thread | no | every 15 min on launch day |
-| Direct DMs to Asad | LinkedIn / Twitter | no | best-effort |
+| Direct DMs to the maintainer | LinkedIn / Twitter | no | best-effort |
 
 All channels feed into the same inbox via Resend forwarding. The chat
 widget posts new conversations to `#support-incoming` in Slack.
@@ -20,13 +20,13 @@ widget posts new conversations to `#support-incoming` in Slack.
 
 ## Coverage windows (Dubai time, UTC+4)
 
-Today this is one person — Asad. The grid below names slots so a
+Today this is one person — the maintainer. The grid below names slots so a
 contractor or first-hire can slot in cleanly later.
 
 | Window | Dubai hours | Primary | Backup |
 |---|---|---|---|
-| Morning | 06:00 – 14:00 | Asad | Friend-X |
-| Afternoon | 14:00 – 22:00 | Asad | Friend-X |
+| Morning | 06:00 – 14:00 | Owner | Friend-X |
+| Afternoon | 14:00 – 22:00 | Owner | Friend-X |
 | Overnight | 22:00 – 06:00 | **auto-ack only** | Friend-X (alerts only) |
 
 During overnight the auto-ack copy says:
@@ -37,7 +37,7 @@ and we'll get to you faster.
 ```
 
 URGENT-flagged tickets route to `#support-incoming` with a louder
-ping (Slack DM to Asad).
+ping (Slack DM to the maintainer).
 
 ---
 
@@ -48,7 +48,7 @@ The pattern we'll grow into:
 | Shift | Coverage | Local hire from |
 |---|---|---|
 | APAC | 02:00 – 10:00 UTC | India / Philippines |
-| EMEA | 06:00 – 14:00 UTC | Dubai (Asad today) |
+| EMEA | 06:00 – 14:00 UTC | Dubai (the maintainer today) |
 | Americas | 14:00 – 22:00 UTC | LATAM / US East |
 
 Three shifts of 8h with 2h overlap each end = round-the-clock with
@@ -78,7 +78,7 @@ Post-launch SLAs (T+14 onward):
 
 ## Escalation triggers
 
-Escalate to Asad's phone (override "do not disturb") when:
+Escalate to the maintainer's phone (override "do not disturb") when:
 - Inbox depth > 20 unread
 - Same-issue tickets ≥ 3 in 1 hour (probably an incident)
 - Any ticket mentioning words: `breach`, `leak`, `regulator`,
@@ -104,7 +104,7 @@ Stored in admin → Support → Macros. Top 10 to have ready:
 7. **feature-request-ack** — thanks + we add it to the board
 8. **bug-report-ack** — thanks + repro request
 9. **enterprise-inquiry** — booking link
-10. **press-inquiry** — route to Asad directly
+10. **press-inquiry** — route to the maintainer directly
 
 ---
 

@@ -64,7 +64,7 @@ export async function GET(req: NextRequest): Promise<Response> {
   // Evolution's real state and reconcile so the UI never gets stranded
   // on the pair screen while the phone shows the device linked. Cheap —
   // one fetchInstances call, only when not already connected.
-  // (2026-05-27: Asad hit exactly this — phone linked, UI stuck on QR.)
+  // (2026-05-27: the maintainer hit exactly this — phone linked, UI stuck on QR.)
   if (
     inst.status !== "connected" &&
     inst.status !== "banned" &&

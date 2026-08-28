@@ -78,7 +78,7 @@ function defaultState(): State {
           .toISOString()
           .slice(0, 10),
         stage: "Qualified",
-        owner: "Asad",
+        owner: "Alex",
       },
       {
         id: uid(),
@@ -89,7 +89,7 @@ function defaultState(): State {
           .toISOString()
           .slice(0, 10),
         stage: "Proposal",
-        owner: "Asad",
+        owner: "Alex",
       },
       {
         id: uid(),
@@ -100,7 +100,7 @@ function defaultState(): State {
           .toISOString()
           .slice(0, 10),
         stage: "Negotiation",
-        owner: "Asad",
+        owner: "Alex",
       },
     ],
   };

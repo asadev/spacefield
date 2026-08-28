@@ -182,7 +182,7 @@ revoke all on function public.search_doc_remove(text, uuid) from public;
 --     'task',                       -- entity_type, snake_case
 --     '<row_id>'::uuid,
 --     'Buy groceries',              -- title
---     'Due 2026-05-20 · Asad',      -- subtitle (free-form context line)
+--     'Due 2026-05-20 · the maintainer',      -- subtitle (free-form context line)
 --     null,                         -- body — long text, optional
 --     '/tasks/<row_id>',            -- href
 --     'check-square'                -- icon (lucide name) or emoji

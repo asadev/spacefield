@@ -13,7 +13,7 @@
 --   posture for service-role-only analytics tables), but PostgreSQL
 --   partitioning does NOT inherit RLS to children. Each partition was
 --   independently readable/writable by anon + authenticated roles via
---   the project URL. Caught + remediated by Asad's forwarded advisor
+--   the project URL. Caught + remediated by the maintainer's forwarded advisor
 --   email on 2026-05-27.
 --
 -- This migration:

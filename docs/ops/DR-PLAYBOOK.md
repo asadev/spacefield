@@ -69,7 +69,7 @@ the playbook is the operational truth.
 - Pin a `/admin/banners` entry with link to the status page.
 - For paying customers (Paddle subscriptions), draft an email via
   `lib/email.ts` template `incident-notification` — DO NOT auto-send;
-  Asad sends after reading.
+  the maintainer sends after reading.
 
 **Resolve:**
 - Wait for Supabase to confirm region restored, then verify with

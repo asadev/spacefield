@@ -41,7 +41,7 @@ const SKILL_BULK_ACTIONS: BulkAction[] = [
 ];
 
 /**
- * Index of every row in `public.ai_skills`. Asad's ask: "Skills clickable +
+ * Index of every row in `public.ai_skills`. the maintainer's ask: "Skills clickable +
  * editable + add new ones." Each row is a Link to the per-skill editor;
  * the "+ New custom skill" button up top adds an admin-defined skill
  * (kind='custom') with arbitrary RPC/HTTP-backed tools.

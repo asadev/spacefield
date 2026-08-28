@@ -73,7 +73,7 @@ export default function StatusFlowPage() {
                       aria-hidden="true"
                     />
                   </div>
-                  <p className="mt-2 text-[11px] text-secondary line-clamp-3">{p.asad}</p>
+                  <p className="mt-2 text-[11px] text-secondary line-clamp-3">{p.plain}</p>
                 </div>
                 {idx < PHASES.length - 1 ? (
                   <span aria-hidden="true" className="text-faint">
@@ -141,7 +141,7 @@ function PhaseSection({
         </div>
       </div>
 
-      <p className="mb-4 max-w-3xl text-sm text-secondary">{phase.asad}</p>
+      <p className="mb-4 max-w-3xl text-sm text-secondary">{phase.plain}</p>
 
       <div className="mb-4 h-1.5 w-full overflow-hidden rounded-full bg-app-elevated">
         <div

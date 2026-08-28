@@ -4,7 +4,7 @@
  * classifier).
  *
  * Why this exists: the four runtime files used to hardcode their model
- * id (`const MODEL = "claude-haiku-4-5"`). Asad wants to change which
+ * id (`const MODEL = "claude-haiku-4-5"`). the maintainer wants to change which
  * model each call_kind dispatches with from the admin panel, with no code
  * change. This file reads `runtime_model_assignments` (joined with
  * `ai_models` for provider + max_output_tokens) and exposes a tiny

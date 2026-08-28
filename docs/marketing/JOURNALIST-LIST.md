@@ -64,7 +64,7 @@
 
 | Channel | Where | Notes |
 |---|---|---|
-| **Indie Hackers** | indiehackers.com | Asad posts story personally. |
+| **Indie Hackers** | indiehackers.com | the maintainer posts story personally. |
 | **MicroConf** | microconf.com / podcast | DM Rob Walling. |
 | **Bootstrappers.com** | newsletter | Pitch to be featured. |
 | **r/SaaS, r/Entrepreneur** | reddit | Launch-day post, founder-driven, not spammy. |

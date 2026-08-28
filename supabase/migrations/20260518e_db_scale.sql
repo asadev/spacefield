@@ -21,7 +21,7 @@
 -- ─────────────────────────────────────────────────────────────────────
 -- PARTITION SWAP PROCEDURE (manual — DO NOT RUN AS PART OF MIGRATION)
 -- ─────────────────────────────────────────────────────────────────────
--- Once Asad is ready to flip api_latency over to the partitioned form:
+-- Once the maintainer is ready to flip api_latency over to the partitioned form:
 --
 --   begin;
 --     -- 1. Drain new writes into the partitioned table for a moment.

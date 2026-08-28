@@ -164,7 +164,7 @@ export function useLaunchpadView(): UseLaunchpadView {
   // let the closure see a stale cursor when React batched updates,
   // causing the cursor to advance past the actual history slot. The
   // resulting `history[cursor]` was undefined and the view silently
-  // fell back to Applications — the symptom Asad saw as "the sidebar
+  // fell back to Applications — the symptom the maintainer saw as "the sidebar
   // panel isn't accessible / nothing happens when I tap a row".
   const historyRef = useRef(history);
   const cursorRef = useRef(cursor);

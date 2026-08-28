@@ -59,9 +59,9 @@ A hotfix during freeze must meet ALL of:
 
 ## Sign-off authority
 
-Today: **Asad** is the only sign-off authority.
+Today: **the maintainer** is the only sign-off authority.
 
-A hotfix during freeze requires Asad to:
+A hotfix during freeze requires the maintainer to:
 1. Read the diff
 2. Run `npx tsc --noEmit` (must be clean)
 3. Open the preview URL and reproduce the original bug, then verify
@@ -69,7 +69,7 @@ A hotfix during freeze requires Asad to:
 4. Type the word "ship" in `#launch-war-room` as a record
 
 Self-approval is allowed today (one-person company). The verification
-steps are NOT optional — they prevent the 3am tired-Asad mistake.
+steps are NOT optional — they prevent the 3am tired-the maintainer mistake.
 
 When team grows: hotfix requires the on-call + a second human's
 typed "ship" in `#launch-war-room`.

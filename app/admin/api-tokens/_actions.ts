@@ -125,7 +125,7 @@ export async function revokeTokenAction(formData: FormData): Promise<void> {
     .maybeSingle();
 
   // Idempotent: if already revoked, just no-op the update but still audit
-  // the click — useful for "Asad clicked revoke twice" forensics.
+  // the click — useful for "the maintainer clicked revoke twice" forensics.
   const { error } = await admin
     .from("api_tokens")
     .update({ revoked_at: new Date().toISOString() })

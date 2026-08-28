@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 
 export const metadata: Metadata = {
   title:
-    "Golden Visa Eligibility Checker — Check Your Dubai Property Qualification | Asad Iqbal",
+    "Golden Visa Eligibility Checker — Check Your Dubai Property Qualification | Spacefield",
   description:
     "Free tool to check if your Dubai property investment qualifies for the UAE Golden Visa. Instant eligibility assessment, document checklist, and government fees breakdown.",
   openGraph: {

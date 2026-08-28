@@ -56,7 +56,7 @@ function defaultState(): OkrState {
         id: uid(),
         title: "Ship the team dashboard",
         quarter: q,
-        owner: "Asad",
+        owner: "Alex",
         keyResults: [
           {
             id: uid(),
@@ -64,7 +64,7 @@ function defaultState(): OkrState {
             target: 3,
             current: 1,
             unit: "tools",
-            owner: "Asad",
+            owner: "Alex",
             updates: [],
           },
           {
@@ -73,7 +73,7 @@ function defaultState(): OkrState {
             target: 10,
             current: 2,
             unit: "teams",
-            owner: "Asad",
+            owner: "Alex",
             updates: [],
           },
         ],

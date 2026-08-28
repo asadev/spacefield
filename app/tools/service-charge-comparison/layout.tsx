@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "Dubai Service Charge Comparison — 60+ Communities & Buildings | Asad Iqbal",
+  title: "Dubai Service Charge Comparison — 60+ Communities & Buildings | Spacefield",
   description:
     "Compare service charges across 60+ Dubai communities and buildings. From Downtown to JVC, find out what you'll really pay beyond your mortgage. Includes chiller status, trends, and annual estimates.",
   openGraph: {

@@ -34,8 +34,8 @@ export default function AuthoritySection() {
           >
             <div className="relative aspect-[3/4] overflow-hidden bg-bg">
               <Image
-                src="/asad.jpg"
-                alt="Asad Iqbal"
+                src="/owner.jpg"
+                alt="Spacefield"
                 width={600}
                 height={800}
                 priority

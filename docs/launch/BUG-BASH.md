@@ -20,7 +20,7 @@ see [BUG-FREEZE.md](./BUG-FREEZE.md).
 
 | Slot | Who | Role |
 |---|---|---|
-| Owner | Asad | Sets paths, triages, prioritises |
+| Owner | Owner | Sets paths, triages, prioritises |
 | Tester 1 | A real-estate agent friend | "Power user" persona |
 | Tester 2 | A non-tech relative | "Cold user" persona |
 | Tester 3 | A SaaS-savvy friend | "Comparison shopper" persona |
@@ -90,7 +90,7 @@ heroics — slip is cheaper than a broken launch.
 - All bugs go into a single shared doc / Linear / GitHub issue list
   with tag `bug-bash-2026-XX-XX`.
 - Format per row: `[Sev] [Path] What happens — file:line if known`.
-- Asad triages within 1h of bash end.
+- the maintainer triages within 1h of bash end.
 - Each S1/S2 gets an owner + ETA.
 - S3/S4 added to backlog with the bash tag.
 
@@ -98,13 +98,13 @@ heroics — slip is cheaper than a broken launch.
 
 ## Sign-off ceremony
 
-At T-1d 22:00 Asad reviews:
+At T-1d 22:00 the maintainer reviews:
 - All S1: must be fixed + re-tested. Zero open.
 - All S2: must be fixed OR explicitly waived in writing with
   rollback plan. Zero open without waiver.
 - Build: green on main branch. `npx tsc --noEmit` clean.
   Build time logged.
-- Smoke test: signup → first tool → upgrade → signout. By Asad,
+- Smoke test: signup → first tool → upgrade → signout. By the maintainer,
   end-to-end, on production-like URL.
 
 If all pass → **bug freeze begins** ([BUG-FREEZE.md](./BUG-FREEZE.md)).

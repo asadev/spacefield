@@ -1,6 +1,6 @@
 # Admin: zero-technical-dependency audit + plan (v6)
 
-**Asad's mandate (verbatim):**
+**the maintainer's mandate (verbatim):**
 > "the features i want is about 0% dependency on you or manual coding or any technical person needs, if i come here and want to make any kind of change, or access control i should be able to do it from this admin panel"
 
 This doc audits what admin can do today vs what still requires code, then lays out the v6 plan.

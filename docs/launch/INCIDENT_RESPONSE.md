@@ -160,7 +160,7 @@ What we're doing so this doesn't repeat: <2-3 bullet points>.
 If you have questions or you think you were affected and we missed
 something, reply directly to this email. I read every reply.
 
-— Asad, founder
+— the maintainer, founder
 ```
 
 Send from the founder address, not `noreply@`. People respond to humans.

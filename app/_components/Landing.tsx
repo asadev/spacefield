@@ -659,7 +659,7 @@ function WorkspacesSplit() {
                 members={6}
               />
               <FauxWorkspaceCard
-                name="Personal — Asad"
+                name="Personal — the maintainer"
                 role="Owner"
                 members={1}
               />
