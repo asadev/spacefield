@@ -19,7 +19,13 @@ const LEGACY_TOOL_SLUGS: Record<string, string> = {
   "property-poster-creator": "poster-creator",
 };
 
-const SHARE_DOMAIN = "share.example.com";
+/**
+ * The domain your public share links live on (forms, pages, quotes, files).
+ * Set NEXT_PUBLIC_SHARE_DOMAIN to your own domain and point it at this same
+ * deployment. Leave it unset and the share surface simply stays dormant.
+ */
+const SHARE_DOMAIN =
+  process.env.NEXT_PUBLIC_SHARE_DOMAIN?.trim().toLowerCase() || "share.example.com";
 
 /* Paths that bypass the IP-rule + rate-limit gates. We never want to
  * 403/429 internal Next infra (image optimiser, RSC payload, dev HMR),

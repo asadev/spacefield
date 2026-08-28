@@ -65,14 +65,14 @@ export interface Category {
   label: string;
   description: string;
   /** plain-English one-liner the maintainer can read instead of the description */
-  owner: string;
+  plain: string;
 }
 
 export interface PhaseDef {
   id: Phase;
   label: string;
   /** plain-English explanation for the overview/flow view */
-  owner: string;
+  plain: string;
 }
 
 export interface Item {

@@ -49,7 +49,6 @@ export const ENTITY_LABELS: Record<string, string> = {
   file: "Files",
   folder: "Folders",
   share: "Shared links",
-  share: "Shared links",
   workspace: "Workspaces",
   app: "Apps",
   doc: "Documents",
