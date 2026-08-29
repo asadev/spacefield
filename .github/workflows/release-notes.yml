@@ -142,7 +142,7 @@ jobs:
           git push origin main || echo "::warning::push to main failed (branch protection?) — release will still publish."
 
       - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.tag.outputs.tag }}
           name: ${{ steps.tag.outputs.tag }}
