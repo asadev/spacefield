@@ -1,0 +1,22 @@
+{
+  "name": "create-spacefield",
+  "version": "0.1.0",
+  "description": "Create a Spacefield workspace — an open-source desktop OS that runs in a browser tab.",
+  "license": "MIT",
+  "author": "Asad Iqbal",
+  "type": "module",
+  "bin": { "create-spacefield": "bin/index.mjs" },
+  "files": ["bin"],
+  "engines": { "node": ">=18" },
+  "keywords": [
+    "spacefield", "desktop", "desktop-environment", "webos", "workspace",
+    "nextjs", "self-hosted", "open-source", "create"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/asadev/spacefield.git",
+    "directory": "packages/create-spacefield"
+  },
+  "homepage": "https://spacefield.co",
+  "bugs": { "url": "https://github.com/asadev/spacefield/issues" }
+}
