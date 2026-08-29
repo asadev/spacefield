@@ -53,33 +53,33 @@ interface WidgetDef extends WidgetMeta {
 
 const WIDGETS: WidgetDef[] = [
   {
-    id: "market",
-    name: "Market snapshot",
-    description: "Live AED/sqft, YoY growth, blended yield and TTM transactions.",
+    id: "clock",
+    name: "Clock",
+    description: "Local time and date, plus two other cities of your choosing.",
     iconKey: "trending",
     default: { x: 24, y: 56 },
     w: 280,
-    h: 260,
+    h: 196,
     minW: 240,
-    minH: 220,
+    minH: 176,
   },
   {
-    id: "live",
-    name: "Live feed",
-    description: "Rotating market signals — rates, migration, RERA updates.",
+    id: "workspace",
+    name: "Workspace",
+    description: "What this workspace has installed, and what else is available.",
     iconKey: "pulse",
-    default: { x: 24, y: 340 },
+    default: { x: 24, y: 276 },
     w: 280,
-    h: 180,
+    h: 176,
     minW: 240,
-    minH: 140,
+    minH: 156,
   },
   {
     id: "tip",
-    name: "Daily insight",
-    description: "Bite-sized market intelligence that rotates throughout the day.",
+    name: "Tips",
+    description: "Short pointers on getting more out of the workspace.",
     iconKey: "spark",
-    default: { x: 24, y: 540 },
+    default: { x: 24, y: 476 },
     w: 280,
     h: 150,
     minW: 220,
@@ -108,15 +108,8 @@ export const WIDGET_REGISTRY: WidgetMeta[] = WIDGETS.map((w) => ({
 
 export const ALL_WIDGET_IDS: string[] = WIDGETS.map((w) => w.id);
 
-/**
- * Widgets a brand-new workspace starts with.
- *
- * Deliberately just the "featured" tile: it reflects whatever the user
- * actually installed, so it suits any line of work. The market, live and
- * tip widgets carry property-market content, so they are opt-in from the
- * widget gallery rather than switched on for everybody.
- */
-export const DEFAULT_WIDGET_IDS: string[] = ["featured"];
+/** Widgets a brand-new workspace starts with. All four are general-purpose. */
+export const DEFAULT_WIDGET_IDS: string[] = ["clock", "workspace", "tip", "featured"];
 
 function loadRects(storageKey: string): Record<string, WidgetRect> {
   if (typeof window === "undefined") return {};
@@ -341,32 +334,16 @@ function Widget({
 /* ───────── Content pieces ───────── */
 
 const INSIGHTS = [
-  "JVC absorbs the most end-user demand in Dubai right now.",
-  "Palm Jumeirah villa yields have compressed to ~5.1% on capital growth.",
-  "Off-plan 1% monthly plans beat 60/40 once you discount to NPV.",
-  "Service charges in Downtown skew high vs. similar towers — compare before you offer.",
-  "Dubai South is absorbing the bulk of sub-AED 1M end-user demand.",
-  "UK → UAE migration corridor is up 12% year-on-year (late 2025 data).",
-  "RERA rule update cadence has picked up — check Regulation Monitor weekly.",
+  "Press Cmd-K anywhere to jump straight to an app, a file or a setting.",
+  "Every app also works as its own page — handy for sharing one tool with someone.",
+  "Workspaces keep their own apps and state. Make one per client or per project.",
+  "Drag a window to a screen edge to snap it; double-click its title bar to maximise.",
+  "Uninstall anything you do not use from the Store — the dock and search follow along.",
+  "Right-click the desktop to change the wallpaper or add another widget.",
+  "The admin panel has feature flags and roles if you are running this for a team.",
 ];
 
-const LIVE_FEEDS = [
-  [
-    { label: "UAE Central Bank Rate", value: "4.90%" },
-    { label: "DXB → UK migration", value: "+12%", trend: "up" as const },
-    { label: "RERA rule updates", value: "3 this month" },
-  ],
-  [
-    { label: "Dubai off-plan share", value: "64%", trend: "up" as const },
-    { label: "Emaar H2 handovers", value: "18 towers" },
-    { label: "Palm villa median", value: "AED 28M" },
-  ],
-  [
-    { label: "JVC avg yield", value: "7.8%", trend: "up" as const },
-    { label: "Downtown vacancy", value: "3.2%", trend: "down" as const },
-    { label: "Mortgage rate (6M avg)", value: "4.29%" },
-  ],
-];
+
 
 function useTicker<T>(items: T[], intervalMs: number) {
   const [i, setI] = useState(0);
@@ -396,18 +373,6 @@ function useFeaturedTool() {
     return () => clearInterval(t);
   }, [top.length]);
   return top[i];
-}
-
-function useTickingPrice(start: number) {
-  const [v, setV] = useState(start);
-  useEffect(() => {
-    const t = setInterval(() => {
-      const drift = (Math.random() - 0.48) * 4; // slight upward bias
-      setV((x) => Math.max(start - 20, Math.min(start + 40, x + drift)));
-    }, 4_000);
-    return () => clearInterval(t);
-  }, [start]);
-  return v;
 }
 
 /* ───────── Widgets ───────── */
@@ -455,24 +420,24 @@ export default function Widgets({ onOpenTool }: WidgetsProps) {
 
   return (
     <>
-      {isActive("market") && (
-        <MarketWidget
-          rect={rects.market}
-          def={defFor("market")}
-          z={zOf("market")}
+      {isActive("clock") && (
+        <ClockWidget
+          rect={rects.clock}
+          def={defFor("clock")}
+          z={zOf("clock")}
           onUpdate={handleUpdate}
-          onFocus={() => handleFocus("market")}
+          onFocus={() => handleFocus("clock")}
           onRemove={remove}
           onOpenTool={onOpenTool}
         />
       )}
-      {isActive("live") && (
-        <LiveWidget
-          rect={rects.live}
-          def={defFor("live")}
-          z={zOf("live")}
+      {isActive("workspace") && (
+        <WorkspaceWidget
+          rect={rects.workspace}
+          def={defFor("workspace")}
+          z={zOf("workspace")}
           onUpdate={handleUpdate}
-          onFocus={() => handleFocus("live")}
+          onFocus={() => handleFocus("workspace")}
           onRemove={remove}
         />
       )}
@@ -512,113 +477,79 @@ interface InstanceProps {
 
 /* ───────── Market snapshot ───────── */
 
-function MarketWidget({
+function ClockWidget({
   rect,
   def,
   z,
   onUpdate,
   onFocus,
   onRemove,
-  onOpenTool,
 }: InstanceProps & {
   onOpenTool: (slug: string, title: string) => void;
 }) {
-  const price = useTickingPrice(1710);
-  const yoy = 18.2 + Math.sin(Date.now() / 50000) * 0.3;
+  const [now, setNow] = useState<Date | null>(null);
+  useEffect(() => {
+    setNow(new Date());
+    const t = setInterval(() => setNow(new Date()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  /* Rendered only after mount so the server and client never disagree. */
+  const time = now
+    ? now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })
+    : "--:--";
+  const date = now
+    ? now.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })
+    : "";
+  const elsewhere = (tz: string) =>
+    now ? now.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit", timeZone: tz }) : "--:--";
 
   return (
     <Widget id={def.id} rect={rect} minW={def.minW} minH={def.minH} z={z} onUpdate={onUpdate} onFocus={onFocus} onRemove={onRemove}>
-      <div className="flex items-center justify-between">
-        <div className="text-[0.6rem] font-medium uppercase tracking-[0.18em] text-muted">
-          Market snapshot
-        </div>
-        <span className="text-[0.65rem] text-muted">Dubai · live</span>
+      <div className="text-[0.6rem] font-medium uppercase tracking-[0.18em] text-muted">
+        Clock
       </div>
       <div
-        className="mt-2 text-[1.55rem] font-semibold tracking-tight text-app tabular-nums"
-        aria-live="polite"
+        className="mt-2 text-[2.1rem] font-semibold leading-none tracking-tight text-app tabular-nums"
+        aria-live="off"
       >
-        AED {Math.round(price).toLocaleString()}
-        <span className="text-sm text-muted font-normal">/sqft</span>
+        {time}
       </div>
-      <div className="mt-1 flex items-center gap-2 text-xs">
-        <span className="inline-flex items-center gap-1 rounded-md bg-emerald-500/15 px-2 py-0.5 text-emerald-600">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-            <path d="M3 17l6-6 4 4 8-8v4h2V3h-7v2h4l-7 7-4-4-8 8 2 1z" />
-          </svg>
-          +{yoy.toFixed(1)}% YoY
-        </span>
-      </div>
+      <div className="mt-1.5 text-xs text-muted">{date}</div>
       <div className="mt-3 grid grid-cols-2 gap-2">
-        <Metric label="Blended yield" value="7.2%" />
-        <Metric label="TTM transactions" value="63,300" />
+        <Metric label="London" value={elsewhere("Europe/London")} />
+        <Metric label="New York" value={elsewhere("America/New_York")} />
       </div>
-      <button
-        type="button"
-        data-no-drag
-        onClick={(e) => {
-          e.stopPropagation();
-          onOpenTool("market-pulse", "Market Pulse Dashboard");
-        }}
-        className="mt-3 inline-flex items-center gap-1.5 text-[0.72rem] font-medium text-app hover:opacity-70 transition-opacity"
-      >
-        Open Market Pulse
-        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <path d="M5 12h14M13 6l6 6-6 6" />
-        </svg>
-      </button>
     </Widget>
   );
 }
 
-/* ───────── Live feed (rotates) ───────── */
+/* ───────── Workspace ───────── */
 
-function LiveWidget({ rect, def, z, onUpdate, onFocus, onRemove }: InstanceProps) {
-  const feed = useTicker(LIVE_FEEDS, 6_000);
+function WorkspaceWidget({ rect, def, z, onUpdate, onFocus, onRemove }: InstanceProps) {
+  const { installed } = useInstalledTools();
+  const total = TOOLS.length;
+  const categories = new Set(TOOLS.map((t) => t.category)).size;
+  const count = installed.length;
 
   return (
     <Widget id={def.id} rect={rect} minW={def.minW} minH={def.minH} z={z} onUpdate={onUpdate} onFocus={onFocus} onRemove={onRemove}>
-      <div className="flex items-center justify-between">
-        <div className="text-[0.6rem] font-medium uppercase tracking-[0.18em] text-muted">
-          Live
-        </div>
-        <span className="inline-flex items-center gap-1 text-[0.65rem] text-emerald-600">
-          <span className="relative flex h-1.5 w-1.5">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-60" />
-            <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500" />
-          </span>
-          Connected
-        </span>
+      <div className="text-[0.6rem] font-medium uppercase tracking-[0.18em] text-muted">
+        Workspace
       </div>
-      <div className="mt-3 space-y-2">
-        {feed.map((row, i) => (
-          <motion.div
-            key={row.label}
-            initial={{ opacity: 0, x: 6 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ delay: i * 0.05, duration: 0.25 }}
-            className="flex items-center justify-between text-[0.78rem]"
-          >
-            <span className="truncate text-secondary">{row.label}</span>
-            <span
-              className={`tabular-nums font-medium ${
-                row.trend === "up"
-                  ? "text-emerald-600"
-                  : row.trend === "down"
-                  ? "text-rose-600"
-                  : "text-app"
-              }`}
-            >
-              {row.value}
-            </span>
-          </motion.div>
-        ))}
+      <div className="mt-2 text-[1.55rem] font-semibold leading-none tracking-tight text-app tabular-nums">
+        {count}
+        <span className="text-sm font-normal text-muted"> installed</span>
+      </div>
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <Metric label="Available" value={String(total)} />
+        <Metric label="Categories" value={String(categories)} />
       </div>
     </Widget>
   );
 }
 
-/* ───────── Tip (rotates) ───────── */
+/* ───────── Tips ───────── */
 
 function TipWidget({ rect, def, z, onUpdate, onFocus, onRemove }: InstanceProps) {
   const insight = useTicker(INSIGHTS, 10_000);
