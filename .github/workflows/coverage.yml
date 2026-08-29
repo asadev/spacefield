@@ -51,7 +51,7 @@ jobs:
 
       - name: Install Vitest + coverage provider
         # Job-scoped install — keeps the production lockfile lean.
-        run: pnpm add -D --no-save vitest@^2 @vitest/coverage-v8@^2
+        run: pnpm add -D vitest@^2 @vitest/coverage-v8@^2
 
       - name: Run tests with coverage
         run: |

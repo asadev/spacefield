@@ -64,7 +64,7 @@ jobs:
           NEXT_TELEMETRY_DISABLED: "1"
 
       - name: Install Lighthouse CI (job-scoped, not committed to lockfile)
-        run: pnpm add -D --no-save @lhci/cli@^0.14
+        run: pnpm add -D @lhci/cli@^0.14
 
       - name: Run Lighthouse CI
         run: pnpm exec lhci autorun --config=./lighthouserc.json

@@ -74,7 +74,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Vitest (job-scoped, not committed to lockfile)
-        run: pnpm add -D --no-save vitest@^2 @vitest/coverage-v8@^2
+        run: pnpm add -D vitest@^2 @vitest/coverage-v8@^2
 
       - name: Run unit tests
         run: pnpm exec vitest run --reporter=default
@@ -107,7 +107,7 @@ jobs:
 
       - name: Install Playwright
         run: |
-          pnpm add -D --no-save @playwright/test@^1
+          pnpm add -D @playwright/test@^1
           pnpm exec playwright install --with-deps chromium
 
       - name: Build
