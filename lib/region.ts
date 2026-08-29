@@ -37,12 +37,12 @@ function asRegion(v: string | null | undefined): Region | null {
 
 /** Read current region preference from localStorage (SSR-safe). */
 export function getRegion(): Region {
-  if (typeof window === "undefined") return "uae";
+  if (typeof window === "undefined") return "usa";
   try {
     const v = asRegion(window.localStorage.getItem(STORAGE_KEY));
     if (v) return v;
   } catch {}
-  return "uae";
+  return "usa";
 }
 
 /** Persist region preference and notify all subscribers in the same tab. */

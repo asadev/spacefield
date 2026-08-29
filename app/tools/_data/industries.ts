@@ -25,12 +25,6 @@ export interface Industry {
 
 export const INDUSTRIES: Industry[] = [
   {
-    key: "real-estate",
-    label: "Real Estate",
-    tagline: "Investing, selling, developing, or managing property.",
-    icon: "building",
-  },
-  {
     key: "marketing",
     label: "Marketing",
     tagline: "Growth, funnels, acquisition, content.",
@@ -41,12 +35,6 @@ export const INDUSTRIES: Industry[] = [
     label: "Sales",
     tagline: "Pipeline, quota, closing.",
     icon: "target",
-  },
-  {
-    key: "hr",
-    label: "HR & People",
-    tagline: "Hiring, headcount, retention.",
-    icon: "users",
   },
   {
     key: "finance",
@@ -73,10 +61,22 @@ export const INDUSTRIES: Industry[] = [
     icon: "image",
   },
   {
+    key: "hr",
+    label: "HR & People",
+    tagline: "Hiring, headcount, retention.",
+    icon: "users",
+  },
+  {
     key: "consulting",
     label: "Consulting & Services",
     tagline: "Projects, proposals, retainers.",
     icon: "document",
+  },
+  {
+    key: "real-estate",
+    label: "Real Estate",
+    tagline: "Investing, selling, developing, or managing property.",
+    icon: "building",
   },
   {
     key: "other",
@@ -86,7 +86,7 @@ export const INDUSTRIES: Industry[] = [
   },
 ];
 
-export const DEFAULT_INDUSTRY: IndustryKey = "real-estate";
+export const DEFAULT_INDUSTRY: IndustryKey = "other";
 
 export function industryBySlug(key: string) {
   return INDUSTRIES.find((i) => i.key === key);

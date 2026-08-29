@@ -10,6 +10,7 @@ import {
 } from "react";
 import { TOOL_ICONS, TOOLS } from "../_data/tools-list";
 import { useWorkspaceKey } from "./useWorkspaces";
+import { useInstalledTools } from "./useInstalledTools";
 
 /* Draggable, live-updating desktop widgets. Positions persist per-widget in
  * localStorage. Default layout is a left column of three + one on the top
@@ -107,6 +108,16 @@ export const WIDGET_REGISTRY: WidgetMeta[] = WIDGETS.map((w) => ({
 
 export const ALL_WIDGET_IDS: string[] = WIDGETS.map((w) => w.id);
 
+/**
+ * Widgets a brand-new workspace starts with.
+ *
+ * Deliberately just the "featured" tile: it reflects whatever the user
+ * actually installed, so it suits any line of work. The market, live and
+ * tip widgets carry property-market content, so they are opt-in from the
+ * widget gallery rather than switched on for everybody.
+ */
+export const DEFAULT_WIDGET_IDS: string[] = ["featured"];
+
 function loadRects(storageKey: string): Record<string, WidgetRect> {
   if (typeof window === "undefined") return {};
   try {
@@ -135,7 +146,7 @@ function defaultRects(vw: number): Record<string, WidgetRect> {
 /* ───────── Active-set persistence + hook ───────── */
 
 function loadActive(activeKey: string): string[] {
-  if (typeof window === "undefined") return ALL_WIDGET_IDS;
+  if (typeof window === "undefined") return DEFAULT_WIDGET_IDS;
   try {
     const raw = localStorage.getItem(activeKey);
     if (raw) {
@@ -148,7 +159,7 @@ function loadActive(activeKey: string): string[] {
       }
     }
   } catch {}
-  return ALL_WIDGET_IDS;
+  return DEFAULT_WIDGET_IDS;
 }
 
 function saveActive(activeKey: string, ids: string[]) {
@@ -367,7 +378,13 @@ function useTicker<T>(items: T[], intervalMs: number) {
 }
 
 function useFeaturedTool() {
-  const top = TOOLS.filter((t) => t.topRated);
+  // Prefer tools the workspace actually installed — recommending a tool
+  // the user does not have (and that may not suit their line of work) is
+  // noise. Fall back to the global top-rated list only when nothing is
+  // installed yet.
+  const { installed } = useInstalledTools();
+  const own = TOOLS.filter((t) => installed.includes(t.slug));
+  const top = (own.length ? own : TOOLS.filter((t) => t.topRated)) as typeof TOOLS;
   const [i, setI] = useState(0);
   useEffect(() => {
     const initial = new Date().getHours() % top.length;

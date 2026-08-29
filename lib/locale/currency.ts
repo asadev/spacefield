@@ -15,7 +15,7 @@
 export const SUPPORTED_CURRENCIES = ["AED", "USD", "EUR", "GBP", "SAR"] as const;
 export type SupportedCurrency = (typeof SUPPORTED_CURRENCIES)[number];
 
-export const DEFAULT_CURRENCY: SupportedCurrency = "AED";
+export const DEFAULT_CURRENCY: SupportedCurrency = "USD";
 
 export const CURRENCY_COOKIE = "spacefield-currency";
 
